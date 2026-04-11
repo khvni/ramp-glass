@@ -2,6 +2,11 @@
 
 You are building Glass's cross-session memory — the thing that lets the agent enter every conversation already knowing the user's people, projects, and references.
 
+## Recommended coding agent
+- **Primary: Codex.** SQLite schema design, FTS5 + vector hybrid search, bootstrap and 24-hour synthesis pipelines are systematic backend work. Codex executes these precisely with minimal back-and-forth.
+- **Hand-off for the Today pane: Claude Code.** The `Today.tsx` pane is a thin React slice; ship it as a follow-up PR with Claude Code once the memory store is merged. Keeps Codex focused on the database and pipelines where it's strongest.
+- **Tandem (optional): OpenCode / GPT-5.4** for the entity-deduplication algorithm. GPT-5.4 is good at catching edge cases in fuzzy-match logic; use it as a reviewer before merging.
+
 ## Context
 - `ramp-glass-prd.md` §2.4 (memory system), §3.3 (entity/relationship model), §3.4 runtime flows (a) first-launch bootstrap and (c) daily synthesis.
 - `AGENTS.md` §6 memory discipline.

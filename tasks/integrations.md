@@ -2,6 +2,11 @@
 
 You are wiring every external tool Glass ships with on day one. The PRD calls these out explicitly: Slack, Notion, Linear, Salesforce, Gong, Snowflake, Zendesk, Google Calendar, plus Ramp Research / Ramp Inspect / Ramp CLI stubs.
 
+## Recommended coding agent
+- **Primary: Codex.** Eleven client files following the same `BaseMCPClient` pattern is exactly Codex's strength — systematic, repetitive backend work with clear per-file contracts. Codex stays consistent across all 11 files where a more "iterative" agent would drift.
+- **Tandem: OpenCode / GPT-5.4.** Run OpenCode in parallel on a subset (e.g., Salesforce, Gong, Snowflake — the vendor-REST-heavy ones where OpenAPI specs matter). GPT-5.4 is strong at following OpenAPI/MCP schemas and tends to catch auth and pagination edge cases that get missed in a single-pass write. Reconcile into one PR.
+- **Avoid Claude Code for the bulk of this work.** Claude Code is slower on high-volume systematic file creation.
+
 ## Context
 - `ramp-glass-prd.md` §2.1 (pre-wired integrations, self-healing), §3.2 (MCP), §3.4 runtime flows.
 - `AGENTS.md` §4.3 error handling — integrations must self-heal, never surface stack traces.

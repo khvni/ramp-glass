@@ -2,6 +2,10 @@
 
 You are building the heart of Glass: the agent runtime that drives every conversation, scheduled job, and Slack assistant, and the Chat pane that exposes it in the desktop app.
 
+## Recommended coding agent
+- **Primary: Claude Code.** The runtime wraps the **Claude Agent SDK** — Anthropic's own SDK. Claude Code has native, up-to-date knowledge of the SDK's tool-use loop, streaming events, and stop-reason semantics in ways Codex and GPT-5.4 do not. The Chat pane is also classic iterative frontend work (stream tokens, cancel button, error states) where Claude Code's feedback-loop strengths pay off.
+- **Do not use Codex or OpenCode alone here.** They are likely to drift on Agent SDK specifics.
+
 ## Context (read before touching code)
 - `ramp-glass-prd.md` §2.1 (tone), §2.8 (workspace UI), §3.2 (runtime), §3.3 (data model), §3.4 (runtime flows).
 - `AGENTS.md` (all sections, especially §2 tech stack and §4.3 error handling).

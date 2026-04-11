@@ -2,6 +2,11 @@
 
 You are building the public face of Dojo — a Next.js 15 App Router app on Vercel that hosts the skill index and the Sensei recommender endpoint. This app is completely decoupled from the Electron desktop app; they communicate only via HTTP.
 
+## Recommended coding agent
+- **Primary: Claude Code.** Next.js 15 App Router + Tailwind + iterative UI + RSC server components is Claude Code's strongest frontend territory. It's also current on Vercel platform conventions (`vercel.ts` vs `vercel.json`, Cache Components, `next/image`, etc.).
+- **Tandem: OpenCode / GPT-5.4** for `app/api/sensei/route.ts`. The Sensei recommender is a single Claude call with a tight JSON-mode system prompt — GPT-5.4 is excellent at writing disciplined LLM-calling glue and is a good reviewer for the prompt itself. Let Claude Code scaffold the route and have OpenCode harden the prompt + schema validation.
+- **Avoid Codex for the UI work.** It's slower on Tailwind + Next.js iteration.
+
 ## Context
 - `ramp-glass-prd.md` §2.2 (Dojo), §2.3 (Sensei surfaces top-5 skills on day one).
 - `AGENTS.md` global sections + the Next.js-specific note in §4.2 (RSC allowed here).

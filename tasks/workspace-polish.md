@@ -4,6 +4,11 @@ You are bringing Glass's workspace up to product quality. This is the UI piece t
 
 **Wait for Wave 1 to merge** — specifically `@ramp-glass/agent-runtime` (for the file-write tool-call events) and `@ramp-glass/memory` (for layout persistence storage).
 
+## Recommended coding agent
+- **Primary: Claude Code.** This is the most visually iterative phase of the whole project — FlexLayout interactions, inline renderers, persistent layout, keyboard shortcuts, drag-to-rearrange. Claude Code's edit-reload-verify loop against a running Electron app is where it pulls ahead of Codex and OpenCode by a wide margin. It also knows React 19 + FlexLayout idioms well.
+- **Do not use Codex for the UI work.** Codex is slower on fine-grained visual iteration; you will ping-pong.
+- **OpenCode is acceptable for a specific slice**: the CSV → virtualized table renderer and the Monaco read-only wrapper, if you want to run two things in parallel. But the layout state + auto-open hook must stay with Claude Code.
+
 ## Context
 - `ramp-glass-prd.md` §2.8 (workspace UI), §3.4 (b) message flow for auto-open.
 - `AGENTS.md` §7 workspace UI invariants (these are product requirements, not preferences).

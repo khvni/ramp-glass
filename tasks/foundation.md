@@ -2,6 +2,10 @@
 
 The Wave 0 scaffolding is committed but a few pieces still need real work before Wave 1 agents can fan out. This is the single serial task that closes the gap.
 
+## Recommended coding agent
+- **Primary: Codex.** Config files, solution tsconfig, lockfile generation, and CI pipeline are systematic backend/tooling work — exactly Codex's sweet spot. Codex executes without negotiation and handles repetitive config precisely.
+- **Tandem (optional): OpenCode / GPT-5.4** for the final pass over `packages/shared-types/src/**`. GPT-5.4's type-system reasoning is strong; a second set of eyes on the frozen interface is cheap insurance before Wave 1 fans out.
+
 ## Exclusive write scope
 - `.github/workflows/**` (the scaffold could not create these due to a local security hook; they need to be added here)
 - `tsconfig.json` at repo root (a solution file referencing all packages)

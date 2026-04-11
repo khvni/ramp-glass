@@ -4,6 +4,11 @@ You are writing the tests that prove Glass matches the article. Every box in PRD
 
 **Start only after Wave 2's W7, W8, W9 have merged.** You need everything running end to end.
 
+## Recommended coding agent
+- **Primary: Claude Code.** Playwright-Electron is iterative against a running app — selectors, timing, flake debugging — and Claude Code's feedback loop is fastest there. Claude Code also has strong current knowledge of Playwright's Electron support.
+- **Tandem: OpenCode / GPT-5.4** for the fixture data generation (seed entities, seed skills, seed schedule payloads). GPT-5.4 is great at producing large, realistic, deterministic fixtures in one shot.
+- **Do not use Codex here.** Test-first iteration against a live UI is not its strength.
+
 ## Context
 - `ramp-glass-prd.md` §6 (non-negotiable quality bars), §9 (source fidelity checklist).
 - `AGENTS.md` §4.5 tests.

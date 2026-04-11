@@ -2,6 +2,10 @@
 
 You are building the skills system — the thing that lets one person's breakthrough become everyone's baseline. Skills are markdown files with YAML frontmatter, git-backed, reviewed like code.
 
+## Recommended coding agent
+- **Primary: Claude Code.** Two reasons. First, skills are the same format Claude Code uses for its own skill system — Claude Code understands frontmatter + system-prompt injection natively and won't drift on conventions. Second, the Dojo pane is iterative frontend work (search, tag filters, install/uninstall toggles) where Claude Code's edit-review-reload cycle is fastest.
+- **Do not use Codex here unless you're only touching the loader and watcher** — its frontend velocity on React + Tailwind is noticeably slower than Claude Code.
+
 ## Context
 - `ramp-glass-prd.md` §2.2 (Dojo), §2.3 (Sensei — the recommender lives in `apps/dojo-web`, not here; you just consume it).
 - `AGENTS.md` §5 skill format.

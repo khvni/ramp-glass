@@ -4,6 +4,11 @@ You are building the "it works while you don't" layer: daily/weekly/cron automat
 
 **Wait for Wave 1 to merge before starting.** You depend on merged `@ramp-glass/agent-runtime`, `@ramp-glass/integrations`, `@ramp-glass/auth`.
 
+## Recommended coding agent
+- **Primary: Codex.** `node-cron`, SQLite-backed job storage, the detached headless runner process, and the signed-URL permission flow are all backend + protocol work where Codex is strongest. It's also the best at getting Node child-process / detached-process lifecycle right on the first pass.
+- **Hand-off for `apps/mobile-approvals`: Claude Code.** The mobile-approvals React app is a tiny iterative frontend slice — ship it as a companion PR with Claude Code once Codex has the scheduler landing.
+- **Tandem (optional): OpenCode / GPT-5.4** for `prompt-to-job.ts` (the natural-language → cron extractor). GPT-5.4 is strong at writing disciplined LLM extraction pipelines with schema validation.
+
 ## Context
 - `ramp-glass-prd.md` §2.5 (scheduled automations), §2.7 (headless + mobile approvals), §3.4 (d) headless flow.
 - `AGENTS.md` §4.3 error handling, §6 memory discipline.

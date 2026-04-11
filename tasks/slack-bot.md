@@ -4,6 +4,11 @@ You are building two things on one Slack app: (a) user-configurable Slack-native
 
 **Wait for Wave 1 to merge.**
 
+## Recommended coding agent
+- **Primary: Codex.** `@slack/bolt` Socket Mode, event handlers, and `@octokit/rest` ticket creation are systematic backend work. Codex is fastest here.
+- **Tandem: OpenCode / GPT-5.4.** GPT-5.4 has strong working knowledge of Bolt's middleware idioms and is particularly good at the triage classifier prompt (structured output extraction). Have OpenCode write the classifier + prompt-injection defense while Codex builds the app shell and handlers. Reconcile into one PR.
+- **Do not use Claude Code alone here.** Slack bot work benefits from the systematic execution Codex and OpenCode provide.
+
 ## Context
 - `ramp-glass-prd.md` §2.6 (Slack-native assistants), §2.9 (issue triage → auto tickets).
 - `AGENTS.md` §4.3, §4.6.

@@ -2,6 +2,11 @@
 
 You are building the one-click SSO flow that makes every Glass integration "just work" from first launch. Per the article: users sign in via Okta once and everything becomes available.
 
+## Recommended coding agent
+- **Primary: Codex.** OIDC code flow + PKCE + keychain storage + silent refresh is well-trodden protocol work. Codex handles OAuth/OIDC specs precisely and won't invent non-standard flows.
+- **Tandem: OpenCode / GPT-5.4.** GPT-5.4 has deep knowledge of `openid-client` and `keytar` idioms. Use it as either the primary or a reviewer — either is fine. Running both in parallel and taking the intersection is a strong pattern for security-sensitive code.
+- **Do not use Claude Code here unless you're only writing the Electron `auth-window.ts` IPC glue.** Claude Code is great at that frontend slice but slower at the protocol layer.
+
 ## Context
 - `ramp-glass-prd.md` §2.1 (Okta SSO, one-click setup), §3.2 (auth row), §3.4 (a) first-launch flow.
 - `AGENTS.md` §4.6 security (tokens never hit disk in plaintext, keytar only, tight contextBridge, CSP).
