@@ -4,7 +4,6 @@
     { "path": "./packages/shared-types" },
     { "path": "./packages/glass-bridge" },
     { "path": "./packages/memory" },
-    { "path": "./packages/skills" },
     { "path": "./apps/desktop" }
   ]
 }
