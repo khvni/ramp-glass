@@ -12,6 +12,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@opencode-ai/sdk": "^1.4.3",
     "@ramp-glass/shared-types": "workspace:*"
   },
   "devDependencies": {

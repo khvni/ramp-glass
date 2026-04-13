@@ -1,46 +1,42 @@
-import type { IJsonModel } from 'flexlayout-react';
+import 'dockview-react/dist/styles/dockview.css';
 
-export const defaultLayoutModel: IJsonModel = {
-  global: {
-    tabEnableClose: true,
-    tabEnableRename: false,
-    splitterSize: 4,
-  },
-  borders: [],
-  layout: {
-    type: 'row',
-    weight: 100,
-    children: [
+export const defaultLayoutModel = {
+  activePanel: 'welcome-chat',
+  grid: {
+    orientation: 'horizontal' as const,
+    size: 100,
+    type: 'branch' as const,
+    data: [
       {
-        type: 'tabset',
-        weight: 60,
-        children: [
-          {
-            type: 'tab',
-            name: 'Chat',
-            component: 'chat',
-            id: 'welcome-chat',
-          },
-        ],
+        type: 'leaf' as const,
+        data: {
+          views: ['welcome-chat'],
+          activeView: 'welcome-chat',
+          id: 'group-left'
+        },
+        size: 60
       },
       {
-        type: 'tabset',
-        weight: 40,
-        children: [
-          {
-            type: 'tab',
-            name: 'Dojo',
-            component: 'dojo',
-            id: 'welcome-dojo',
-          },
-          {
-            type: 'tab',
-            name: 'Today',
-            component: 'today',
-            id: 'welcome-today',
-          },
-        ],
-      },
-    ],
+        type: 'leaf' as const,
+        data: {
+          views: ['welcome-today'],
+          activeView: 'welcome-today',
+          id: 'group-right'
+        },
+        size: 40
+      }
+    ]
   },
+  panels: {
+    'welcome-chat': {
+      id: 'welcome-chat',
+      component: 'chat',
+      title: 'Chat'
+    },
+    'welcome-today': {
+      id: 'welcome-today',
+      component: 'today',
+      title: 'Today'
+    }
+  }
 };

@@ -18,10 +18,20 @@
   },
   "dependencies": {
     "@opencode-ai/sdk": "^1.4.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "front-matter": "^4.0.2",
+    "keytar": "^7.9.0",
     "opencode-ai": "^1.4.3"
   },
   "devDependencies": {
-    "@types/node": "^20.11.30",
-    "typescript": "^5.6.3"
+    "@playwright/test": "^1.59.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^20.19.39",
+    "@vitest/ui": "^2.1.9",
+    "electron-playwright-helpers": "^2.1.0",
+    "playwright": "^1.59.1",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
   }
 }

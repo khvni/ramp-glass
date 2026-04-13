@@ -2,6 +2,11 @@ import { app, BrowserWindow } from 'electron';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { bootstrapOpencodeOnAppLaunch } from './opencode.js';
+import { registerBridgeIpcHandlers } from './bridge-handler.js';
+import { registerVaultIpcHandlers } from './vault.js';
+import { registerLayoutIpcHandlers } from './layout-store.js';
+import { registerSsoIpcHandlers } from './sso.js';
+import { registerCodexAuthIpcHandlers } from './codex-auth.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -32,6 +37,11 @@ const createMainWindow = (): BrowserWindow => {
 };
 
 bootstrapOpencodeOnAppLaunch();
+registerBridgeIpcHandlers();
+registerVaultIpcHandlers();
+registerLayoutIpcHandlers();
+registerSsoIpcHandlers();
+registerCodexAuthIpcHandlers();
 
 void app.whenReady().then(() => {
   createMainWindow();

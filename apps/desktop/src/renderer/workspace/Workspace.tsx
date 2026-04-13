@@ -1,35 +1,110 @@
-import { useMemo } from 'react';
-import { Layout, Model, type TabNode } from 'flexlayout-react';
+import { useRef, useEffect } from 'react';
+import {
+  DockviewReact,
+  type DockviewReadyEvent,
+  type IDockviewPanelProps
+} from 'dockview-react';
 import type { PaneKind } from '@ramp-glass/shared-types';
 import { defaultLayoutModel } from './layout.default.js';
 import { getPaneComponent, registerPane } from './pane-registry.js';
-import { ChatPlaceholder } from '../panes/ChatPlaceholder.js';
-import { DojoPlaceholder } from '../panes/DojoPlaceholder.js';
-import { TodayPlaceholder } from '../panes/TodayPlaceholder.js';
+import { Chat } from '../panes/Chat.js';
+import { Today } from '../panes/Today.js';
+import { Settings } from '../panes/Settings.js';
+import { MarkdownEditor } from '../panes/MarkdownEditor.js';
+import 'dockview-react/dist/styles/dockview.css';
 
-registerPane('chat', ChatPlaceholder);
-registerPane('dojo', DojoPlaceholder);
-registerPane('today', TodayPlaceholder);
+// Register built-in panes
+registerPane('chat', Chat);
+registerPane('today', Today);
+registerPane('settings', Settings);
+registerPane('markdown-editor', MarkdownEditor);
 
-const factory = (node: TabNode): JSX.Element => {
-  const component = node.getComponent() as PaneKind | undefined;
-  if (!component) return <EmptyPane message="pane: no component assigned" />;
-  const PaneComponent = getPaneComponent(component);
-  if (!PaneComponent) {
-    return <EmptyPane message={`pane: no renderer registered for "${component}"`} />;
+const DockviewWrapper = (props: IDockviewPanelProps) => {
+  const componentName = props.api.component as PaneKind;
+  const Component = getPaneComponent(componentName);
+
+  if (!Component) {
+    return <div className="text-red-500 p-4">Unknown component: {componentName}</div>;
   }
-  return <PaneComponent paneId={node.getId()} props={node.getConfig() as Record<string, unknown>} />;
+
+  return <Component paneId={props.api.id} props={props.params as Record<string, unknown>} />;
 };
 
-const EmptyPane = ({ message }: { message: string }): JSX.Element => (
-  <div className="glass-empty-pane">{message}</div>
-);
-
 export const Workspace = (): JSX.Element => {
-  const model = useMemo(() => Model.fromJson(defaultLayoutModel), []);
+  const components = {
+    chat: DockviewWrapper,
+    today: DockviewWrapper,
+    'markdown-editor': DockviewWrapper,
+    file: DockviewWrapper,
+    markdown: DockviewWrapper,
+    html: DockviewWrapper,
+    csv: DockviewWrapper,
+    image: DockviewWrapper,
+    code: DockviewWrapper,
+    settings: DockviewWrapper
+  };
+
+  const onReady = (event: DockviewReadyEvent) => {
+     window.glass.invoke('layout:load', 'default').then((state: any) => {
+         if (state && state.dockviewModel) {
+            try {
+                event.api.fromJSON(state.dockviewModel);
+            } catch (err) {
+                console.error('Failed to restore layout', err);
+                event.api.fromJSON(defaultLayoutModel as any);
+            }
+         } else {
+             event.api.fromJSON(defaultLayoutModel as any);
+         }
+     });
+
+     event.api.onDidLayoutChange(() => {
+         const dockviewModel = event.api.toJSON();
+         window.glass.invoke('layout:save', {
+             userId: 'default',
+             state: { version: 1, dockviewModel, updatedAt: new Date().toISOString() }
+         });
+     });
+
+     window.addEventListener('keydown', (e) => {
+        if (e.metaKey && e.key === '\\') {
+            if (e.shiftKey) {
+                // Split horizontal
+                const activePanel = event.api.activePanel;
+                if (activePanel) {
+                    event.api.addPanel({
+                        id: `chat-${Date.now()}`,
+                        component: 'chat',
+                        position: { direction: 'down', referencePanel: activePanel }
+                    });
+                }
+            } else {
+                // Split vertical
+                const activePanel = event.api.activePanel;
+                if (activePanel) {
+                    event.api.addPanel({
+                        id: `chat-${Date.now()}`,
+                        component: 'chat',
+                        position: { direction: 'right', referencePanel: activePanel }
+                    });
+                }
+            }
+        } else if (e.metaKey && e.key === 'w') {
+            const activePanel = event.api.activePanel;
+            if (activePanel) {
+                activePanel.api.close();
+            }
+        }
+     });
+  };
+
   return (
-    <div className="glass-workspace">
-      <Layout model={model} factory={factory} />
+    <div className="dockview-theme-dark w-full h-full text-white">
+      <DockviewReact
+        components={components}
+        onReady={onReady}
+        className="w-full h-full"
+      />
     </div>
   );
 };
