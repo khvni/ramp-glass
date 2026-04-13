@@ -1,30 +1,27 @@
-# F0 · Foundation finishing (serial, before Wave 1)
-
-The Wave 0 scaffolding is committed but a few pieces still need real work before Wave 1 agents can fan out. This is the single serial task that closes the gap.
+# F0 · Foundation (serial, before Wave 1)
 
 ## Recommended coding agent
-- **Primary: Codex.** Config files, solution tsconfig, lockfile generation, and CI pipeline are systematic backend/tooling work — exactly Codex's sweet spot. Codex executes without negotiation and handles repetitive config precisely.
-- **Tandem (optional): OpenCode / GPT-5.4** for the final pass over `packages/shared-types/src/**`. GPT-5.4's type-system reasoning is strong; a second set of eyes on the frozen interface is cheap insurance before Wave 1 fans out.
+- **Primary: Codex.** Config, bundling, lockfile, OpenCode spawn verification.
 
 ## Exclusive write scope
-- `.github/workflows/**` (the scaffold could not create these due to a local security hook; they need to be added here)
-- `tsconfig.json` at repo root (a solution file referencing all packages)
-- `pnpm-lock.yaml` (first-time generation)
-- `packages/shared-types/src/**` (FINAL pass — this is the last chance to edit; after F0 merges, shared-types is FROZEN for Wave 1)
+- Root `package.json`, `pnpm-workspace.yaml`, `tsconfig.json` (solution file), `pnpm-lock.yaml`
+- `opencode.json` (MCP server config)
+- `apps/desktop/src/main/opencode.ts` (spawn logic)
+- `packages/shared-types/src/**` (FINAL pass — frozen after this merges)
 
 ## What to build
-1. `.github/workflows/ci.yml` — GitHub Actions pipeline running typecheck, lint, and test on every PR and push to `main`. Use `actions/checkout@v4`, `pnpm/action-setup@v4`, `actions/setup-node@v4` with `node-version-file: .nvmrc`. Never interpolate untrusted GitHub event data directly into `run:` — always route through `env:` with quoting.
-2. Root `tsconfig.json` as a solution file with `references` pointing at every package and app.
-3. First run of `pnpm install` → commit `pnpm-lock.yaml`.
-4. First run of `pnpm typecheck` → fix any setup issues (module resolution, workspace references).
-5. Review `packages/shared-types/src/**` one final time. If anything is missing that Wave 1 will obviously need, add it now. Once this PR merges, shared-types is frozen and changes require a coordinator PR.
-6. Document the freeze: add a `FROZEN.md` marker file inside `packages/shared-types/` explaining the policy.
+1. Add OpenCode as a bundled dependency. Determine how to ship it inside Electron (npm package if available, or bundle the binary). Verify `opencode serve` can be spawned as a child process and responds to `@opencode-ai/sdk` calls.
+2. Create `apps/desktop/src/main/opencode.ts`: spawns `opencode serve` on a random local port, monitors health, restarts on crash.
+3. Create `opencode.json` at repo root with placeholder MCP server entries for Gmail, Google Calendar, Google Drive.
+4. Root `tsconfig.json` solution file referencing all packages/apps.
+5. `pnpm install` → commit `pnpm-lock.yaml`.
+6. `pnpm typecheck` passes.
+7. `packages/shared-types/FROZEN.md` marker.
 
 ## Acceptance
-- [ ] `pnpm install` and `pnpm typecheck` both succeed locally.
-- [ ] CI runs green on the PR.
-- [ ] `packages/shared-types/FROZEN.md` exists.
-- [ ] A tag `v0.0.0-foundation` is pushed so Wave 1 agents can rebase cleanly from it.
+- [ ] Electron main process spawns OpenCode, connects via SDK, sends a test message, gets a response.
+- [ ] `pnpm typecheck` passes.
+- [ ] `opencode.json` has MCP entries (they don't need to work yet — just valid config shape).
 
 ## When done
-`chore(foundation): CI, lockfile, shared-types freeze`. PR to `main`. Merge before dispatching any Wave-1 worktree in Conductor.
+`chore(foundation): OpenCode bundling + freeze shared-types`. PR to `main`.

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://opencode.ai/schema/opencode.json",
+  "mcp": {
+    "gmail": {
+      "type": "local",
+      "command": "npx",
+      "args": ["@google/gmail-mcp-server"],
+      "enabled": false,
+      "description": "Gmail — auto-enabled after Google SSO sign-in"
+    },
+    "google-calendar": {
+      "type": "local",
+      "command": "npx",
+      "args": ["@google/calendar-mcp-server"],
+      "enabled": false,
+      "description": "Google Calendar — auto-enabled after Google SSO sign-in"
+    },
+    "google-drive": {
+      "type": "local",
+      "command": "npx",
+      "args": ["@google/drive-mcp-server"],
+      "enabled": false,
+      "description": "Google Drive/Docs — auto-enabled after Google SSO sign-in"
+    }
+  }
+}

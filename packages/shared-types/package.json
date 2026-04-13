@@ -7,14 +7,10 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./agent": "./src/agent.ts",
-    "./auth": "./src/auth.ts",
-    "./integrations": "./src/integrations.ts",
     "./layout": "./src/layout.ts",
     "./memory": "./src/memory.ts",
-    "./scheduler": "./src/scheduler.ts",
-    "./skills": "./src/skills.ts",
-    "./slack": "./src/slack.ts"
+    "./sso": "./src/sso.ts",
+    "./vault": "./src/vault.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

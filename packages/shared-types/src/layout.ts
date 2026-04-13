@@ -1,9 +1,8 @@
 export type PaneKind =
   | 'chat'
-  | 'dojo'
   | 'today'
-  | 'scheduled'
   | 'settings'
+  | 'markdown-editor'
   | 'file'
   | 'markdown'
   | 'html'
@@ -11,17 +10,9 @@ export type PaneKind =
   | 'image'
   | 'code';
 
-export type PaneDescriptor = {
-  id: string;
-  kind: PaneKind;
-  title: string;
-  props?: Record<string, unknown>;
-};
-
 export type LayoutState = {
   version: 1;
-  model: unknown;
-  panes: PaneDescriptor[];
+  dockviewModel: unknown;
   updatedAt: string;
 };
 

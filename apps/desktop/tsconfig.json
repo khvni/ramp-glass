@@ -9,12 +9,7 @@
   "include": ["src/**/*"],
   "references": [
     { "path": "../../packages/shared-types" },
-    { "path": "../../packages/agent-runtime" },
-    { "path": "../../packages/auth" },
-    { "path": "../../packages/integrations" },
-    { "path": "../../packages/memory" },
-    { "path": "../../packages/scheduler" },
-    { "path": "../../packages/skills" },
-    { "path": "../../packages/slack-bot" }
+    { "path": "../../packages/glass-bridge" },
+    { "path": "../../packages/memory" }
   ]
 }

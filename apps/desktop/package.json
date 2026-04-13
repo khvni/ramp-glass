@@ -13,15 +13,10 @@
     "start": "electron ."
   },
   "dependencies": {
-    "@ramp-glass/agent-runtime": "workspace:*",
-    "@ramp-glass/auth": "workspace:*",
-    "@ramp-glass/integrations": "workspace:*",
+    "@ramp-glass/glass-bridge": "workspace:*",
     "@ramp-glass/memory": "workspace:*",
-    "@ramp-glass/scheduler": "workspace:*",
     "@ramp-glass/shared-types": "workspace:*",
-    "@ramp-glass/skills": "workspace:*",
-    "@ramp-glass/slack-bot": "workspace:*",
-    "flexlayout-react": "^0.7.15",
+    "dockview-react": "^5.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
