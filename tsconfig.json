@@ -2,7 +2,7 @@
   "files": [],
   "references": [
     { "path": "./packages/shared-types" },
-    { "path": "./packages/glass-bridge" },
+    { "path": "./packages/bridge" },
     { "path": "./packages/memory" },
     { "path": "./apps/desktop" }
   ]

@@ -1,4 +1,4 @@
-export type SSOProvider = 'google' | 'entra-id';
+export type SSOProvider = 'google';
 
 export type SSOSession = {
   provider: SSOProvider;

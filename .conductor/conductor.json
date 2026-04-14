@@ -1,6 +1,6 @@
 {
-  "name": "ramp-glass",
-  "description": "Local-first AI workspace cloning Ramp's internal Glass suite. One package per parallel agent.",
+  "name": "tinker",
+  "description": "Local-first AI workspace with a Tauri desktop shell, OpenCode sidecar, and a user-owned vault.",
   "scripts": {
     "setup": "./.conductor/scripts/setup.sh",
     "run": "./.conductor/scripts/run.sh",
@@ -15,15 +15,12 @@
   "runScriptMode": "nonconcurrent",
   "enterpriseDataPrivacy": false,
   "recommendations": {
-    "parallel_agents": 4,
+    "parallel_agents": 1,
     "notes": [
-      "One package per agent. Each agent works in its own worktree against main.",
-      "Wave 1 (4 parallel): glass-bridge, memory, workspace, sso.",
-      "Wave 2 (1-2): polish (markdown editor + E2E).",
-      "Hand each agent the matching tasks/<name>.md via @file reference.",
-      "shared-types is FROZEN after F0 merges. Coordinate changes.",
-      "Only one agent may touch pnpm-lock.yaml at a time. Rebase before adding deps.",
-      "OpenCode is a bundled backend. Agents must not bypass it — all LLM/tool calls go through @opencode-ai/sdk."
+      "Keep Rust thin and keep agent logic in TypeScript.",
+      "Delete stale architecture before adding new wrappers.",
+      "Do not modify packages/shared-types unless required.",
+      "OpenCode remains the only path for model and tool work."
     ]
   }
 }

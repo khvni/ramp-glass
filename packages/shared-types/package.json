@@ -1,6 +1,6 @@
 {
-  "name": "@ramp-glass/shared-types",
-  "version": "0.0.0",
+  "name": "@tinker/shared-types",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

@@ -1,30 +1,36 @@
 {
-  "name": "@ramp-glass/desktop",
-  "version": "0.0.0",
+  "name": "@tinker/desktop",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "./dist/main/index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "dev": "tauri dev",
+    "build": "tsc -p tsconfig.json --noEmit && tauri build",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint src",
-    "test": "vitest run",
-    "start": "electron ."
+    "test": "vitest run --passWithNoTests",
+    "tauri": "tauri"
   },
   "dependencies": {
-    "@ramp-glass/glass-bridge": "workspace:*",
-    "@ramp-glass/memory": "workspace:*",
-    "@ramp-glass/shared-types": "workspace:*",
+    "@opencode-ai/sdk": "^1.4.3",
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-dialog": "^2.7.0",
+    "@tauri-apps/plugin-fs": "^2.5.0",
+    "@tauri-apps/plugin-shell": "^2.3.5",
+    "@tauri-apps/plugin-sql": "^2.4.0",
+    "@tinker/bridge": "workspace:*",
+    "@tinker/memory": "workspace:*",
+    "@tinker/shared-types": "workspace:*",
     "dockview-react": "^5.2.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "tauri-plugin-keyring-api": "^0.1.1"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.10.1",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.3",
-    "electron": "^33.2.0",
     "typescript": "^5.6.3",
     "vite": "^6.0.1",
     "vitest": "^2.1.0"
