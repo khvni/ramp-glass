@@ -1,6 +1,6 @@
 {
-  "name": "@ramp-glass/memory",
-  "version": "0.0.0",
+  "name": "@tinker/memory",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -9,10 +9,13 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc --noEmit",
     "lint": "eslint src",
-    "test": "vitest run"
+    "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@ramp-glass/shared-types": "workspace:*"
+    "@tauri-apps/api": "^2.10.1",
+    "@tauri-apps/plugin-fs": "^2.5.0",
+    "@tauri-apps/plugin-sql": "^2.4.0",
+    "@tinker/shared-types": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.3",

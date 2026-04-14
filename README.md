@@ -1,31 +1,50 @@
-# Ramp Glass
+# Tinker
 
-A personal/enterprise AI workspace inspired by Ramp's internal "Glass" suite. Electron desktop app with OpenCode as the headless backend, Codex OAuth for flat-rate LLM access, and an Obsidian-compatible vault as the knowledge base.
+Tinker is a local-first AI workspace. The desktop shell is Tauri v2, the UI is React + Dockview, OpenCode runs as a bundled sidecar, and the knowledge base lives in an Obsidian-compatible vault on disk.
 
-## Read these first
+## Why it exists
 
-| File | What |
-|---|---|
-| `ramp-glass-prd.md` | PRD v2 — what to build |
-| `CLAUDE.md` / `AGENTS.md` | Build guide — how to build it |
-| `tasks/README.md` | Conductor task briefs |
+Tinker keeps the agent close to the user and their files. Memory, layout state, and vault notes stay local. LLM access goes through OpenCode and Codex OAuth, so the user can bring a ChatGPT subscription instead of wiring direct API billing into the app.
+
+## Quick start
+
+Prerequisites:
+
+- Node.js 20+
+- pnpm 9+
+- Rust 1.77.2+
+- Xcode Command Line Tools on macOS
+
+Development:
+
+```bash
+pnpm install
+pnpm --filter @tinker/desktop tauri dev
+```
 
 ## Architecture
 
-```
-Glass Desktop (Electron + React + Dockview)
-    ↕ @opencode-ai/sdk (HTTP + SSE)
-OpenCode Server (bundled, headless)
-    ↕ Vercel AI SDK + Codex OAuth
-GPT-5.4 (flat-rate via ChatGPT subscription)
+```text
+Tinker Desktop (Tauri v2 + React + Dockview)
+  |- @tinker/bridge for memory injection + event shaping
+  |- @tinker/memory for SQLite-backed memory and layout state
+  |- direct HTTP + SSE calls to OpenCode on localhost
+
+OpenCode Sidecar
+  |- GPT-5.4 via Codex OAuth
+  |- MCP integrations from opencode.json
 ```
 
 ## Status
 
-Scaffolding in place. Run `tasks/foundation.md` (F0) first, then dispatch 4 Wave-1 agents in parallel via Conductor.
+Early, but bootable. v1 focuses on Google sign-in, Linear via MCP, local vault indexing, and a persistent split-pane workspace.
 
-## Principles
+## Read next
 
-1. **Don't limit anyone's upside.** Make complexity invisible, don't remove it.
-2. **One person's breakthrough becomes everyone's baseline.** (Dojo in v2.)
-3. **The product is the enablement.** First-run delivers a result in minutes.
+- [tinker-prd.md](./tinker-prd.md)
+- [CLAUDE.md](./CLAUDE.md)
+- [AGENTS.md](./AGENTS.md)
+
+## License
+
+MIT

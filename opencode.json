@@ -3,24 +3,26 @@
   "mcp": {
     "gmail": {
       "type": "local",
-      "command": "npx",
-      "args": ["@google/gmail-mcp-server"],
-      "enabled": false,
-      "description": "Gmail — auto-enabled after Google SSO sign-in"
+      "command": ["npx", "-y", "@google/gmail-mcp-server"],
+      "enabled": false
     },
     "google-calendar": {
       "type": "local",
-      "command": "npx",
-      "args": ["@google/calendar-mcp-server"],
-      "enabled": false,
-      "description": "Google Calendar — auto-enabled after Google SSO sign-in"
+      "command": ["npx", "-y", "@google/calendar-mcp-server"],
+      "enabled": false
     },
     "google-drive": {
       "type": "local",
-      "command": "npx",
-      "args": ["@google/drive-mcp-server"],
+      "command": ["npx", "-y", "@google/drive-mcp-server"],
+      "enabled": false
+    },
+    "linear": {
+      "type": "local",
+      "command": ["npx", "-y", "@tacticlaunch/mcp-linear"],
       "enabled": false,
-      "description": "Google Drive/Docs — auto-enabled after Google SSO sign-in"
+      "environment": {
+        "LINEAR_API_KEY": "{env:LINEAR_API_KEY}"
+      }
     }
   }
 }

@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-oauth-flow"
+description = "Allows the frontend to start the Google OAuth loopback flow."
+
+[permission.commands]
+allow = ["oauth_flow"]
+deny = []

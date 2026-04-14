@@ -18,10 +18,12 @@ out/
 .vite/
 coverage/
 
-# Electron
+# Tauri
+target/
+src-tauri/target/
+apps/desktop/src-tauri/target/
+apps/desktop/dist/
 apps/desktop/release/
-apps/desktop/out/
-apps/desktop/dist-electron/
 
 # Env / secrets
 .env

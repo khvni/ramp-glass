@@ -1,46 +1,30 @@
-import type { IJsonModel } from 'flexlayout-react';
+import type { DockviewApi } from 'dockview-react';
 
-export const defaultLayoutModel: IJsonModel = {
-  global: {
-    tabEnableClose: true,
-    tabEnableRename: false,
-    splitterSize: 4,
-  },
-  borders: [],
-  layout: {
-    type: 'row',
-    weight: 100,
-    children: [
-      {
-        type: 'tabset',
-        weight: 60,
-        children: [
-          {
-            type: 'tab',
-            name: 'Chat',
-            component: 'chat',
-            id: 'welcome-chat',
-          },
-        ],
-      },
-      {
-        type: 'tabset',
-        weight: 40,
-        children: [
-          {
-            type: 'tab',
-            name: 'Dojo',
-            component: 'dojo',
-            id: 'welcome-dojo',
-          },
-          {
-            type: 'tab',
-            name: 'Today',
-            component: 'today',
-            id: 'welcome-today',
-          },
-        ],
-      },
-    ],
-  },
+export const applyDefaultLayout = (api: DockviewApi): void => {
+  api.addPanel({
+    id: 'chat',
+    component: 'chat',
+    title: 'Chat',
+  });
+
+  api.addPanel({
+    id: 'today',
+    component: 'today',
+    title: 'Today',
+    position: {
+      referencePanel: 'chat',
+      direction: 'right',
+    },
+  });
+
+  api.addPanel({
+    id: 'settings',
+    component: 'settings',
+    title: 'Settings',
+    inactive: true,
+    position: {
+      referencePanel: 'today',
+      direction: 'within',
+    },
+  });
 };

@@ -20,7 +20,7 @@ echo "[conductor:setup] installing workspace dependencies…"
 pnpm install --prefer-frozen-lockfile
 
 echo "[conductor:setup] typechecking shared-types (the frozen contract)…"
-pnpm --filter @ramp-glass/shared-types typecheck
+pnpm --filter @tinker/shared-types typecheck
 
 echo "[conductor:setup] done. Your worktree is ready."
-echo "[conductor:setup] NEXT: open tasks/<your-package>.md and follow the brief."
+echo "[conductor:setup] NEXT: read tinker-prd.md and CLAUDE.md."

@@ -1,0 +1,175 @@
+# Tinker — Product Requirements Document
+
+> Mission: build a local-first AI workspace with a thin Tauri shell, OpenCode as the agent backend, a user-owned vault, and persistent workspace state.
+
+> Audience: coding agents working in this repo. Read this before changing architecture.
+
+---
+
+## 0. Guiding Principles
+
+1. **Make complexity invisible, not absent.** Power is available without forcing setup knowledge into the first-run path.
+2. **Local-first, user-owned.** The vault, app database, and tokens stay on the user's machine.
+3. **The product teaches by doing.** The first useful interaction should happen in the product itself.
+
+---
+
+## 1. Product Summary
+
+Tinker is a desktop AI workspace. The shell is Tauri v2, the UI is React + Dockview, and OpenCode runs as a localhost sidecar. The user can connect Google for integrations, pick or create a local vault, and keep working even if no integrations are configured.
+
+The app is not a cloud dashboard. It is a local workspace that happens to talk to a model.
+
+Core traits:
+
+- OpenCode is the agent runtime
+- GPT-5.4 is the default model path
+- a local markdown vault is the knowledge base
+- SQLite stores app state, memory indexes, and layout state
+- the workspace is pane-based, not chat-only
+
+---
+
+## 2. v1 Feature Set
+
+### 2.1 Desktop runtime
+
+- Tauri v2 manages the native window, sidecar lifecycle, system keychain access, and OS dialogs.
+- Rust stays thin. It starts the OpenCode sidecar, runs the Google loopback OAuth command, exposes the OpenCode base URL, and shuts the sidecar down cleanly.
+- The webview talks directly to OpenCode over HTTP + SSE through `@opencode-ai/sdk`.
+
+### 2.2 OpenCode backend
+
+- OpenCode is bundled as a sidecar invoked as `opencode serve`.
+- The app health-checks the sidecar before showing the main workspace.
+- Chat uses `session.create()`, `session.prompt()`, `session.messages()`, and `event.subscribe()`.
+- Streamed events are transformed into a smaller UI-facing event model in `@tinker/bridge`.
+
+### 2.3 Sign-in and integrations
+
+- v1 sign-in is **Google only**.
+- Gmail, Calendar, Drive, and Linear are integration targets configured through MCP servers in `opencode.json`.
+- No custom API clients belong in the app.
+- OAuth tokens are stored in the system keychain.
+
+### 2.4 Memory and vault
+
+- The vault is an Obsidian-compatible markdown directory.
+- Tinker can connect an existing vault or create a new one.
+- SQLite stores:
+  - entities
+  - relationships
+  - FTS-backed entity search
+  - saved Dockview layouts
+- The vault remains the human-readable source of truth for notes and summaries.
+
+### 2.5 Workspace
+
+- Dockview provides split panes and tab movement.
+- The default layout is Chat + Today.
+- Layout serializes into SQLite and restores on relaunch.
+- First run walks the user through sign-in, vault choice, and opening the workspace.
+
+---
+
+## 3. Architecture
+
+```text
+Tauri Window
+  |- React renderer
+  |- Dockview workspace
+  |- @tinker/bridge for memory injection + stream shaping
+  |- @tinker/memory for SQLite and vault indexing
+  |- direct HTTP + SSE to OpenCode at localhost
+
+Tauri Rust core
+  |- starts OpenCode sidecar
+  |- health-checks localhost
+  |- runs Google loopback OAuth
+  |- exposes small invoke commands
+  |- manages keychain-backed token storage plugin
+
+OpenCode sidecar
+  |- GPT-5.4 via Codex OAuth
+  |- session management
+  |- tools and MCP servers
+```
+
+### Runtime flows
+
+**First launch**
+
+1. Tauri starts the OpenCode sidecar.
+2. The renderer asks for the sidecar URL.
+3. The user can sign in with Google or skip it.
+4. The user chooses an existing vault or creates a new one.
+5. The renderer indexes the vault into SQLite.
+6. The workspace opens with Chat and Today.
+
+**Sending a message**
+
+1. The renderer ensures a session exists.
+2. Recent entities are injected as a `noReply` prompt.
+3. The real user prompt is sent to OpenCode.
+4. SSE events stream back into the Chat pane.
+5. Any resulting layout or memory updates are written locally.
+
+**Vault indexing**
+
+1. Read markdown files from the selected vault.
+2. Parse frontmatter and body.
+3. Upsert document entities into SQLite.
+4. Surface recent entities in Today.
+
+---
+
+## 4. Repo Layout
+
+```text
+tinker/
+  apps/
+    desktop/
+      src/
+        bindings.ts
+        renderer/
+      src-tauri/
+  packages/
+    shared-types/
+    bridge/
+    memory/
+  opencode.json
+  tinker-prd.md
+  CLAUDE.md
+  AGENTS.md
+```
+
+---
+
+## 5. Quality Bars
+
+- The app launches through `pnpm tauri dev`.
+- FirstRun renders and can reach the workspace without crashing.
+- Chat and Today panes render in Dockview.
+- Layout state persists across restarts.
+- The renderer does not depend on preload globals or custom IPC channels for app logic.
+- The workspace still loads when sign-in fails or is skipped.
+
+---
+
+## 6. Non-goals
+
+- multi-provider model support
+- enterprise SSO
+- cloud sync
+- legacy desktop-shell compatibility
+- a separate prompt marketplace
+
+---
+
+## 7. Acceptance Snapshot
+
+- no product-name references to the old identity remain
+- no desktop-shell references to the removed runtime remain
+- package names use the `@tinker/*` namespace
+- the bridge package is reduced to stream + memory helpers
+- the desktop app is Tauri-first and webview-directed

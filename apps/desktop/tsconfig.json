@@ -6,10 +6,5 @@
     "jsx": "react-jsx",
     "types": ["node", "vite/client"]
   },
-  "include": ["src/**/*"],
-  "references": [
-    { "path": "../../packages/shared-types" },
-    { "path": "../../packages/glass-bridge" },
-    { "path": "../../packages/memory" }
-  ]
+  "include": ["src/**/*"]
 }
