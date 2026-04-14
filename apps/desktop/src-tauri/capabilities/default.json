@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "dialog:default",
+    "shell:default",
     "sql:default",
     "keyring:default",
     "allow-get-opencode-connection",

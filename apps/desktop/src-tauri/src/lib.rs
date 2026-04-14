@@ -1,20 +1,17 @@
 mod commands;
 
-use std::{
-  net::TcpListener,
-  path::PathBuf,
-  sync::Mutex,
-};
+use std::{path::PathBuf, sync::Mutex};
 
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use rand::{rngs::OsRng, RngCore};
 use serde::Serialize;
+use tauri::async_runtime::Receiver;
 use tauri::{Manager, RunEvent, State};
 use tauri_plugin_shell::{
   process::{CommandChild, CommandEvent},
   ShellExt,
 };
-use tokio::time::sleep;
+use tokio::time::{sleep, timeout, Duration as TokioDuration, Instant};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -44,13 +41,6 @@ fn random_url_safe(bytes: usize) -> String {
   let mut buffer = vec![0_u8; bytes];
   OsRng.fill_bytes(&mut buffer);
   URL_SAFE_NO_PAD.encode(buffer)
-}
-
-fn reserve_opencode_port() -> Result<u16, String> {
-  let listener = TcpListener::bind("127.0.0.1:0").map_err(|error| error.to_string())?;
-  let port = listener.local_addr().map_err(|error| error.to_string())?.port();
-  drop(listener);
-  Ok(port)
 }
 
 fn opencode_config_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
@@ -116,6 +106,62 @@ async fn wait_for_opencode(connection: &OpencodeConnection) -> Result<(), String
   Err("Timed out waiting for OpenCode to become healthy.".to_string())
 }
 
+fn extract_opencode_base_url(line: &[u8]) -> Option<String> {
+  let text = String::from_utf8_lossy(line);
+  let start = text.find("http://127.0.0.1:")?;
+  let candidate = text[start..].split_whitespace().next()?;
+  Some(candidate.to_string())
+}
+
+async fn wait_for_opencode_connection(
+  receiver: &mut Receiver<CommandEvent>,
+  username: String,
+  password: String,
+) -> Result<OpencodeConnection, String> {
+  let deadline = Instant::now() + TokioDuration::from_secs(20);
+
+  loop {
+    let remaining = deadline
+      .checked_duration_since(Instant::now())
+      .ok_or_else(|| "Timed out waiting for OpenCode to announce its listening URL.".to_string())?;
+
+    let event = timeout(remaining, receiver.recv())
+      .await
+      .map_err(|_| "Timed out waiting for OpenCode to announce its listening URL.".to_string())?
+      .ok_or_else(|| "OpenCode exited before it announced a listening URL.".to_string())?;
+
+    match event {
+      CommandEvent::Stdout(line) => {
+        eprintln!("[opencode] {}", String::from_utf8_lossy(&line));
+
+        if let Some(base_url) = extract_opencode_base_url(&line) {
+          let connection = OpencodeConnection {
+            base_url,
+            username: username.clone(),
+            password: password.clone(),
+          };
+
+          wait_for_opencode(&connection).await?;
+          return Ok(connection);
+        }
+      }
+      CommandEvent::Stderr(line) => {
+        eprintln!("[opencode:error] {}", String::from_utf8_lossy(&line));
+      }
+      CommandEvent::Error(error) => {
+        eprintln!("[opencode:error] {error}");
+      }
+      CommandEvent::Terminated(payload) => {
+        return Err(format!(
+          "OpenCode exited before becoming ready (code: {:?}, signal: {:?}).",
+          payload.code, payload.signal
+        ));
+      }
+      _ => {}
+    }
+  }
+}
+
 async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
   let state = app.state::<OpencodeState>();
   if state.child.lock().map_err(|_| "OpenCode state lock was poisoned.".to_string())?.is_some() {
@@ -127,22 +173,18 @@ async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
     .parent()
     .ok_or_else(|| "OpenCode config path did not have a parent directory.".to_string())?
     .to_path_buf();
-  let port = reserve_opencode_port()?;
-  let connection = OpencodeConnection {
-    base_url: format!("http://127.0.0.1:{port}"),
-    username: format!("tinker-{}", random_url_safe(8)),
-    password: random_url_safe(24),
-  };
+  let username = format!("tinker-{}", random_url_safe(8));
+  let password = random_url_safe(24);
 
   let sidecar = app
     .shell()
     .sidecar("opencode")
     .map_err(|error| error.to_string())?
-    .args(["serve", "--hostname", "127.0.0.1", "--port", &port.to_string()])
+    .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
     .envs([
       ("OPENCODE_CONFIG", config_path.to_string_lossy().into_owned()),
-      ("OPENCODE_SERVER_USERNAME", connection.username.clone()),
-      ("OPENCODE_SERVER_PASSWORD", connection.password.clone()),
+      ("OPENCODE_SERVER_USERNAME", username.clone()),
+      ("OPENCODE_SERVER_PASSWORD", password.clone()),
     ])
     .current_dir(working_dir);
 
@@ -155,6 +197,14 @@ async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
       .map_err(|_| "OpenCode state lock was poisoned.".to_string())?;
     *guard = Some(child);
   }
+
+  let connection = match wait_for_opencode_connection(&mut receiver, username, password).await {
+    Ok(connection) => connection,
+    Err(error) => {
+      stop_opencode(app);
+      return Err(error);
+    }
+  };
 
   tauri::async_runtime::spawn(async move {
     while let Some(event) = receiver.recv().await {
@@ -178,11 +228,6 @@ async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
       }
     }
   });
-
-  if let Err(error) = wait_for_opencode(&connection).await {
-    stop_opencode(app);
-    return Err(error);
-  }
 
   {
     let mut guard = state

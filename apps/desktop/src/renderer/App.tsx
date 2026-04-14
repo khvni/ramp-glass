@@ -69,6 +69,25 @@ const storeSession = async (session: SSOSession | null): Promise<void> => {
   await setPassword(KEYRING_SERVICE, GOOGLE_SESSION_ACCOUNT, JSON.stringify(session));
 };
 
+const mergeGoogleSession = (previous: SSOSession | null, next: SSOSession): SSOSession => {
+  if (next.refreshToken.length > 0) {
+    return next;
+  }
+
+  if (!previous) {
+    return next;
+  }
+
+  if (previous.provider !== next.provider || previous.userId !== next.userId) {
+    return next;
+  }
+
+  return {
+    ...next,
+    refreshToken: previous.refreshToken,
+  };
+};
+
 const getDefaultVaultPath = async (): Promise<string> => {
   const home = await homeDir();
   return join(home, 'Tinker', 'knowledge');
@@ -173,14 +192,21 @@ export const App = (): JSX.Element => {
 
     void (async () => {
       try {
-        const [opencode, session] = await Promise.all([
+        const [opencode, storedSession] = await Promise.all([
           invoke<OpencodeConnection>('get_opencode_connection'),
           readStoredSession(),
         ]);
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
+        let session = storedSession;
 
         if (session) {
-          await forwardGoogleAuth(opencode, vaultPath, session);
+          try {
+            await forwardGoogleAuth(opencode, vaultPath, session);
+          } catch (error) {
+            console.warn('Stored Google session could not be restored. Continuing in local-only mode.', error);
+            await storeSession(null);
+            session = null;
+          }
         }
 
         let vaultRevision = 0;
@@ -286,11 +312,7 @@ export const App = (): JSX.Element => {
       }
     };
 
-    const unsubscribe = vaultService.watch((changedPath) => {
-      if (!changedPath.toLowerCase().endsWith('.md')) {
-        return;
-      }
-
+    const unsubscribe = vaultService.watch(() => {
       scheduleIndex();
     });
 
@@ -393,7 +415,7 @@ export const App = (): JSX.Element => {
   };
 
   const handleGoogleConnect = async (): Promise<void> => {
-    const session = await invoke<GoogleOAuthSession>('oauth_flow');
+    const session = mergeGoogleSession(state.session, await invoke<GoogleOAuthSession>('oauth_flow'));
     await storeSession(session);
     await forwardGoogleAuth(state.opencode, state.vaultPath, session);
 

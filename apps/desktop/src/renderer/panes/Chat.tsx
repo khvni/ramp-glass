@@ -52,6 +52,7 @@ export const Chat = ({ memoryStore, modelConnected, opencode, vaultPath }: ChatP
     return () => {
       mountedRef.current = false;
       const activeSessionID = sessionIDRef.current;
+      sessionIDRef.current = null;
       if (activeSessionID) {
         void client.session.abort({ sessionID: activeSessionID });
       }
