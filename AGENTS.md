@@ -43,21 +43,23 @@
 
 ---
 
-## 2. Engineering Algorithm
+## 2. Engineering Algorithm (Musk's 5-step)
 
-Apply these steps in order:
+Apply these steps **in order**. Reversing them is the most common mistake — Musk himself has flagged automating, accelerating, and simplifying things that should have been deleted entirely.
 
-1. **Question every requirement.** Know why it exists and who still benefits from it.
-2. **Delete what should not exist.** Removing stale process beats wrapping it.
-3. **Simplify after deletion.** Optimize only the code paths that remain necessary.
-4. **Accelerate cycle time.** Make the shortest path to a verified change even shorter.
-5. **Automate last.** Do not automate a bad process.
+1. **Make requirements less dumb.** Every requirement is suspect until proven — especially ones from smart people, which are the hardest to challenge. Know why each one exists and who still benefits.
+2. **Delete parts or processes.** If you aren't adding 10% of what you delete back later, you aren't deleting enough. Removing stale process beats wrapping it.
+3. **Simplify / optimize.** Only after deletion. Optimizing something that shouldn't exist is the worst kind of waste.
+4. **Accelerate cycle time.** Shrink the distance between a change and a verified result. Only after simplification — otherwise you accelerate waste.
+5. **Automate.** Last. Never first. Automating a bad process calcifies it.
 
 How this shows up in practice:
 
 - prefer fewer dependencies over one more abstraction
 - prefer direct primitives over wrappers that only rename them
 - prefer deleting dead files over preserving compatibility with removed architecture
+- before adding a config flag, ask whether the thing it toggles should exist at all
+- before writing a helper, ask whether the three callers should be three lines instead
 
 ---
 
@@ -179,3 +181,45 @@ How this shows up in practice:
 - "Let me preserve the old desktop shell behind a flag." No. The old shell is deleted.
 - "Let me add non-GPT providers." No. GPT-5.4 via Codex OAuth is the path.
 - "Let me store tokens in a file." No. Use the system keychain.
+
+---
+
+## 12. Response Style — Caveman Mode
+
+Default response style for all prose output (chat replies, session summaries, PR descriptions, task notes). Conserves tokens during long build sessions without losing technical substance.
+
+### Rules
+
+- **Drop**: articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries (sure/certainly/of course/happy to), hedging
+- **Fragments OK**. Pattern: `[thing] [action] [reason]. [next step].`
+- **Short synonyms** (big not extensive, fix not "implement a solution for")
+- **All technical substance stays**. Only fluff dies.
+
+### Not / Yes examples
+
+- Not: "Sure! I'd be happy to help. The issue you're experiencing is likely caused by..."
+- Yes: "Bug in auth middleware. Token expiry check use `<` not `<=`. Fix:"
+
+### Auto-clarity exceptions
+
+Drop caveman mode and write normally for:
+
+- Security warnings
+- Irreversible action confirmations (destructive git commands, deletions, force pushes)
+- Multi-step sequences where fragment order risks misread
+- User repeats a question or asks for clarification
+- Errors quoted exact (never paraphrased)
+
+Resume caveman after the clarity-required section ends.
+
+### What STAYS normal — do not cavemanify
+
+- **Code** — full types, proper naming, comments where logic isn't self-evident
+- **Commit messages** — conventional commits (`feat(scope): <summary>`); already terse by convention
+- **Knowledge base files** — use the vault convention (atomic bullets with `[YYYY-MM-DD]` prefix), not caveman prose
+- **Session summary Markdown structure** — headings and lists stay; only the prose inside them goes caveman
+- **User-facing error messages / UI copy** — must be readable by nontechnical users (product principle 1)
+
+### Turning it off
+
+If a user or session says `stop caveman` or `normal mode`, revert for that session. Default resumes in new sessions.
