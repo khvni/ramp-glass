@@ -1,5 +1,5 @@
 import type { JSX } from 'react';
-import type { SSOSession } from '@tinker/shared-types';
+import type { SSOSession, WorkspacePreferences } from '@tinker/shared-types';
 
 type SettingsProps = {
   modelConnected: boolean;
@@ -15,6 +15,8 @@ type SettingsProps = {
   onDisconnectGoogle(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
+  workspacePreferences: WorkspacePreferences;
+  onWorkspacePreferencesChange(nextPreferences: WorkspacePreferences): void;
 };
 
 export const Settings = ({
@@ -31,6 +33,8 @@ export const Settings = ({
   onDisconnectModel,
   onDisconnectGoogle,
   onSelectVault,
+  workspacePreferences,
+  onWorkspacePreferencesChange,
 }: SettingsProps): JSX.Element => {
   return (
     <section className="tinker-pane">
@@ -91,6 +95,25 @@ export const Settings = ({
             </button>
             <button className="tinker-button-ghost" type="button" onClick={() => void onCreateVault()}>
               Create default vault
+            </button>
+          </div>
+        </article>
+
+        <article className="tinker-list-item">
+          <h3>Workspace</h3>
+          <p className="tinker-muted">Agent-written files open automatically by default. Turn it off if you want manual review first.</p>
+          <div className="tinker-inline-actions">
+            <button
+              className="tinker-button-secondary"
+              type="button"
+              aria-pressed={workspacePreferences.autoOpenAgentWrittenFiles}
+              onClick={() =>
+                onWorkspacePreferencesChange({
+                  autoOpenAgentWrittenFiles: !workspacePreferences.autoOpenAgentWrittenFiles,
+                })
+              }
+            >
+              Auto-open agent-written files: {workspacePreferences.autoOpenAgentWrittenFiles ? 'On' : 'Off'}
             </button>
           </div>
         </article>

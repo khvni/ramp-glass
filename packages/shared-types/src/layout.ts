@@ -13,10 +13,21 @@ export type PaneKind =
   | 'image'
   | 'code';
 
+export type WorkspacePreferences = {
+  autoOpenAgentWrittenFiles: boolean;
+};
+
+export const createDefaultWorkspacePreferences = (): WorkspacePreferences => {
+  return {
+    autoOpenAgentWrittenFiles: true,
+  };
+};
+
 export type LayoutState = {
   version: 1;
   dockviewModel: unknown;
   updatedAt: string;
+  preferences: WorkspacePreferences;
 };
 
 export type LayoutStore = {

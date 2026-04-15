@@ -21,6 +21,7 @@ type ChatProps = {
   vaultPath: string | null;
   activeSkillsRevision: number;
   onFileWritten?: (path: string) => void;
+  onOpenNewChat?: () => void;
 };
 
 const deriveSkillSlug = (text: string): string => {
@@ -58,6 +59,7 @@ export const Chat = ({
   vaultPath,
   activeSkillsRevision,
   onFileWritten,
+  onOpenNewChat,
 }: ChatProps): JSX.Element => {
   const client = useMemo(
     () => createWorkspaceClient(opencode, getOpencodeDirectory(vaultPath)),
@@ -251,7 +253,14 @@ export const Chat = ({
           <p className="tinker-eyebrow">Chat</p>
           <h2>Talk to OpenCode directly</h2>
         </div>
-        <span className="tinker-pill">{status}</span>
+        <div className="tinker-inline-actions">
+          {onOpenNewChat ? (
+            <button className="tinker-button-secondary" type="button" onClick={onOpenNewChat}>
+              New chat tab
+            </button>
+          ) : null}
+          <span className="tinker-pill">{status}</span>
+        </div>
       </header>
 
       <div className="tinker-chat-log">

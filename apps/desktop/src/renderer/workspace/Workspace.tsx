@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview-react';
 import { resolveVaultPath } from '@tinker/memory';
-import type { LayoutState, LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOSession } from '@tinker/shared-types';
+import {
+  createDefaultWorkspacePreferences,
+  type LayoutState,
+  type LayoutStore,
+  type MemoryStore,
+  type ScheduledJobStore,
+  type SkillStore,
+  type SSOSession,
+  type WorkspacePreferences,
+} from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { Chat } from '../panes/Chat.js';
 import { Dojo } from '../panes/Dojo.js';
@@ -15,14 +24,11 @@ import { HtmlRenderer } from '../renderers/HtmlRenderer.js';
 import { ImageRenderer } from '../renderers/ImageRenderer.js';
 import { MarkdownEditor } from '../renderers/MarkdownEditor.js';
 import { MarkdownRenderer } from '../renderers/MarkdownRenderer.js';
-import {
-  getPaneKindForPath,
-  getPanelIdForPath,
-  getPanelTitleForPath,
-  isAbsolutePath,
-} from '../renderers/file-utils.js';
+import { isAbsolutePath } from '../renderers/file-utils.js';
 import { DockviewApiContext } from './DockviewContext.js';
+import { openNewChatPanel } from './chat-panels.js';
 import { applyDefaultLayout } from './layout.default.js';
+import { openWorkspaceFile } from './file-open.js';
 import { createPaneRegistry } from './pane-registry.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
@@ -84,11 +90,17 @@ export const Workspace = ({
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const vaultPathRef = useRef<string | null>(vaultPath);
+  const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
+  const [workspacePreferences, setWorkspacePreferences] = useState<WorkspacePreferences>(createDefaultWorkspacePreferences);
 
   useEffect(() => {
     vaultPathRef.current = vaultPath;
   }, [vaultPath]);
+
+  useEffect(() => {
+    workspacePreferencesRef.current = workspacePreferences;
+  }, [workspacePreferences]);
 
   const getReferencePanelId = (api: DockviewApi): string | null => {
     return api.activePanel?.id ?? api.panels[0]?.id ?? null;
@@ -112,45 +124,95 @@ export const Workspace = ({
     }
   }, []);
 
-  const openFileInWorkspace = useCallback(
+  const openFileInWorkspace = useCallback((reportedPath: string): void => {
+    const api = dockviewApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    const absolutePath = resolveAgentPath(reportedPath);
+    if (!absolutePath) {
+      return;
+    }
+
+    openWorkspaceFile(api, absolutePath);
+  }, [resolveAgentPath]);
+
+  const openNewChatPane = useCallback((): void => {
+    const api = dockviewApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    openNewChatPanel(api);
+  }, []);
+
+  const handleAgentFileWritten = useCallback(
     (reportedPath: string): void => {
-      const api = dockviewApiRef.current;
-      if (!api) {
+      if (!workspacePreferencesRef.current.autoOpenAgentWrittenFiles) {
         return;
       }
 
-      const absolutePath = resolveAgentPath(reportedPath);
-      if (!absolutePath) {
-        return;
-      }
+      openFileInWorkspace(reportedPath);
+    },
+    [openFileInWorkspace],
+  );
 
-      const component = getPaneKindForPath(absolutePath);
-      const panelId = getPanelIdForPath(component, absolutePath);
-      const existingPanel = api.panels.find((panel) => panel.id === panelId);
+  const saveLayoutNow = useCallback(
+    (api: DockviewApi): void => {
+      const snapshot: LayoutState = {
+        version: LAYOUT_VERSION,
+        dockviewModel: api.toJSON(),
+        updatedAt: new Date().toISOString(),
+        preferences: workspacePreferencesRef.current,
+      };
 
-      if (existingPanel) {
-        existingPanel.api.updateParameters({ path: absolutePath });
-        existingPanel.api.setActive();
-        return;
-      }
-
-      const referencePanelId = getReferencePanelId(api);
-      api.addPanel({
-        id: panelId,
-        component,
-        title: getPanelTitleForPath(absolutePath),
-        params: { path: absolutePath },
-        ...(referencePanelId
-          ? {
-              position: {
-                referencePanel: referencePanelId,
-                direction: 'right' as const,
-              },
-            }
-          : {}),
+      void layoutStore.save(DEFAULT_USER_ID, snapshot).catch((error) => {
+        console.warn('Failed to persist workspace layout.', error);
       });
     },
-    [resolveAgentPath],
+    [layoutStore],
+  );
+
+  const scheduleLayoutSave = useCallback(
+    (api: DockviewApi): void => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+      }
+
+      saveTimerRef.current = window.setTimeout(() => {
+        saveTimerRef.current = null;
+        saveLayoutNow(api);
+      }, LAYOUT_SAVE_DEBOUNCE_MS);
+    },
+    [saveLayoutNow],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+
+        const api = dockviewApiRef.current;
+        if (api) {
+          saveLayoutNow(api);
+        }
+      }
+    };
+  }, [saveLayoutNow]);
+
+  const handleWorkspacePreferencesChange = useCallback(
+    (nextPreferences: WorkspacePreferences): void => {
+      workspacePreferencesRef.current = nextPreferences;
+      setWorkspacePreferences(nextPreferences);
+
+      const api = dockviewApiRef.current;
+      if (api) {
+        saveLayoutNow(api);
+      }
+    },
+    [saveLayoutNow],
   );
 
   const openSchedulerPane = (): void => {
@@ -193,7 +255,8 @@ export const Workspace = ({
             opencode={opencode}
             vaultPath={vaultPath}
             activeSkillsRevision={activeSkillsRevision}
-            onFileWritten={openFileInWorkspace}
+            onFileWritten={handleAgentFileWritten}
+            onOpenNewChat={openNewChatPane}
           />
         ),
         today: () => (
@@ -229,6 +292,8 @@ export const Workspace = ({
             onDisconnectGoogle={onDisconnectGoogle}
             onCreateVault={onCreateVault}
             onSelectVault={onSelectVault}
+            workspacePreferences={workspacePreferences}
+            onWorkspacePreferencesChange={handleWorkspacePreferencesChange}
           />
         ),
         dojo: (props) => <Dojo {...props} />,
@@ -257,58 +322,19 @@ export const Workspace = ({
       onSchedulerChanged,
       onSelectVault,
       opencode,
+      handleAgentFileWritten,
       openFileInWorkspace,
+      openNewChatPane,
       schedulerRevision,
       schedulerStore,
       session,
       skillStore,
       vaultPath,
       vaultRevision,
+      handleWorkspacePreferencesChange,
+      workspacePreferences,
     ],
   );
-
-  const saveLayoutNow = useCallback(
-    (api: DockviewApi): void => {
-      const snapshot: LayoutState = {
-        version: LAYOUT_VERSION,
-        dockviewModel: api.toJSON(),
-        updatedAt: new Date().toISOString(),
-      };
-
-      void layoutStore.save(DEFAULT_USER_ID, snapshot).catch((error) => {
-        console.warn('Failed to persist workspace layout.', error);
-      });
-    },
-    [layoutStore],
-  );
-
-  const scheduleLayoutSave = useCallback(
-    (api: DockviewApi): void => {
-      if (saveTimerRef.current !== null) {
-        window.clearTimeout(saveTimerRef.current);
-      }
-
-      saveTimerRef.current = window.setTimeout(() => {
-        saveTimerRef.current = null;
-        saveLayoutNow(api);
-      }, LAYOUT_SAVE_DEBOUNCE_MS);
-    },
-    [saveLayoutNow],
-  );
-
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current !== null) {
-        window.clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-
-        const api = dockviewApiRef.current;
-        if (api) {
-          saveLayoutNow(api);
-        }
-      }
-    };
-  }, [saveLayoutNow]);
 
   const onReady = (event: DockviewReadyEvent): void => {
     dockviewApiRef.current = event.api;
@@ -322,6 +348,10 @@ export const Workspace = ({
       }
 
       let hydrated = false;
+      const nextPreferences = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+      workspacePreferencesRef.current = nextPreferences;
+      setWorkspacePreferences(nextPreferences);
+
       if (savedLayout?.dockviewModel) {
         try {
           event.api.fromJSON(savedLayout.dockviewModel as ReturnType<typeof event.api.toJSON>);
@@ -452,8 +482,11 @@ export const Workspace = ({
           <h1>Tinker</h1>
         </div>
         <div className="tinker-inline-actions">
-          <button className="tinker-button-secondary" type="button" onClick={openSchedulerPane}>
+          <button className="tinker-button-secondary" type="button" onClick={openSchedulerPane} disabled={!dockviewApi}>
             Open scheduler
+          </button>
+          <button className="tinker-button-secondary" type="button" onClick={openNewChatPane} disabled={!dockviewApi}>
+            New chat tab
           </button>
         </div>
         <div className="tinker-header-meta">

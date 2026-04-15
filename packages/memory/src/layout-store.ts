@@ -1,4 +1,9 @@
-import type { LayoutState, LayoutStore } from '@tinker/shared-types';
+import {
+  createDefaultWorkspacePreferences,
+  type LayoutState,
+  type LayoutStore,
+  type WorkspacePreferences,
+} from '@tinker/shared-types';
 import { getDatabase } from './database.js';
 
 export type LayoutRow = {
@@ -9,12 +14,40 @@ export type LayoutRow = {
 
 export const CURRENT_LAYOUT_VERSION = 1 as const;
 
+type StoredLayoutPayload = {
+  dockviewModel: unknown;
+  preferences?: unknown;
+};
+
 const parseDockviewModel = (raw: string): unknown | null => {
   try {
     return JSON.parse(raw) as unknown;
   } catch {
     return null;
   }
+};
+
+const normalizePreferences = (value: unknown): WorkspacePreferences => {
+  if (!value || typeof value !== 'object') {
+    return createDefaultWorkspacePreferences();
+  }
+
+  const candidate = value as Record<string, unknown>;
+  return {
+    autoOpenAgentWrittenFiles:
+      typeof candidate.autoOpenAgentWrittenFiles === 'boolean'
+        ? candidate.autoOpenAgentWrittenFiles
+        : createDefaultWorkspacePreferences().autoOpenAgentWrittenFiles,
+  };
+};
+
+export const serializeLayoutState = (state: LayoutState): string => {
+  const payload: StoredLayoutPayload = {
+    dockviewModel: state.dockviewModel,
+    preferences: state.preferences,
+  };
+
+  return JSON.stringify(payload);
 };
 
 const isVersionCompatible = (version: number): version is 1 => {
@@ -39,10 +72,20 @@ export const hydrateLayoutRow = (row: LayoutRow | undefined, userId: string): La
     return null;
   }
 
+  const candidate = model as Record<string, unknown>;
+  const dockviewModel = 'dockviewModel' in candidate ? candidate.dockviewModel : model;
+  const preferences = 'dockviewModel' in candidate ? normalizePreferences(candidate.preferences) : createDefaultWorkspacePreferences();
+
+  if (!dockviewModel || typeof dockviewModel !== 'object') {
+    console.warn(`Ignoring stored layout for user ${userId}: payload was not valid JSON.`);
+    return null;
+  }
+
   return {
     version: row.version,
-    dockviewModel: model,
+    dockviewModel,
     updatedAt: row.updated_at,
+    preferences,
   };
 };
 
@@ -71,7 +114,7 @@ export const createLayoutStore = (): LayoutStore => {
            version = excluded.version,
            dockview_model_json = excluded.dockview_model_json,
            updated_at = excluded.updated_at`,
-        [userId, state.version, JSON.stringify(state.dockviewModel), state.updatedAt],
+        [userId, state.version, serializeLayoutState(state), state.updatedAt],
       );
     },
   };
