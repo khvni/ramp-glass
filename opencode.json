@@ -17,6 +17,14 @@
       "command": ["npx", "-y", "@google/drive-mcp-server"],
       "enabled": true
     },
+    "github": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+      "enabled": false,
+      "environment": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:TINKER_GITHUB_TOKEN}"
+      }
+    },
     "linear": {
       "type": "local",
       "command": ["npx", "-y", "@tacticlaunch/mcp-linear"],

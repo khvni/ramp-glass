@@ -1,5 +1,7 @@
 import type { JSX } from 'react';
-import type { SSOSession } from '@tinker/shared-types';
+import type { SSOStatus } from '@tinker/shared-types';
+import type { MCPStatus } from '../components/IntegrationsStrip.js';
+import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 
 type FirstRunProps = {
   modelConnected: boolean;
@@ -7,10 +9,14 @@ type FirstRunProps = {
   modelAuthMessage: string | null;
   googleAuthBusy: boolean;
   googleAuthMessage: string | null;
-  session: SSOSession | null;
+  githubAuthBusy: boolean;
+  githubAuthMessage: string | null;
+  sessions: SSOStatus;
+  mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
   onConnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
+  onConnectGithub(): Promise<void>;
   onSelectVault(): Promise<void>;
   onCreateVault(): Promise<void>;
   onContinue(): void;
@@ -22,12 +28,16 @@ export const FirstRun = ({
   modelConnected,
   googleAuthBusy,
   googleAuthMessage,
-  onConnectModel,
+  githubAuthBusy,
+  githubAuthMessage,
+  mcpStatus,
+  onConnectGithub,
   onConnectGoogle,
+  onConnectModel,
   onContinue,
   onCreateVault,
   onSelectVault,
-  session,
+  sessions,
   vaultPath,
 }: FirstRunProps): JSX.Element => {
   return (
@@ -36,8 +46,8 @@ export const FirstRun = ({
         <p className="tinker-eyebrow">First run</p>
         <h1>Tinker is ready to set up your local workspace</h1>
         <p className="tinker-muted">
-          Connect Google if you want integrations, choose a vault, and move straight into the workspace. You can
-          skip the network pieces and still use Tinker as a coding agent.
+          Connect GPT-5.4 if you want chat live on first boot. Google and GitHub are optional. Skip them and Tinker
+          still works as a local coding agent.
         </p>
 
         <div className="tinker-first-run-grid">
@@ -46,7 +56,7 @@ export const FirstRun = ({
             <p className="tinker-muted">
               {modelConnected
                 ? 'Connected through OpenCode.'
-                : 'Connect GPT-5.4 first if you want the chat pane live on first launch. Tinker uses OpenCode’s provider auth instead of duplicating the OpenAI OAuth flow.'}
+                : 'Optional on first launch. Tinker asks OpenCode to run provider auth instead of duplicating OpenAI OAuth.'}
             </p>
             {modelAuthMessage ? <p className="tinker-muted">{modelAuthMessage}</p> : null}
             <div className="tinker-inline-actions">
@@ -57,21 +67,25 @@ export const FirstRun = ({
           </article>
 
           <article className="tinker-list-item">
-            <h3>2. Google sign-in</h3>
+            <h3>2. Connected tools</h3>
             <p className="tinker-muted">
-              {session ? `Connected as ${session.email}` : 'Optional. Enables Gmail, Calendar, Drive, and forwarded auth for MCP tools.'}
+              Google unlocks Gmail, Calendar, Drive. GitHub unlocks repos, issues, and PRs. Both stay optional.
             </p>
-            {googleAuthMessage ? <p className="tinker-muted">{googleAuthMessage}</p> : null}
             <div className="tinker-inline-actions">
               <button className="tinker-button-secondary" type="button" onClick={() => void onConnectGoogle()} disabled={googleAuthBusy}>
-                {googleAuthBusy ? 'Connecting…' : session ? 'Reconnect Google' : 'Connect Google'}
+                {googleAuthBusy ? 'Connecting…' : sessions.google ? 'Reconnect Google' : 'Connect Google'}
+              </button>
+              <button className="tinker-button-secondary" type="button" onClick={() => void onConnectGithub()} disabled={githubAuthBusy}>
+                {githubAuthBusy ? 'Connecting…' : sessions.github ? 'Reconnect GitHub' : 'Connect GitHub'}
               </button>
             </div>
+            {googleAuthMessage ? <p className="tinker-muted">{googleAuthMessage}</p> : null}
+            {githubAuthMessage ? <p className="tinker-muted">{githubAuthMessage}</p> : null}
           </article>
 
           <article className="tinker-list-item">
             <h3>3. Pick a vault</h3>
-            <p className="tinker-muted">{vaultPath ?? 'Choose an existing Obsidian vault or create a new local knowledge base.'}</p>
+            <p className="tinker-muted">{vaultPath ?? 'Choose existing vault or create new local knowledge base.'}</p>
             <div className="tinker-inline-actions">
               <button className="tinker-button-secondary" type="button" onClick={() => void onSelectVault()}>
                 Select existing vault
@@ -82,6 +96,8 @@ export const FirstRun = ({
             </div>
           </article>
         </div>
+
+        <IntegrationsStrip mcpStatus={mcpStatus} sessions={sessions} />
 
         <div className="tinker-actions" style={{ marginTop: '1.5rem' }}>
           <button className="tinker-button" type="button" onClick={onContinue}>
