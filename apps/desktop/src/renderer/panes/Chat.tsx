@@ -20,6 +20,7 @@ type ChatProps = {
   opencode: OpencodeConnection;
   vaultPath: string | null;
   activeSkillsRevision: number;
+  onFileWritten?: (path: string) => void;
 };
 
 const deriveSkillSlug = (text: string): string => {
@@ -56,6 +57,7 @@ export const Chat = ({
   opencode,
   vaultPath,
   activeSkillsRevision,
+  onFileWritten,
 }: ChatProps): JSX.Element => {
   const client = useMemo(
     () => createWorkspaceClient(opencode, getOpencodeDirectory(vaultPath)),
@@ -200,6 +202,8 @@ export const Chat = ({
             setStatus(`Running ${event.name}…`);
           } else if (event.type === 'tool_result') {
             setStatus(`${event.name} finished.`);
+          } else if (event.type === 'file_written') {
+            onFileWritten?.(event.path);
           } else if (event.type === 'error') {
             setStatus(event.message);
           } else if (event.type === 'done') {
