@@ -24,7 +24,7 @@
       }
     ],
     "security": {
-      "csp": null,
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* https://accounts.google.com https://oauth2.googleapis.com https://www.googleapis.com; img-src 'self' data: blob: https://*.googleusercontent.com; style-src 'self' 'unsafe-inline'; script-src 'self';",
       "capabilities": ["default"]
     }
   },
@@ -32,6 +32,7 @@
     "active": true,
     "targets": ["app"],
     "externalBin": ["binaries/opencode"],
+    "resources": ["../../../opencode.json"],
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",

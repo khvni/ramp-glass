@@ -2,8 +2,14 @@ import type { JSX } from 'react';
 import type { SSOSession } from '@tinker/shared-types';
 
 type FirstRunProps = {
+  modelConnected: boolean;
+  modelAuthBusy: boolean;
+  modelAuthMessage: string | null;
+  googleAuthBusy: boolean;
+  googleAuthMessage: string | null;
   session: SSOSession | null;
   vaultPath: string | null;
+  onConnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
   onSelectVault(): Promise<void>;
   onCreateVault(): Promise<void>;
@@ -11,6 +17,12 @@ type FirstRunProps = {
 };
 
 export const FirstRun = ({
+  modelAuthBusy,
+  modelAuthMessage,
+  modelConnected,
+  googleAuthBusy,
+  googleAuthMessage,
+  onConnectModel,
   onConnectGoogle,
   onContinue,
   onCreateVault,
@@ -30,19 +42,35 @@ export const FirstRun = ({
 
         <div className="tinker-first-run-grid">
           <article className="tinker-list-item">
-            <h3>1. Google sign-in</h3>
+            <h3>1. GPT-5.4 sign-in</h3>
             <p className="tinker-muted">
-              {session ? `Connected as ${session.email}` : 'Optional. Enables Gmail, Calendar, Drive, and forwarded auth for MCP tools.'}
+              {modelConnected
+                ? 'Connected through OpenCode.'
+                : 'Connect GPT-5.4 first if you want the chat pane live on first launch. Tinker uses OpenCode’s provider auth instead of duplicating the OpenAI OAuth flow.'}
             </p>
+            {modelAuthMessage ? <p className="tinker-muted">{modelAuthMessage}</p> : null}
             <div className="tinker-inline-actions">
-              <button className="tinker-button" type="button" onClick={() => void onConnectGoogle()}>
-                {session ? 'Reconnect Google' : 'Connect Google'}
+              <button className="tinker-button" type="button" onClick={() => void onConnectModel()} disabled={modelAuthBusy}>
+                {modelConnected ? 'Reconnect GPT-5.4' : modelAuthBusy ? 'Connecting…' : 'Connect GPT-5.4'}
               </button>
             </div>
           </article>
 
           <article className="tinker-list-item">
-            <h3>2. Pick a vault</h3>
+            <h3>2. Google sign-in</h3>
+            <p className="tinker-muted">
+              {session ? `Connected as ${session.email}` : 'Optional. Enables Gmail, Calendar, Drive, and forwarded auth for MCP tools.'}
+            </p>
+            {googleAuthMessage ? <p className="tinker-muted">{googleAuthMessage}</p> : null}
+            <div className="tinker-inline-actions">
+              <button className="tinker-button-secondary" type="button" onClick={() => void onConnectGoogle()} disabled={googleAuthBusy}>
+                {googleAuthBusy ? 'Connecting…' : session ? 'Reconnect Google' : 'Connect Google'}
+              </button>
+            </div>
+          </article>
+
+          <article className="tinker-list-item">
+            <h3>3. Pick a vault</h3>
             <p className="tinker-muted">{vaultPath ?? 'Choose an existing Obsidian vault or create a new local knowledge base.'}</p>
             <div className="tinker-inline-actions">
               <button className="tinker-button-secondary" type="button" onClick={() => void onSelectVault()}>

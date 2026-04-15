@@ -1,7 +1,9 @@
-import { readDir, readTextFile } from '@tauri-apps/plugin-fs';
+import { readTextFile } from '@tauri-apps/plugin-fs';
 import type { Entity, EntitySource, MemorySearchResult, MemoryStore, Relationship } from '@tinker/shared-types';
 import type { VaultConfig } from '@tinker/shared-types/vault';
 import { getDatabase } from './database.js';
+import { extractEntities } from './entity-extractor.js';
+import { deriveNoteTitle, parseFrontmatter, relativeVaultPath, walkMarkdownFiles } from './vault-utils.js';
 
 const normalizeAliases = (aliases: string[]): string => aliases.join(' ');
 
@@ -39,63 +41,24 @@ const tokenizeQuery = (query: string): string | null => {
   return terms.map((term) => `"${term.replaceAll('"', '""')}"`).join(' OR ');
 };
 
-const walkMarkdownFiles = async (root: string): Promise<string[]> => {
-  const stack = [root];
-  const files: string[] = [];
-
-  while (stack.length > 0) {
-    const directory = stack.pop();
-    if (!directory) {
-      continue;
-    }
-
-    const entries = await readDir(directory);
-
-    for (const entry of entries) {
-      const absolutePath = `${directory}/${entry.name}`;
-
-      if (entry.isDirectory) {
-        stack.push(absolutePath);
-        continue;
-      }
-
-      if (entry.isFile && absolutePath.endsWith('.md')) {
-        files.push(absolutePath);
-      }
-    }
-  }
-
-  return files;
+const deleteEntityRecord = async (database: Awaited<ReturnType<typeof getDatabase>>, id: string): Promise<void> => {
+  await database.execute('DELETE FROM entities WHERE id = $1', [id]);
+  await database.execute('DELETE FROM entities_fts WHERE id = $1', [id]);
 };
 
-const parseFrontmatter = (text: string): { frontmatter: Record<string, unknown>; body: string } => {
-  if (!text.startsWith('---\n')) {
-    return { frontmatter: {}, body: text };
-  }
+const getVaultEntityIds = async (database: Awaited<ReturnType<typeof getDatabase>>): Promise<string[]> => {
+  const rows = await database.select<Array<{ id: string; sources_json: string }>>('SELECT id, sources_json FROM entities');
 
-  const boundary = text.indexOf('\n---\n', 4);
-  if (boundary < 0) {
-    return { frontmatter: {}, body: text };
-  }
-
-  const rawFrontmatter = text.slice(4, boundary);
-  const body = text.slice(boundary + 5);
-  const frontmatter: Record<string, unknown> = {};
-
-  for (const line of rawFrontmatter.split('\n')) {
-    const separator = line.indexOf(':');
-    if (separator <= 0) {
-      continue;
-    }
-
-    const key = line.slice(0, separator).trim();
-    const value = line.slice(separator + 1).trim();
-    if (key.length > 0) {
-      frontmatter[key] = value;
-    }
-  }
-
-  return { frontmatter, body };
+  return rows
+    .filter((row) => {
+      try {
+        const sources = JSON.parse(row.sources_json) as EntitySource[];
+        return sources.some((source) => source.integration === 'vault');
+      } catch {
+        return false;
+      }
+    })
+    .map((row) => row.id);
 };
 
 export const createMemoryStore = (): MemoryStore => {
@@ -238,19 +201,19 @@ export const createMemoryStore = (): MemoryStore => {
 
 export const indexVault = async (vault: VaultConfig): Promise<{ entitiesIndexed: number }> => {
   const memoryStore = createMemoryStore();
+  const database = await getDatabase();
   const files = await walkMarkdownFiles(vault.path);
+  const nextEntities: Entity[] = [];
+  let hadIndexingFailure = false;
 
-  await Promise.all(
-    files.map(async (absolutePath) => {
+  for (const absolutePath of files) {
+    try {
       const text = await readTextFile(absolutePath);
       const { frontmatter, body } = parseFrontmatter(text);
-      const relativePath = absolutePath.slice(vault.path.length + 1);
-      const title =
-        typeof frontmatter.title === 'string' && frontmatter.title.length > 0
-          ? frontmatter.title
-          : relativePath.replace(/\.md$/u, '');
+      const relativePath = relativeVaultPath(vault.path, absolutePath);
+      const title = deriveNoteTitle(relativePath, frontmatter, body);
 
-      await memoryStore.upsertEntity({
+      nextEntities.push({
         id: `vault:${relativePath}`,
         kind: 'document',
         name: title,
@@ -263,10 +226,28 @@ export const indexVault = async (vault: VaultConfig): Promise<{ entitiesIndexed:
         },
         lastSeenAt: new Date().toISOString(),
       });
-    }),
-  );
 
-  return { entitiesIndexed: files.length };
+      const extractedEntities = extractEntities(body, relativePath);
+      nextEntities.push(...extractedEntities);
+    } catch (error) {
+      hadIndexingFailure = true;
+      console.warn(`Skipping vault file during indexing: ${absolutePath}`, error);
+    }
+  }
+
+  await Promise.all(nextEntities.map((entity) => memoryStore.upsertEntity(entity)));
+
+  if (!hadIndexingFailure) {
+    const staleVaultEntityIds = await getVaultEntityIds(database);
+    const nextEntityIds = new Set(nextEntities.map((entity) => entity.id));
+    await Promise.all(
+      staleVaultEntityIds
+        .filter((id) => !nextEntityIds.has(id))
+        .map((id) => deleteEntityRecord(database, id)),
+    );
+  }
+
+  return { entitiesIndexed: nextEntities.length };
 };
 
 export const runDailySynthesis = async (userId: string): Promise<{ summary: string }> => {
@@ -280,4 +261,7 @@ export const runDailySynthesis = async (userId: string): Promise<{ summary: stri
 };
 
 export { createLayoutStore } from './layout-store.js';
+export { extractEntities } from './entity-extractor.js';
+export { createVaultService } from './vault-service.js';
+export { deriveNoteTitle, parseFrontmatter, relativeVaultPath, resolveVaultPath, serializeFrontmatter, walkMarkdownFiles, walkVaultFiles } from './vault-utils.js';
 export type { LayoutStore } from '@tinker/shared-types';

@@ -16,3 +16,8 @@ export const VAULT_PATH_KEY = 'tinker:vault-path';
 export const DEFAULT_USER_ID = 'local-user';
 
 export type GoogleOAuthSession = SSOSession;
+export type OpencodeConnection = {
+  baseUrl: string;
+  username: string;
+  password: string;
+};
