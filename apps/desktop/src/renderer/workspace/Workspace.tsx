@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview-react';
-import type { LayoutStore, MemoryStore, SSOSession } from '@tinker/shared-types';
+import type { LayoutStore, MemoryStore, ScheduledJobStore, SSOSession } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { Chat } from '../panes/Chat.js';
+import { SchedulerPane } from '../panes/SchedulerPane.js';
 import { Settings } from '../panes/Settings.js';
 import { Today } from '../panes/Today.js';
 import { VaultBrowser } from '../panes/VaultBrowser.js';
@@ -19,6 +20,8 @@ import { DockviewApiContext } from './DockviewContext.js';
 type WorkspaceProps = {
   layoutStore: LayoutStore;
   memoryStore: MemoryStore;
+  schedulerStore: ScheduledJobStore;
+  schedulerRevision: number;
   modelConnected: boolean;
   modelAuthBusy: boolean;
   modelAuthMessage: string | null;
@@ -34,11 +37,15 @@ type WorkspaceProps = {
   onDisconnectGoogle(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
+  onRunScheduledJobNow(jobId: string): Promise<void>;
+  onSchedulerChanged(): void;
 };
 
 export const Workspace = ({
   layoutStore,
   memoryStore,
+  schedulerStore,
+  schedulerRevision,
   modelAuthBusy,
   modelAuthMessage,
   modelConnected,
@@ -54,18 +61,64 @@ export const Workspace = ({
   session,
   vaultPath,
   vaultRevision,
+  onRunScheduledJobNow,
+  onSchedulerChanged,
 }: WorkspaceProps): JSX.Element => {
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
   const getReferencePanelId = (api: DockviewApi): string | null => {
     return api.activePanel?.id ?? api.panels[0]?.id ?? null;
   };
+  const openSchedulerPane = (): void => {
+    const api = dockviewApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    const existingPanel = api.panels.find((panel) => panel.id === 'scheduler');
+    if (existingPanel) {
+      existingPanel.api.setActive();
+      return;
+    }
+
+    const referencePanelId = getReferencePanelId(api);
+    api.addPanel({
+      id: 'scheduler',
+      component: 'scheduler',
+      title: 'Scheduler',
+      ...(referencePanelId
+        ? {
+            position: {
+              referencePanel: referencePanelId,
+              direction: 'within' as const,
+            },
+          }
+        : {}),
+    });
+  };
   const components = useMemo(
     () =>
       createPaneRegistry({
         'vault-browser': (props) => <VaultBrowser {...props} vaultRevision={vaultRevision} />,
         chat: () => <Chat memoryStore={memoryStore} modelConnected={modelConnected} opencode={opencode} vaultPath={vaultPath} />,
-        today: () => <Today memoryStore={memoryStore} vaultPath={vaultPath} vaultRevision={vaultRevision} />,
+        today: () => (
+          <Today
+            memoryStore={memoryStore}
+            schedulerStore={schedulerStore}
+            vaultPath={vaultPath}
+            vaultRevision={vaultRevision}
+            schedulerRevision={schedulerRevision}
+          />
+        ),
+        scheduler: () => (
+          <SchedulerPane
+            schedulerStore={schedulerStore}
+            schedulerRevision={schedulerRevision}
+            vaultPath={vaultPath}
+            onRunJobNow={onRunScheduledJobNow}
+            onSchedulerChanged={onSchedulerChanged}
+          />
+        ),
         settings: () => (
           <Settings
             modelConnected={modelConnected}
@@ -93,6 +146,8 @@ export const Workspace = ({
       }),
     [
       memoryStore,
+      onRunScheduledJobNow,
+      onSchedulerChanged,
       modelAuthBusy,
       modelAuthMessage,
       modelConnected,
@@ -105,6 +160,8 @@ export const Workspace = ({
       onDisconnectModel,
       onSelectVault,
       opencode,
+      schedulerRevision,
+      schedulerStore,
       session,
       vaultPath,
       vaultRevision,
@@ -194,6 +251,11 @@ export const Workspace = ({
         <div>
           <p className="tinker-eyebrow">Workspace</p>
           <h1>Tinker</h1>
+        </div>
+        <div className="tinker-inline-actions">
+          <button className="tinker-button-secondary" type="button" onClick={openSchedulerPane}>
+            Open scheduler
+          </button>
         </div>
         <div className="tinker-header-meta">
           <span className="tinker-pill">{modelConnected ? 'GPT-5.4 connected' : 'GPT-5.4 disconnected'}</span>

@@ -5,6 +5,8 @@ import { getDatabase } from './database.js';
 import { extractEntities } from './entity-extractor.js';
 import { deriveNoteTitle, parseFrontmatter, relativeVaultPath, walkMarkdownFiles } from './vault-utils.js';
 
+export * from './scheduler-store.js';
+
 const normalizeAliases = (aliases: string[]): string => aliases.join(' ');
 
 const hydrateEntity = (row: {
