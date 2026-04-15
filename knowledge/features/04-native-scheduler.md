@@ -1,7 +1,7 @@
 ---
 type: concept
 tags: [tinker, feature, scheduler, automation, cron]
-status: not-started
+status: review
 priority: p1
 ---
 
@@ -66,7 +66,7 @@ type OutputSink =
 
 ### App lifecycle concerns
 
-- `[2026-04-14]` If the app is closed when a job is due, it runs on next launch (catch-up mode)
+- `[2026-04-15]` If the app is closed when a job is due, missed runs are skipped on next launch and recorded once in job history
 - `[2026-04-14]` If the app is backgrounded/sleeping, OS-level wake is NOT attempted in v1 — accept the limitation, document it
 - `[2026-04-14]` Jobs that would run "every minute" are rejected at creation time (too aggressive for a desktop app)
 
@@ -106,7 +106,7 @@ type OutputSink =
 
 - **In-process vs. OS-level scheduling**: in-process is simpler but jobs don't run when app is closed. OS-level (launchd/Task Scheduler) runs reliably but requires platform-specific Rust code. Leaning in-process for v1, accept the limitation, make it clear in UI ("scheduled jobs run when Tinker is open").
 - **Background throttling**: if the app is in the background, should jobs still fire? Leaning yes — the whole point is "laptop as a server."
-- **Catch-up behavior**: if a daily job missed 3 days (laptop was off), run 3 times? Run once? Skip? Leaning: skip missed runs, note the skip in job history.
+- `[2026-04-15]` **Catch-up behavior**: missed runs are skipped, not replayed. Scheduler records one skipped-history entry with the count of missed runs.
 
 ## Security
 

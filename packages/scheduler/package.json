@@ -1,0 +1,23 @@
+{
+  "name": "@tinker/scheduler",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@opencode-ai/sdk": "^1.4.3",
+    "@tinker/shared-types": "workspace:*",
+    "cron-parser": "^5.4.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.0"
+  }
+}

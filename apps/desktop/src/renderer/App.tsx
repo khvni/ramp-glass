@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState, type JSX } from 'react';
+import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { homeDir, join } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
-import { createLayoutStore, createMemoryStore, createSkillStore, createVaultService, indexVault } from '@tinker/memory';
-import type { LayoutStore, MemoryStore, SkillStore, SSOSession, VaultConfig } from '@tinker/shared-types';
+import { createLayoutStore, createMemoryStore, createScheduledJobStore, createSkillStore, createVaultService, indexVault } from '@tinker/memory';
+import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
+import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOSession, VaultConfig } from '@tinker/shared-types';
 import { deletePassword, getPassword, setPassword } from 'tauri-plugin-keyring-api';
 import {
   DEFAULT_USER_ID,
@@ -24,6 +26,7 @@ type ReadyAppState = {
   layoutStore: LayoutStore;
   memoryStore: MemoryStore;
   skillStore: SkillStore;
+  schedulerStore: ScheduledJobStore;
   opencode: OpencodeConnection;
   session: SSOSession | null;
   vaultPath: string | null;
@@ -31,6 +34,7 @@ type ReadyAppState = {
   modelConnected: boolean;
   vaultRevision: number;
   activeSkillsRevision: number;
+  schedulerRevision: number;
 };
 
 type AppState =
@@ -251,6 +255,7 @@ const disconnectModelProvider = async (connection: OpencodeConnection, vaultPath
 export const App = (): JSX.Element => {
   const memoryStore = useMemo(() => createMemoryStore(), []);
   const layoutStore = useMemo(() => createLayoutStore(), []);
+  const schedulerStore = useMemo(() => createScheduledJobStore(), []);
   const skillStore = useMemo(() => createSkillStore(), []);
   const vaultService = useMemo(() => createVaultService(), []);
   const [state, setState] = useState<AppState>({ status: 'loading' });
@@ -258,6 +263,18 @@ export const App = (): JSX.Element => {
   const [modelAuthMessage, setModelAuthMessage] = useState<string | null>(null);
   const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
   const [googleAuthMessage, setGoogleAuthMessage] = useState<string | null>(null);
+  const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
+
+  const bumpSchedulerRevision = (): void => {
+    setState((current) =>
+      current.status !== 'ready'
+        ? current
+        : {
+            ...current,
+            schedulerRevision: current.schedulerRevision + 1,
+          },
+    );
+  };
 
   useEffect(() => {
     let active = true;
@@ -302,6 +319,7 @@ export const App = (): JSX.Element => {
           layoutStore,
           memoryStore,
           skillStore,
+          schedulerStore,
           opencode,
           session,
           vaultPath,
@@ -309,6 +327,7 @@ export const App = (): JSX.Element => {
           modelConnected,
           vaultRevision,
           activeSkillsRevision: 0,
+          schedulerRevision: 0,
         });
       } catch (error) {
         if (!active) {
@@ -325,7 +344,7 @@ export const App = (): JSX.Element => {
     return () => {
       active = false;
     };
-  }, [layoutStore, memoryStore, skillStore, vaultService]);
+  }, [layoutStore, memoryStore, schedulerStore, skillStore, vaultService]);
 
   useEffect(() => {
     if (state.status !== 'ready' || !state.vaultPath) {
@@ -401,6 +420,44 @@ export const App = (): JSX.Element => {
       unsubscribe();
     };
   }, [state.status, state.status === 'ready' ? state.vaultPath : null, vaultService, skillStore]);
+
+  useEffect(() => {
+    if (state.status !== 'ready') {
+      schedulerEngineRef.current = null;
+      return;
+    }
+
+    const notify = async (payload: { title: string; body: string }): Promise<void> => {
+      let granted = await isPermissionGranted();
+      if (!granted) {
+        granted = (await requestPermission()) === 'granted';
+      }
+
+      if (!granted) {
+        throw new Error('Notification permission denied.');
+      }
+
+      sendNotification(payload);
+    };
+
+    const engine = createSchedulerEngine({
+      jobStore: state.schedulerStore,
+      vaultService: state.vaultPath ? vaultService : null,
+      createClient: () => createWorkspaceClient(state.opencode, getOpencodeDirectory(state.vaultPath)),
+      notify,
+      onMutation: bumpSchedulerRevision,
+    });
+
+    schedulerEngineRef.current = engine;
+    engine.start();
+
+    return () => {
+      engine.stop();
+      if (schedulerEngineRef.current === engine) {
+        schedulerEngineRef.current = null;
+      }
+    };
+  }, [state.status, state.status === 'ready' ? state.opencode : null, state.status === 'ready' ? state.schedulerStore : null, state.status === 'ready' ? state.vaultPath : null, vaultService]);
 
   if (state.status === 'loading') {
     return (
@@ -592,6 +649,15 @@ export const App = (): JSX.Element => {
     );
   };
 
+  const handleRunScheduledJobNow = async (jobId: string): Promise<void> => {
+    const engine = schedulerEngineRef.current;
+    if (!engine) {
+      throw new Error('Scheduler is not ready yet.');
+    }
+
+    await engine.runNow(jobId);
+  };
+
   return (
     <div className="tinker-app">
       {!state.onboarded ? (
@@ -614,6 +680,8 @@ export const App = (): JSX.Element => {
           key={DEFAULT_USER_ID}
           layoutStore={state.layoutStore}
           memoryStore={state.memoryStore}
+          schedulerStore={state.schedulerStore}
+          schedulerRevision={state.schedulerRevision}
           skillStore={state.skillStore}
           modelConnected={state.modelConnected}
           modelAuthBusy={modelAuthBusy}
@@ -631,6 +699,8 @@ export const App = (): JSX.Element => {
           onDisconnectModel={handleDisconnectModel}
           onCreateVault={handleCreateVault}
           onSelectVault={handlePickVault}
+          onRunScheduledJobNow={handleRunScheduledJobNow}
+          onSchedulerChanged={bumpSchedulerRevision}
           onActiveSkillsChanged={handleActiveSkillsChanged}
         />
       )}

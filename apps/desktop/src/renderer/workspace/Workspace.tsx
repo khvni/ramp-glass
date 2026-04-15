@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview-react';
 import { resolveVaultPath } from '@tinker/memory';
-import type { LayoutState, LayoutStore, MemoryStore, SkillStore, SSOSession } from '@tinker/shared-types';
+import type { LayoutState, LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOSession } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { Chat } from '../panes/Chat.js';
 import { Dojo } from '../panes/Dojo.js';
+import { SchedulerPane } from '../panes/SchedulerPane.js';
 import { Settings } from '../panes/Settings.js';
 import { Today } from '../panes/Today.js';
 import { VaultBrowser } from '../panes/VaultBrowser.js';
@@ -20,9 +21,9 @@ import {
   getPanelTitleForPath,
   isAbsolutePath,
 } from '../renderers/file-utils.js';
+import { DockviewApiContext } from './DockviewContext.js';
 import { applyDefaultLayout } from './layout.default.js';
 import { createPaneRegistry } from './pane-registry.js';
-import { DockviewApiContext } from './DockviewContext.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 const LAYOUT_VERSION = 1 as const;
@@ -30,6 +31,8 @@ const LAYOUT_VERSION = 1 as const;
 type WorkspaceProps = {
   layoutStore: LayoutStore;
   memoryStore: MemoryStore;
+  schedulerStore: ScheduledJobStore;
+  schedulerRevision: number;
   skillStore: SkillStore;
   modelConnected: boolean;
   modelAuthBusy: boolean;
@@ -48,11 +51,15 @@ type WorkspaceProps = {
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
   onActiveSkillsChanged(): void;
+  onRunScheduledJobNow(jobId: string): Promise<void>;
+  onSchedulerChanged(): void;
 };
 
 export const Workspace = ({
   layoutStore,
   memoryStore,
+  schedulerStore,
+  schedulerRevision,
   skillStore,
   modelAuthBusy,
   modelAuthMessage,
@@ -66,6 +73,8 @@ export const Workspace = ({
   onDisconnectGoogle,
   onSelectVault,
   onActiveSkillsChanged,
+  onRunScheduledJobNow,
+  onSchedulerChanged,
   opencode,
   session,
   vaultPath,
@@ -144,6 +153,34 @@ export const Workspace = ({
     [resolveAgentPath],
   );
 
+  const openSchedulerPane = (): void => {
+    const api = dockviewApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    const existingPanel = api.panels.find((panel) => panel.id === 'scheduler');
+    if (existingPanel) {
+      existingPanel.api.setActive();
+      return;
+    }
+
+    const referencePanelId = getReferencePanelId(api);
+    api.addPanel({
+      id: 'scheduler',
+      component: 'scheduler',
+      title: 'Scheduler',
+      ...(referencePanelId
+        ? {
+            position: {
+              referencePanel: referencePanelId,
+              direction: 'within' as const,
+            },
+          }
+        : {}),
+    });
+  };
+
   const components = useMemo(
     () =>
       createPaneRegistry({
@@ -159,7 +196,24 @@ export const Workspace = ({
             onFileWritten={openFileInWorkspace}
           />
         ),
-        today: () => <Today memoryStore={memoryStore} vaultPath={vaultPath} vaultRevision={vaultRevision} />,
+        today: () => (
+          <Today
+            memoryStore={memoryStore}
+            schedulerStore={schedulerStore}
+            vaultPath={vaultPath}
+            vaultRevision={vaultRevision}
+            schedulerRevision={schedulerRevision}
+          />
+        ),
+        scheduler: () => (
+          <SchedulerPane
+            schedulerStore={schedulerStore}
+            schedulerRevision={schedulerRevision}
+            vaultPath={vaultPath}
+            onRunJobNow={onRunScheduledJobNow}
+            onSchedulerChanged={onSchedulerChanged}
+          />
+        ),
         settings: () => (
           <Settings
             modelConnected={modelConnected}
@@ -189,7 +243,6 @@ export const Workspace = ({
     [
       activeSkillsRevision,
       memoryStore,
-      skillStore,
       modelAuthBusy,
       modelAuthMessage,
       modelConnected,
@@ -200,12 +253,17 @@ export const Workspace = ({
       onCreateVault,
       onDisconnectGoogle,
       onDisconnectModel,
+      onRunScheduledJobNow,
+      onSchedulerChanged,
       onSelectVault,
       opencode,
+      openFileInWorkspace,
+      schedulerRevision,
+      schedulerStore,
       session,
+      skillStore,
       vaultPath,
       vaultRevision,
-      openFileInWorkspace,
     ],
   );
 
@@ -384,7 +442,7 @@ export const Workspace = ({
           : {}),
       });
     }
-  }, [dockviewApi, memoryStore, skillStore, vaultPath, onActiveSkillsChanged]);
+  }, [dockviewApi, memoryStore, onActiveSkillsChanged, skillStore, vaultPath]);
 
   return (
     <main className="tinker-workspace-shell">
@@ -392,6 +450,11 @@ export const Workspace = ({
         <div>
           <p className="tinker-eyebrow">Workspace</p>
           <h1>Tinker</h1>
+        </div>
+        <div className="tinker-inline-actions">
+          <button className="tinker-button-secondary" type="button" onClick={openSchedulerPane}>
+            Open scheduler
+          </button>
         </div>
         <div className="tinker-header-meta">
           <span className="tinker-pill">{modelConnected ? 'GPT-5.4 connected' : 'GPT-5.4 disconnected'}</span>

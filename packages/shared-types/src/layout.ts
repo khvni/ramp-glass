@@ -2,6 +2,7 @@ export type PaneKind =
   | 'vault-browser'
   | 'chat'
   | 'today'
+  | 'scheduler'
   | 'settings'
   | 'dojo'
   | 'markdown-editor'
