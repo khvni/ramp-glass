@@ -62,6 +62,33 @@ const schema = [
     author_email TEXT,
     updated_at TEXT NOT NULL
   )`,
+  `CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    schedule TEXT NOT NULL,
+    timezone TEXT NOT NULL,
+    output_sinks_json TEXT NOT NULL,
+    enabled INTEGER NOT NULL,
+    last_run_at TEXT,
+    last_run_status TEXT,
+    next_run_at TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  )`,
+  `CREATE TABLE IF NOT EXISTS job_runs (
+    id TEXT PRIMARY KEY,
+    job_id TEXT NOT NULL,
+    trigger TEXT NOT NULL,
+    scheduled_for TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    finished_at TEXT NOT NULL,
+    status TEXT NOT NULL,
+    output_text TEXT,
+    error_text TEXT,
+    delivered_sinks_json TEXT NOT NULL,
+    skipped_count INTEGER NOT NULL DEFAULT 0
+  )`,
   `CREATE TABLE IF NOT EXISTS memory_runs (
     run_key TEXT PRIMARY KEY,
     status TEXT NOT NULL,

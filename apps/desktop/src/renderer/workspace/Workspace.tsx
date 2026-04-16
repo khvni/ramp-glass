@@ -1,11 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview-react';
 import { resolveVaultPath, type MemoryRunState } from '@tinker/memory';
-import type { LayoutState, LayoutStore, MemoryStore, SkillStore, SSOStatus } from '@tinker/shared-types';
+import {
+  createDefaultWorkspacePreferences,
+  type LayoutState,
+  type LayoutStore,
+  type MemoryStore,
+  type ScheduledJobStore,
+  type SkillStore,
+  type SSOStatus,
+  type WorkspacePreferences,
+} from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { IntegrationsStrip, type MCPStatus } from '../components/IntegrationsStrip.js';
 import { Chat } from '../panes/Chat.js';
 import { Dojo } from '../panes/Dojo.js';
+import { SchedulerPane } from '../panes/SchedulerPane.js';
 import { Settings } from '../panes/Settings.js';
 import { Today } from '../panes/Today.js';
 import { VaultBrowser } from '../panes/VaultBrowser.js';
@@ -15,15 +25,12 @@ import { HtmlRenderer } from '../renderers/HtmlRenderer.js';
 import { ImageRenderer } from '../renderers/ImageRenderer.js';
 import { MarkdownEditor } from '../renderers/MarkdownEditor.js';
 import { MarkdownRenderer } from '../renderers/MarkdownRenderer.js';
-import {
-  getPaneKindForPath,
-  getPanelIdForPath,
-  getPanelTitleForPath,
-  isAbsolutePath,
-} from '../renderers/file-utils.js';
+import { isAbsolutePath } from '../renderers/file-utils.js';
+import { DockviewApiContext } from './DockviewContext.js';
+import { openNewChatPanel } from './chat-panels.js';
+import { openWorkspaceFile } from './file-open.js';
 import { applyDefaultLayout } from './layout.default.js';
 import { createPaneRegistry } from './pane-registry.js';
-import { DockviewApiContext } from './DockviewContext.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 const LAYOUT_VERSION = 1 as const;
@@ -31,6 +38,8 @@ const LAYOUT_VERSION = 1 as const;
 type WorkspaceProps = {
   layoutStore: LayoutStore;
   memoryStore: MemoryStore;
+  schedulerStore: ScheduledJobStore;
+  schedulerRevision: number;
   skillStore: SkillStore;
   modelConnected: boolean;
   modelAuthBusy: boolean;
@@ -56,6 +65,8 @@ type WorkspaceProps = {
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
   onActiveSkillsChanged(): void;
+  onRunScheduledJobNow(jobId: string): Promise<void>;
+  onSchedulerChanged(): void;
   onRunMemorySweep(): Promise<void>;
   onMemoryCommitted(): void;
 };
@@ -63,6 +74,8 @@ type WorkspaceProps = {
 export const Workspace = ({
   layoutStore,
   memoryStore,
+  schedulerStore,
+  schedulerRevision,
   skillStore,
   modelAuthBusy,
   modelAuthMessage,
@@ -80,6 +93,10 @@ export const Workspace = ({
   onDisconnectGoogle,
   onSelectVault,
   onActiveSkillsChanged,
+  onRunScheduledJobNow,
+  onSchedulerChanged,
+  onRunMemorySweep,
+  onMemoryCommitted,
   mcpStatus,
   opencode,
   sessions,
@@ -88,17 +105,21 @@ export const Workspace = ({
   activeSkillsRevision,
   memorySweepState,
   memorySweepBusy,
-  onRunMemorySweep,
-  onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const saveTimerRef = useRef<number | null>(null);
   const vaultPathRef = useRef<string | null>(vaultPath);
+  const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
   const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
+  const [workspacePreferences, setWorkspacePreferences] = useState<WorkspacePreferences>(createDefaultWorkspacePreferences);
 
   useEffect(() => {
     vaultPathRef.current = vaultPath;
   }, [vaultPath]);
+
+  useEffect(() => {
+    workspacePreferencesRef.current = workspacePreferences;
+  }, [workspacePreferences]);
 
   const getReferencePanelId = (api: DockviewApi): string | null => {
     return api.activePanel?.id ?? api.panels[0]?.id ?? null;
@@ -134,121 +155,29 @@ export const Workspace = ({
         return;
       }
 
-      const component = getPaneKindForPath(absolutePath);
-      const panelId = getPanelIdForPath(component, absolutePath);
-      const existingPanel = api.panels.find((panel) => panel.id === panelId);
-
-      if (existingPanel) {
-        existingPanel.api.updateParameters({ path: absolutePath });
-        existingPanel.api.setActive();
-        return;
-      }
-
-      const referencePanelId = getReferencePanelId(api);
-      api.addPanel({
-        id: panelId,
-        component,
-        title: getPanelTitleForPath(absolutePath),
-        params: { path: absolutePath },
-        ...(referencePanelId
-          ? {
-              position: {
-                referencePanel: referencePanelId,
-                direction: 'right' as const,
-              },
-            }
-          : {}),
-      });
+      openWorkspaceFile(api, absolutePath);
     },
     [resolveAgentPath],
   );
 
-  const components = useMemo(
-    () =>
-      createPaneRegistry({
-        'vault-browser': (props) => <VaultBrowser {...props} vaultRevision={vaultRevision} />,
-        chat: () => (
-          <Chat
-            skillStore={skillStore}
-            modelConnected={modelConnected}
-            opencode={opencode}
-            vaultPath={vaultPath}
-            activeSkillsRevision={activeSkillsRevision}
-            onFileWritten={openFileInWorkspace}
-            onMemoryCommitted={onMemoryCommitted}
-          />
-        ),
-        today: () => (
-          <Today
-            memoryStore={memoryStore}
-            vaultPath={vaultPath}
-            vaultRevision={vaultRevision}
-            memorySweepState={memorySweepState}
-            memorySweepBusy={memorySweepBusy}
-            onRunMemorySweep={onRunMemorySweep}
-          />
-        ),
-        settings: () => (
-          <Settings
-            modelConnected={modelConnected}
-            modelAuthBusy={modelAuthBusy}
-            modelAuthMessage={modelAuthMessage}
-            googleAuthBusy={googleAuthBusy}
-            googleAuthMessage={googleAuthMessage}
-            githubAuthBusy={githubAuthBusy}
-            githubAuthMessage={githubAuthMessage}
-            sessions={sessions}
-            mcpStatus={mcpStatus}
-            vaultPath={vaultPath}
-            onConnectModel={onConnectModel}
-            onConnectGoogle={onConnectGoogle}
-            onConnectGithub={onConnectGithub}
-            onDisconnectModel={onDisconnectModel}
-            onDisconnectGoogle={onDisconnectGoogle}
-            onDisconnectGithub={onDisconnectGithub}
-            onCreateVault={onCreateVault}
-            onSelectVault={onSelectVault}
-          />
-        ),
-        dojo: (props) => <Dojo {...props} />,
-        file: (props) => <CodeRenderer {...props} />,
-        markdown: (props) => <MarkdownRenderer {...props} vaultRevision={vaultRevision} />,
-        html: (props) => <HtmlRenderer {...props} />,
-        csv: (props) => <CsvRenderer {...props} />,
-        image: (props) => <ImageRenderer {...props} />,
-        code: (props) => <CodeRenderer {...props} />,
-        'markdown-editor': (props) => <MarkdownEditor {...props} vaultRevision={vaultRevision} />,
-      }),
-    [
-      activeSkillsRevision,
-      memoryStore,
-      skillStore,
-      modelAuthBusy,
-      modelAuthMessage,
-      modelConnected,
-      memorySweepBusy,
-      memorySweepState,
-      googleAuthBusy,
-      googleAuthMessage,
-      githubAuthBusy,
-      githubAuthMessage,
-      onConnectGoogle,
-      onConnectGithub,
-      onConnectModel,
-      onCreateVault,
-      onDisconnectGoogle,
-      onDisconnectGithub,
-      onDisconnectModel,
-      onMemoryCommitted,
-      onRunMemorySweep,
-      onSelectVault,
-      opencode,
-      sessions,
-      mcpStatus,
-      vaultPath,
-      vaultRevision,
-      openFileInWorkspace,
-    ],
+  const openNewChatPane = useCallback((): void => {
+    const api = dockviewApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    openNewChatPanel(api);
+  }, []);
+
+  const handleAgentFileWritten = useCallback(
+    (reportedPath: string): void => {
+      if (!workspacePreferencesRef.current.autoOpenAgentWrittenFiles) {
+        return;
+      }
+
+      openFileInWorkspace(reportedPath);
+    },
+    [openFileInWorkspace],
   );
 
   const saveLayoutNow = useCallback(
@@ -257,6 +186,7 @@ export const Workspace = ({
         version: LAYOUT_VERSION,
         dockviewModel: api.toJSON(),
         updatedAt: new Date().toISOString(),
+        preferences: workspacePreferencesRef.current,
       };
 
       void layoutStore.save(DEFAULT_USER_ID, snapshot).catch((error) => {
@@ -294,6 +224,156 @@ export const Workspace = ({
     };
   }, [saveLayoutNow]);
 
+  const handleWorkspacePreferencesChange = useCallback(
+    (nextPreferences: WorkspacePreferences): void => {
+      workspacePreferencesRef.current = nextPreferences;
+      setWorkspacePreferences(nextPreferences);
+
+      const api = dockviewApiRef.current;
+      if (api) {
+        saveLayoutNow(api);
+      }
+    },
+    [saveLayoutNow],
+  );
+
+  const openSchedulerPane = (): void => {
+    const api = dockviewApiRef.current;
+    if (!api) {
+      return;
+    }
+
+    const existingPanel = api.panels.find((panel) => panel.id === 'scheduler');
+    if (existingPanel) {
+      existingPanel.api.setActive();
+      return;
+    }
+
+    const referencePanelId = getReferencePanelId(api);
+    api.addPanel({
+      id: 'scheduler',
+      component: 'scheduler',
+      title: 'Scheduler',
+      ...(referencePanelId
+        ? {
+            position: {
+              referencePanel: referencePanelId,
+              direction: 'within' as const,
+            },
+          }
+        : {}),
+    });
+  };
+
+  const components = useMemo(
+    () =>
+      createPaneRegistry({
+        'vault-browser': (props) => <VaultBrowser {...props} vaultRevision={vaultRevision} />,
+        chat: () => (
+          <Chat
+            skillStore={skillStore}
+            modelConnected={modelConnected}
+            opencode={opencode}
+            vaultPath={vaultPath}
+            activeSkillsRevision={activeSkillsRevision}
+            onFileWritten={handleAgentFileWritten}
+            onOpenNewChat={openNewChatPane}
+            onMemoryCommitted={onMemoryCommitted}
+          />
+        ),
+        today: () => (
+          <Today
+            memoryStore={memoryStore}
+            schedulerStore={schedulerStore}
+            vaultPath={vaultPath}
+            vaultRevision={vaultRevision}
+            schedulerRevision={schedulerRevision}
+            memorySweepState={memorySweepState}
+            memorySweepBusy={memorySweepBusy}
+            onRunMemorySweep={onRunMemorySweep}
+          />
+        ),
+        scheduler: () => (
+          <SchedulerPane
+            schedulerStore={schedulerStore}
+            schedulerRevision={schedulerRevision}
+            vaultPath={vaultPath}
+            onRunJobNow={onRunScheduledJobNow}
+            onSchedulerChanged={onSchedulerChanged}
+          />
+        ),
+        settings: () => (
+          <Settings
+            modelConnected={modelConnected}
+            modelAuthBusy={modelAuthBusy}
+            modelAuthMessage={modelAuthMessage}
+            googleAuthBusy={googleAuthBusy}
+            googleAuthMessage={googleAuthMessage}
+            githubAuthBusy={githubAuthBusy}
+            githubAuthMessage={githubAuthMessage}
+            sessions={sessions}
+            mcpStatus={mcpStatus}
+            vaultPath={vaultPath}
+            onConnectModel={onConnectModel}
+            onConnectGoogle={onConnectGoogle}
+            onConnectGithub={onConnectGithub}
+            onDisconnectModel={onDisconnectModel}
+            onDisconnectGoogle={onDisconnectGoogle}
+            onDisconnectGithub={onDisconnectGithub}
+            onCreateVault={onCreateVault}
+            onSelectVault={onSelectVault}
+            workspacePreferences={workspacePreferences}
+            onWorkspacePreferencesChange={handleWorkspacePreferencesChange}
+          />
+        ),
+        dojo: (props) => <Dojo {...props} />,
+        file: (props) => <CodeRenderer {...props} />,
+        markdown: (props) => <MarkdownRenderer {...props} vaultRevision={vaultRevision} />,
+        html: (props) => <HtmlRenderer {...props} />,
+        csv: (props) => <CsvRenderer {...props} />,
+        image: (props) => <ImageRenderer {...props} />,
+        code: (props) => <CodeRenderer {...props} />,
+        'markdown-editor': (props) => <MarkdownEditor {...props} vaultRevision={vaultRevision} />,
+      }),
+    [
+      activeSkillsRevision,
+      memoryStore,
+      skillStore,
+      modelAuthBusy,
+      modelAuthMessage,
+      modelConnected,
+      memorySweepBusy,
+      memorySweepState,
+      googleAuthBusy,
+      googleAuthMessage,
+      githubAuthBusy,
+      githubAuthMessage,
+      onConnectGoogle,
+      onConnectGithub,
+      onConnectModel,
+      onCreateVault,
+      onDisconnectGoogle,
+      onDisconnectGithub,
+      onDisconnectModel,
+      onMemoryCommitted,
+      onRunMemorySweep,
+      onRunScheduledJobNow,
+      onSchedulerChanged,
+      onSelectVault,
+      opencode,
+      sessions,
+      mcpStatus,
+      vaultPath,
+      vaultRevision,
+      schedulerStore,
+      schedulerRevision,
+      handleAgentFileWritten,
+      openNewChatPane,
+      handleWorkspacePreferencesChange,
+      workspacePreferences,
+    ],
+  );
+
   const onReady = (event: DockviewReadyEvent): void => {
     dockviewApiRef.current = event.api;
 
@@ -306,6 +386,10 @@ export const Workspace = ({
       }
 
       let hydrated = false;
+      const nextPreferences = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+      workspacePreferencesRef.current = nextPreferences;
+      setWorkspacePreferences(nextPreferences);
+
       if (savedLayout?.dockviewModel) {
         try {
           event.api.fromJSON(savedLayout.dockviewModel as ReturnType<typeof event.api.toJSON>);
@@ -339,15 +423,14 @@ export const Workspace = ({
         .forEach((panel) => {
           panel.api.updateParameters({
             skillStore,
-            onActiveSkillsChanged,
             vaultPath,
+            onActiveSkillsChanged,
           });
         });
 
-      event.api.onDidAddPanel(() => scheduleLayoutSave(event.api));
-      event.api.onDidRemovePanel(() => scheduleLayoutSave(event.api));
-      event.api.onDidMovePanel(() => scheduleLayoutSave(event.api));
-      event.api.onDidActivePanelChange(() => scheduleLayoutSave(event.api));
+      event.api.onDidLayoutChange(() => {
+        scheduleLayoutSave(event.api);
+      });
 
       setDockviewApi(event.api);
       scheduleLayoutSave(event.api);
@@ -428,7 +511,7 @@ export const Workspace = ({
           : {}),
       });
     }
-  }, [dockviewApi, memoryStore, skillStore, vaultPath, onActiveSkillsChanged]);
+  }, [dockviewApi, memoryStore, onActiveSkillsChanged, skillStore, vaultPath]);
 
   return (
     <main className="tinker-workspace-shell">
@@ -436,6 +519,14 @@ export const Workspace = ({
         <div>
           <p className="tinker-eyebrow">Workspace</p>
           <h1>Tinker</h1>
+        </div>
+        <div className="tinker-inline-actions">
+          <button className="tinker-button-secondary" type="button" onClick={openSchedulerPane} disabled={!dockviewApi}>
+            Open scheduler
+          </button>
+          <button className="tinker-button-secondary" type="button" onClick={openNewChatPane} disabled={!dockviewApi}>
+            New chat tab
+          </button>
         </div>
         <div className="tinker-header-meta">
           <span className="tinker-pill">{modelConnected ? 'GPT-5.4 connected' : 'GPT-5.4 disconnected'}</span>

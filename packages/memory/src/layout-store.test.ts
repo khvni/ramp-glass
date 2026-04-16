@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CURRENT_LAYOUT_VERSION, hydrateLayoutRow } from './layout-store.js';
+import { CURRENT_LAYOUT_VERSION, hydrateLayoutRow, serializeLayoutState } from './layout-store.js';
 
 describe('hydrateLayoutRow', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
@@ -48,7 +48,27 @@ describe('hydrateLayoutRow', () => {
     expect(hydrateLayoutRow(row, 'user')).toBeNull();
   });
 
-  it('hydrates a valid row into the LayoutState shape', () => {
+  it('round-trips a persisted layout including workspace preferences', () => {
+    const row = {
+      version: CURRENT_LAYOUT_VERSION,
+      dockview_model_json: serializeLayoutState({
+        version: CURRENT_LAYOUT_VERSION,
+        dockviewModel: { grid: { height: 1, width: 1 } },
+        updatedAt: '2026-04-15T00:00:00.000Z',
+        preferences: { autoOpenAgentWrittenFiles: false },
+      }),
+      updated_at: '2026-04-15T00:00:00.000Z',
+    };
+
+    expect(hydrateLayoutRow(row, 'user')).toEqual({
+      version: CURRENT_LAYOUT_VERSION,
+      dockviewModel: { grid: { height: 1, width: 1 } },
+      updatedAt: '2026-04-15T00:00:00.000Z',
+      preferences: { autoOpenAgentWrittenFiles: false },
+    });
+  });
+
+  it('defaults auto-open on when loading a legacy dockview payload', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION,
       dockview_model_json: '{"grid":{"height":1,"width":1}}',
@@ -56,9 +76,10 @@ describe('hydrateLayoutRow', () => {
     };
 
     expect(hydrateLayoutRow(row, 'user')).toEqual({
-      version: 1,
+      version: CURRENT_LAYOUT_VERSION,
       dockviewModel: { grid: { height: 1, width: 1 } },
       updatedAt: '2026-04-15T00:00:00.000Z',
+      preferences: { autoOpenAgentWrittenFiles: true },
     });
   });
 });

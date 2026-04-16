@@ -1,0 +1,283 @@
+import type { OpencodeClient } from '@opencode-ai/sdk/v2/client';
+import type { ScheduledJob, ScheduledJobRun, ScheduledJobStore, ScheduledOutputSink, VaultService } from '@tinker/shared-types';
+import { countSkippedRuns, getFutureRunAfter } from './schedule.js';
+import { runPromptWithClient } from './opencode.js';
+
+export type SchedulerEngineOptions = {
+  jobStore: ScheduledJobStore;
+  vaultService: VaultService | null;
+  createClient(): OpencodeClient;
+  notify?(payload: { title: string; body: string }): Promise<void> | void;
+  onMutation?(): void;
+  now?: () => Date;
+  pollIntervalMs?: number;
+  runGraceMs?: number;
+};
+
+export type SchedulerEngine = {
+  start(): void;
+  stop(): void;
+  tick(): Promise<void>;
+  runNow(jobId: string): Promise<void>;
+};
+
+const DEFAULT_POLL_INTERVAL_MS = 30_000;
+const DEFAULT_RUN_GRACE_MS = 90_000;
+
+const getNoteTitleFromPath = (path: string): string => {
+  const normalized = path.replace(/\\/gu, '/');
+  const leaf = normalized.split('/').filter(Boolean).at(-1) ?? 'Scheduled Output';
+  return leaf.replace(/\.md$/iu, '') || 'Scheduled Output';
+};
+
+const formatTimestamp = (value: string): string => {
+  return new Intl.DateTimeFormat(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(value));
+};
+
+const buildVaultAppendBody = (
+  existingBody: string | null,
+  path: string,
+  jobName: string,
+  finishedAt: string,
+  outputText: string,
+): string => {
+  const heading = `# ${getNoteTitleFromPath(path)}`;
+  const currentBody = existingBody?.trim();
+  const prefix = currentBody && currentBody.length > 0 ? currentBody : heading;
+  const section = [`## ${formatTimestamp(finishedAt)} — ${jobName}`, '', outputText.trim()].join('\n');
+  return `${prefix}\n\n${section}\n`;
+};
+
+const truncateNotificationBody = (value: string): string => {
+  const trimmed = value.trim().replace(/\s+/gu, ' ');
+  if (trimmed.length <= 180) {
+    return trimmed;
+  }
+
+  return `${trimmed.slice(0, 177)}...`;
+};
+
+const serializeError = (error: unknown): string => {
+  return error instanceof Error ? error.message : String(error);
+};
+
+const appendToVaultSink = async (
+  vaultService: VaultService | null,
+  sink: Extract<ScheduledOutputSink, { type: 'vault-append' }>,
+  job: ScheduledJob,
+  finishedAt: string,
+  outputText: string,
+): Promise<void> => {
+  if (!vaultService) {
+    throw new Error(`Vault sink "${sink.path}" requires a connected vault.`);
+  }
+
+  const existingNote = await vaultService.readNote(sink.path);
+  const nextBody = buildVaultAppendBody(existingNote?.body ?? null, sink.path, job.name, finishedAt, outputText);
+
+  await vaultService.writeNote(sink.path, existingNote?.frontmatter ?? {}, nextBody);
+};
+
+const deliverOutput = async (
+  job: ScheduledJob,
+  outputText: string,
+  finishedAt: string,
+  options: SchedulerEngineOptions,
+): Promise<{ deliveredSinks: ScheduledOutputSink[]; errors: string[] }> => {
+  const deliveredSinks: ScheduledOutputSink[] = [];
+  const errors: string[] = [];
+
+  for (const sink of job.outputSinks) {
+    try {
+      if (sink.type === 'vault-append') {
+        await appendToVaultSink(options.vaultService, sink, job, finishedAt, outputText);
+      } else if (sink.type === 'notification') {
+        await options.notify?.({
+          title: sink.title,
+          body: truncateNotificationBody(outputText),
+        });
+      }
+
+      deliveredSinks.push(sink);
+    } catch (error) {
+      errors.push(`${sink.type}: ${serializeError(error)}`);
+    }
+  }
+
+  return { deliveredSinks, errors };
+};
+
+const buildRunRecord = (run: ScheduledJobRun): ScheduledJobRun => run;
+
+export const createSchedulerEngine = (options: SchedulerEngineOptions): SchedulerEngine => {
+  const now = options.now ?? (() => new Date());
+  const pollIntervalMs = options.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
+  const runGraceMs = options.runGraceMs ?? DEFAULT_RUN_GRACE_MS;
+  const activeJobs = new Set<string>();
+  let intervalId: number | null = null;
+  let ticking = false;
+
+  const saveJobAndRun = async (job: ScheduledJob, run: ScheduledJobRun): Promise<void> => {
+    await options.jobStore.saveJob(job);
+    await options.jobStore.recordRun(buildRunRecord(run));
+    options.onMutation?.();
+  };
+
+  const runJob = async (
+    job: ScheduledJob,
+    trigger: ScheduledJobRun['trigger'],
+    scheduledFor: string,
+  ): Promise<void> => {
+    if (activeJobs.has(job.id)) {
+      return;
+    }
+
+    activeJobs.add(job.id);
+    const startedAt = now().toISOString();
+    const nextScheduledRun =
+      trigger === 'schedule' ? getFutureRunAfter(job.schedule, job.timezone, new Date(scheduledFor)) : job.nextRunAt;
+
+    try {
+      const outputText = await runPromptWithClient(options.createClient(), job.name, job.prompt);
+      const finishedAt = now().toISOString();
+      const delivery = await deliverOutput(job, outputText, finishedAt, options);
+      const status = delivery.errors.length === 0 ? 'success' : 'error';
+      const updatedJob: ScheduledJob = {
+        ...job,
+        lastRunAt: finishedAt,
+        lastRunStatus: status,
+        nextRunAt: nextScheduledRun,
+        updatedAt: finishedAt,
+      };
+
+      await saveJobAndRun(updatedJob, {
+        id: crypto.randomUUID(),
+        jobId: job.id,
+        trigger,
+        scheduledFor,
+        startedAt,
+        finishedAt,
+        status,
+        outputText,
+        errorText: delivery.errors.length > 0 ? delivery.errors.join('\n') : null,
+        deliveredSinks: delivery.deliveredSinks,
+        skippedCount: 0,
+      });
+    } catch (error) {
+      const finishedAt = now().toISOString();
+      const updatedJob: ScheduledJob = {
+        ...job,
+        lastRunAt: finishedAt,
+        lastRunStatus: 'error',
+        nextRunAt: nextScheduledRun,
+        updatedAt: finishedAt,
+      };
+
+      await saveJobAndRun(updatedJob, {
+        id: crypto.randomUUID(),
+        jobId: job.id,
+        trigger,
+        scheduledFor,
+        startedAt,
+        finishedAt,
+        status: 'error',
+        outputText: null,
+        errorText: serializeError(error),
+        deliveredSinks: [],
+        skippedCount: 0,
+      });
+    } finally {
+      activeJobs.delete(job.id);
+    }
+  };
+
+  const skipMissedJob = async (job: ScheduledJob, nowDate: Date): Promise<void> => {
+    const startedAt = nowDate.toISOString();
+    const skipped = countSkippedRuns(job.schedule, job.timezone, new Date(job.nextRunAt), nowDate);
+    const finishedAt = now().toISOString();
+    const message = `Skipped ${skipped.skippedCount} missed run${skipped.skippedCount === 1 ? '' : 's'} while Tinker was closed or sleeping.`;
+    const updatedJob: ScheduledJob = {
+      ...job,
+      lastRunAt: finishedAt,
+      lastRunStatus: 'skipped',
+      nextRunAt: skipped.nextRunAt,
+      updatedAt: finishedAt,
+    };
+
+    await saveJobAndRun(updatedJob, {
+      id: crypto.randomUUID(),
+      jobId: job.id,
+      trigger: 'schedule',
+      scheduledFor: job.nextRunAt,
+      startedAt,
+      finishedAt,
+      status: 'skipped',
+      outputText: null,
+      errorText: message,
+      deliveredSinks: [],
+      skippedCount: skipped.skippedCount,
+    });
+  };
+
+  const tick = async (): Promise<void> => {
+    if (ticking) {
+      return;
+    }
+
+    ticking = true;
+
+    try {
+      const nowDate = now();
+      const jobs = await options.jobStore.listDueJobs(nowDate.toISOString());
+
+      for (const job of jobs) {
+        const lagMs = nowDate.getTime() - new Date(job.nextRunAt).getTime();
+        if (lagMs > runGraceMs) {
+          await skipMissedJob(job, nowDate);
+          continue;
+        }
+
+        await runJob(job, 'schedule', job.nextRunAt);
+      }
+    } finally {
+      ticking = false;
+    }
+  };
+
+  return {
+    start(): void {
+      if (intervalId !== null) {
+        return;
+      }
+
+      void tick();
+      intervalId = window.setInterval(() => {
+        void tick();
+      }, pollIntervalMs);
+    },
+
+    stop(): void {
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+        intervalId = null;
+      }
+    },
+
+    tick,
+
+    async runNow(jobId: string): Promise<void> {
+      const job = await options.jobStore.getJob(jobId);
+      if (!job) {
+        throw new Error('Scheduled job no longer exists.');
+      }
+
+      await runJob(job, 'manual', now().toISOString());
+    },
+  };
+};

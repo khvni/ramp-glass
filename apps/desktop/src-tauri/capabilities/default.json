@@ -20,6 +20,7 @@
     },
     "sql:default",
     "keyring:default",
+    "notification:default",
     "allow-get-opencode-connection",
     "allow-oauth-flow",
     "allow-restart-opencode",

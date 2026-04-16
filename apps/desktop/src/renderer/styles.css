@@ -42,6 +42,15 @@ textarea {
   font: inherit;
 }
 
+input:not([type='checkbox']),
+textarea {
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.85rem 0.95rem;
+  background: rgba(2, 6, 23, 0.72);
+  color: var(--tinker-text);
+}
+
 .tinker-app {
   display: flex;
   min-height: 100%;
@@ -90,6 +99,12 @@ textarea {
   flex-wrap: wrap;
 }
 
+.tinker-section {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
 .tinker-button,
 .tinker-button-secondary,
 .tinker-button-ghost {
@@ -133,7 +148,7 @@ textarea {
 
 .tinker-workspace-shell {
   display: grid;
-  grid-template-rows: auto 1fr;
+  grid-template-rows: auto auto 1fr;
   width: 100%;
 }
 
@@ -159,6 +174,10 @@ textarea {
   flex-wrap: wrap;
 }
 
+.tinker-header-strip {
+  padding: 0.75rem 1.25rem 0;
+}
+
 .tinker-pill {
   padding: 0.3rem 0.7rem;
   border-radius: 999px;
@@ -166,6 +185,49 @@ textarea {
   background: rgba(255, 255, 255, 0.05);
   color: var(--tinker-muted);
   font-size: 0.82rem;
+}
+
+.tinker-integrations {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.tinker-integrations--compact {
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+}
+
+.tinker-integration-card {
+  display: grid;
+  gap: 0.2rem;
+  padding: 0.7rem 0.8rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.tinker-integration-card strong {
+  font-size: 0.88rem;
+}
+
+.tinker-integration-card span {
+  color: var(--tinker-muted);
+  font-size: 0.78rem;
+}
+
+.tinker-integration-card--ok {
+  border-color: rgba(125, 211, 252, 0.35);
+  background: rgba(56, 189, 248, 0.1);
+}
+
+.tinker-integration-card--warn {
+  border-color: rgba(245, 158, 11, 0.28);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.tinker-integration-card--bad {
+  border-color: rgba(248, 113, 113, 0.28);
+  background: rgba(248, 113, 113, 0.08);
 }
 
 .tinker-dockview {
@@ -367,6 +429,103 @@ textarea {
   opacity: 0.75;
 }
 
+.tinker-field,
+.tinker-check {
+  display: grid;
+  gap: 0.4rem;
+}
+
+.tinker-check {
+  grid-template-columns: auto 1fr;
+  align-items: center;
+}
+
+.tinker-check input {
+  margin: 0;
+}
+
+.tinker-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.tinker-field-grid {
+  display: grid;
+  gap: 0.9rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.tinker-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 2rem;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(16px);
+  z-index: 20;
+}
+
+.tinker-modal {
+  width: min(860px, 100%);
+  max-height: calc(100vh - 4rem);
+  overflow: auto;
+  padding: 1.2rem;
+  border-radius: 22px;
+  border: 1px solid var(--tinker-panel-border);
+  background:
+    linear-gradient(180deg, rgba(10, 16, 28, 0.98), rgba(11, 17, 32, 0.95)),
+    linear-gradient(130deg, rgba(245, 158, 11, 0.1), transparent 42%);
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+}
+
+.tinker-scheduler-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  min-height: 0;
+}
+
+.tinker-scheduler-list,
+.tinker-scheduler-history {
+  min-height: 0;
+  overflow: auto;
+  padding-right: 0.25rem;
+}
+
+.tinker-job-card {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.tinker-job-card--selected {
+  border-color: rgba(125, 211, 252, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(125, 211, 252, 0.12);
+}
+
+.tinker-job-select {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tinker-job-select h3 {
+  margin-bottom: 0.3rem;
+}
+
+.tinker-today-output {
+  margin-top: 0.55rem;
+  color: var(--tinker-text);
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
 .tinker-renderer-pane {
   min-height: 0;
 }
@@ -401,6 +560,86 @@ textarea {
 .tinker-code-block {
   margin: 0;
   white-space: pre;
+}
+
+.tinker-code-content {
+  display: block;
+  margin: 0;
+  color: var(--tinker-text);
+  font-family:
+    "SFMono-Regular",
+    "JetBrains Mono",
+    "Menlo",
+    "Monaco",
+    "Consolas",
+    monospace;
+  font-size: 0.9rem;
+  line-height: 1.65;
+  tab-size: 2;
+  white-space: pre;
+}
+
+.tinker-code-content.hljs {
+  background: transparent;
+}
+
+.tinker-code-content .hljs-comment,
+.tinker-code-content .hljs-quote {
+  color: #8fa1b8;
+  font-style: italic;
+}
+
+.tinker-code-content .hljs-keyword,
+.tinker-code-content .hljs-selector-tag,
+.tinker-code-content .hljs-literal,
+.tinker-code-content .hljs-title,
+.tinker-code-content .hljs-section,
+.tinker-code-content .hljs-doctag {
+  color: #7dd3fc;
+}
+
+.tinker-code-content .hljs-string,
+.tinker-code-content .hljs-regexp,
+.tinker-code-content .hljs-addition,
+.tinker-code-content .hljs-attr {
+  color: #fbbf24;
+}
+
+.tinker-code-content .hljs-number,
+.tinker-code-content .hljs-symbol,
+.tinker-code-content .hljs-bullet,
+.tinker-code-content .hljs-meta,
+.tinker-code-content .hljs-link {
+  color: #fb7185;
+}
+
+.tinker-code-content .hljs-function .hljs-title,
+.tinker-code-content .hljs-built_in,
+.tinker-code-content .hljs-type {
+  color: #34d399;
+}
+
+.tinker-code-content .hljs-variable,
+.tinker-code-content .hljs-params,
+.tinker-code-content .hljs-property {
+  color: #e2e8f0;
+}
+
+.tinker-code-content .hljs-strong {
+  font-weight: 700;
+}
+
+.tinker-code-content .hljs-emphasis {
+  font-style: italic;
+}
+
+.tinker-code-content .hljs-deletion {
+  color: #fca5a5;
+}
+
+.tinker-code-content .hljs,
+.tinker-code-content .hljs-subst {
+  color: inherit;
 }
 
 .tinker-markdown-editor {
@@ -736,6 +975,12 @@ textarea {
 .tinker-button-ghost--small {
   font-size: 0.75rem;
   padding: 0.2rem 0.55rem;
+}
+
+@media (max-width: 960px) {
+  .tinker-scheduler-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 800px) {

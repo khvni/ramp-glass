@@ -58,7 +58,7 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 | `today` | Today pane — recent entities, recommended skills | Default layout |
 | `markdown` | Markdown renderer (with wikilinks) | User opens `.md` file, agent creates note |
 | `csv` | Table renderer (sortable, searchable) | Agent outputs CSV, user opens `.csv` |
-| `code` | Monaco or CodeMirror with syntax highlighting | Agent creates/edits code file |
+| `code` | Lazy syntax-highlighted code renderer (`highlight.js`) | Agent creates/edits code file |
 | `image` | Image viewer | Agent outputs image, user opens image file |
 | `text` | Plain text fallback | Any other file type |
 | `skill` | Skill markdown editor (special mode) | User edits a skill via Dojo |
@@ -78,7 +78,7 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 
 ### Dependencies (per CLAUDE.md §3)
 - `[2026-04-14]` `dockview-react` — layout (required)
-- `[2026-04-14]` CodeMirror 6 or Monaco — code rendering (pick one; prefer CodeMirror for bundle size)
+- `[2026-04-15]` `highlight.js` — render-only syntax highlighting for code tabs (lazy language chunks)
 - `[2026-04-14]` `react-markdown` or similar — markdown rendering
 - `[2026-04-14]` `papaparse` — CSV parsing for table renderer
 
@@ -98,7 +98,7 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 
 ## Open Questions
 
-- **Code renderer choice**: CodeMirror 6 (smaller bundle, React-friendly) vs. Monaco (feature-rich, larger bundle). Leaning CodeMirror 6 for app-size discipline.
+- **Inline code editing**: render-only code tabs now use lazy `highlight.js`. If v1 expands into richer in-pane editing, revisit CodeMirror 6 vs. Monaco then.
 - **Layout migration**: how aggressive on version bumps? Safer to fall back to default than to attempt auto-migration for significant structural changes.
 - **Multi-session chat tabs**: can user open two separate OpenCode sessions side by side? Leaning yes — this is part of Glass's "multi-chat" flavor.
 
@@ -119,7 +119,7 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 - [x] Layout state serializes to SQLite on change — `packages/memory/src/layout-store.ts` + debounced (300ms) save in `Workspace.onReady`
 - [x] Layout restores on app relaunch — `layoutStore.load()` + `event.api.fromJSON()` with version-gated hydration
 - [x] Agent-created files auto-open in new tabs — `Chat` forwards `file_written` stream events to `Workspace.openFileInWorkspace`, which resolves vault-relative paths via `resolveVaultPath` and opens/focuses the right renderer panel
-- [x] Markdown, CSV, code, and image tabs render inline with correct content — renderers wired through `pane-registry` + `getPaneKindForPath`
+- [x] Markdown, CSV, code, and image tabs render inline with correct content — renderers wired through `pane-registry` + `getPaneKindForPath`; code tabs now lazy-highlight through `renderers/code-highlighter.ts`
 - [x] App remains usable if the layout_state table is empty or corrupted (fallback to default) — `hydrateLayoutRow` rejects incompatible versions and malformed JSON; `fromJSON` failures fall back to `applyDefaultLayout` (see `layout-store.test.ts` for corruption cases)
 
 ## Implementation Notes (2026-04-15)
@@ -128,7 +128,9 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 - `hydrateLayoutRow` exported from `layout-store.ts` is the pure hydrate path used both at runtime and in `layout-store.test.ts`.
 - `isAbsolutePath` helper in `renderer/renderers/file-utils.ts` keeps POSIX + Windows path detection local to the renderer without leaking `vault-utils` regex internals.
 - Auto-open uses the existing `getPanelIdForPath` keying, so repeat writes to the same file reuse the open tab instead of stacking duplicates.
-- Code rendering still uses the plain `<pre><code>` fallback; CodeMirror 6 vs Monaco decision is deferred (still an open question below). No runtime regression — existing syntax-class hook in `getCodeLanguage` stays in place for when the renderer is upgraded.
+- Code tabs now lazy-load `highlight.js` core plus language modules through `renderers/code-highlighter.ts`. Oversized files (>200k chars) skip highlighting and fall back to plain text so large generated files stay responsive.
+- Workspace preferences now persist alongside the Dockview payload inside the existing `layouts.dockview_model_json` row, keeping the new auto-open toggle local-first without extra schema.
+- `packages/bridge/src/stream.test.ts` now covers both `patch` and `file` parts emitting `file_written`, closing the original auto-open regression gap from the feature handoff.
 
 ## Connections
 - [[ramp-glass]] — workspace reference
