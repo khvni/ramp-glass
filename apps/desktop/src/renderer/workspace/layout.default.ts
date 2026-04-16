@@ -51,12 +51,23 @@ export const applyDefaultLayout = (api: DockviewApi, options: DefaultLayoutOptio
   });
 
   api.addPanel({
+    id: 'scheduler',
+    component: 'scheduler',
+    title: 'Scheduler',
+    inactive: true,
+    position: {
+      referencePanel: 'today',
+      direction: 'within',
+    },
+  });
+
+  api.addPanel({
     id: 'settings',
     component: 'settings',
     title: 'Settings',
     inactive: true,
     position: {
-      referencePanel: 'today',
+      referencePanel: 'scheduler',
       direction: 'within',
     },
   });

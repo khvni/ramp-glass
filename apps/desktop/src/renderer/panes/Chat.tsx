@@ -21,6 +21,7 @@ type ChatProps = {
   vaultPath: string | null;
   activeSkillsRevision: number;
   onFileWritten?: (path: string) => void;
+  onOpenNewChat?: () => void;
   onMemoryCommitted?: () => void;
 };
 
@@ -58,6 +59,7 @@ export const Chat = ({
   vaultPath,
   activeSkillsRevision,
   onFileWritten,
+  onOpenNewChat,
   onMemoryCommitted,
 }: ChatProps): JSX.Element => {
   const client = useMemo(
@@ -92,8 +94,6 @@ export const Chat = ({
   }, [modelConnected]);
 
   useEffect(() => {
-    // When the active skill set changes, abandon the current session so the next
-    // prompt spins up a fresh session with the refreshed skill injection.
     const existing = sessionIDRef.current;
     sessionIDRef.current = null;
     if (existing) {
@@ -277,7 +277,14 @@ export const Chat = ({
           <p className="tinker-eyebrow">Chat</p>
           <h2>Talk to OpenCode directly</h2>
         </div>
-        <span className="tinker-pill">{status}</span>
+        <div className="tinker-inline-actions">
+          {onOpenNewChat ? (
+            <button className="tinker-button-secondary" type="button" onClick={onOpenNewChat}>
+              New chat tab
+            </button>
+          ) : null}
+          <span className="tinker-pill">{status}</span>
+        </div>
       </header>
 
       <div className="tinker-chat-log">
