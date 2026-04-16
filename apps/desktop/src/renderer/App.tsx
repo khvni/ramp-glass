@@ -4,7 +4,15 @@ import { homeDir, join } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
-import { createLayoutStore, createMemoryStore, createScheduledJobStore, createSkillStore, createVaultService, indexVault } from '@tinker/memory';
+import {
+  createLayoutStore,
+  createMemoryStore,
+  createScheduledJobStore,
+  createSkillStore,
+  createVaultService,
+  indexVault,
+  type MemoryRunState,
+} from '@tinker/memory';
 import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
 import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOSession, VaultConfig } from '@tinker/shared-types';
 import { deletePassword, getPassword, setPassword } from 'tauri-plugin-keyring-api';
@@ -17,6 +25,7 @@ import {
   type GoogleOAuthSession,
   type OpencodeConnection,
 } from '../bindings.js';
+import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import { FirstRun } from './panes/FirstRun.js';
 import { createWorkspaceClient, getOpencodeDirectory, OPENCODE_OPENAI_PROVIDER_ID } from './opencode.js';
 import { Workspace } from './workspace/Workspace.js';
@@ -42,11 +51,6 @@ type AppState =
   | { status: 'error'; message: string }
   | ReadyAppState;
 
-const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
-const MODEL_CONNECT_TIMEOUT_MS = 180_000;
-const VAULT_REINDEX_DEBOUNCE_MS = 300;
-const OPENCODE_AUTH_HOST = 'auth.openai.com';
-
 type StoredSSOSession = {
   provider: 'google';
   userId: string;
@@ -58,6 +62,11 @@ type StoredSSOSession = {
   expiresAt: string;
   scopes: string[];
 };
+
+const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
+const MODEL_CONNECT_TIMEOUT_MS = 180_000;
+const VAULT_REINDEX_DEBOUNCE_MS = 300;
+const OPENCODE_AUTH_HOST = 'auth.openai.com';
 
 const isNonEmptyString = (value: unknown): value is string => {
   return typeof value === 'string' && value.trim().length > 0;
@@ -263,6 +272,8 @@ export const App = (): JSX.Element => {
   const [modelAuthMessage, setModelAuthMessage] = useState<string | null>(null);
   const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
   const [googleAuthMessage, setGoogleAuthMessage] = useState<string | null>(null);
+  const [memorySweepState, setMemorySweepState] = useState<MemoryRunState | null>(null);
+  const [memorySweepBusy, setMemorySweepBusy] = useState(false);
   const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
 
   const bumpSchedulerRevision = (): void => {
@@ -459,6 +470,84 @@ export const App = (): JSX.Element => {
     };
   }, [state.status, state.status === 'ready' ? state.opencode : null, state.status === 'ready' ? state.schedulerStore : null, state.status === 'ready' ? state.vaultPath : null, vaultService]);
 
+  useEffect(() => {
+    if (state.status !== 'ready') {
+      return;
+    }
+
+    let active = true;
+    let intervalId: number | null = null;
+
+    const refreshSweepState = async (): Promise<void> => {
+      try {
+        const nextState = await readDailySweepState();
+        if (active) {
+          setMemorySweepState(nextState);
+        }
+      } catch (error) {
+        if (active) {
+          console.warn('Failed to read daily memory sweep state.', error);
+        }
+      }
+    };
+
+    const maybeRunSweep = async (force = false): Promise<void> => {
+      await refreshSweepState();
+
+      if (!state.vaultPath || !state.modelConnected) {
+        return;
+      }
+
+      setMemorySweepBusy(true);
+      try {
+        const result = await runDailyMemorySweepIfDue(state.opencode, state.vaultPath, { force });
+        if (!active) {
+          return;
+        }
+
+        setMemorySweepState(result.state);
+        if (result.changed) {
+          setState((current) =>
+            current.status !== 'ready' || current.vaultPath !== state.vaultPath
+              ? current
+              : {
+                  ...current,
+                  vaultRevision: current.vaultRevision + 1,
+                },
+          );
+        }
+      } catch (error) {
+        if (active) {
+          console.warn('Daily memory sweep failed.', error);
+          void refreshSweepState();
+        }
+      } finally {
+        if (active) {
+          setMemorySweepBusy(false);
+        }
+      }
+    };
+
+    void maybeRunSweep(false);
+    intervalId = window.setInterval(() => {
+      void maybeRunSweep(false);
+    }, 60 * 60 * 1000);
+
+    return () => {
+      active = false;
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [
+    state.status,
+    state.status === 'ready' ? state.modelConnected : false,
+    state.status === 'ready' ? state.opencode.baseUrl : null,
+    state.status === 'ready' ? state.opencode.username : null,
+    state.status === 'ready' ? state.opencode.password : null,
+    state.status === 'ready' ? state.vaultPath : null,
+  ]);
+
   if (state.status === 'loading') {
     return (
       <div className="tinker-app">
@@ -517,6 +606,37 @@ export const App = (): JSX.Element => {
             activeSkillsRevision: current.activeSkillsRevision + 1,
           },
     );
+  };
+
+  const handleMemoryCommitted = (): void => {
+    setState((current) =>
+      current.status !== 'ready'
+        ? current
+        : {
+            ...current,
+            vaultRevision: current.vaultRevision + 1,
+          },
+    );
+  };
+
+  const handleRunMemorySweep = async (): Promise<void> => {
+    if (memorySweepBusy || !state.vaultPath || !state.modelConnected) {
+      return;
+    }
+
+    setMemorySweepBusy(true);
+    try {
+      const result = await runDailyMemorySweepIfDue(state.opencode, state.vaultPath, { force: true });
+      setMemorySweepState(result.state);
+      if (result.changed) {
+        handleMemoryCommitted();
+      }
+    } catch (error) {
+      console.warn('Manual memory sweep failed.', error);
+      setMemorySweepState(await readDailySweepState());
+    } finally {
+      setMemorySweepBusy(false);
+    }
   };
 
   const handleConnectModel = async (): Promise<void> => {
@@ -693,6 +813,8 @@ export const App = (): JSX.Element => {
           vaultPath={state.vaultPath}
           vaultRevision={state.vaultRevision}
           activeSkillsRevision={state.activeSkillsRevision}
+          memorySweepState={memorySweepState}
+          memorySweepBusy={memorySweepBusy}
           onConnectGoogle={handleGoogleConnect}
           onDisconnectGoogle={handleGoogleDisconnect}
           onConnectModel={handleConnectModel}
@@ -702,6 +824,8 @@ export const App = (): JSX.Element => {
           onRunScheduledJobNow={handleRunScheduledJobNow}
           onSchedulerChanged={bumpSchedulerRevision}
           onActiveSkillsChanged={handleActiveSkillsChanged}
+          onRunMemorySweep={handleRunMemorySweep}
+          onMemoryCommitted={handleMemoryCommitted}
         />
       )}
     </div>

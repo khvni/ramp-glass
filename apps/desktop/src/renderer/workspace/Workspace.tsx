@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview-react';
-import { resolveVaultPath } from '@tinker/memory';
+import { resolveVaultPath, type MemoryRunState } from '@tinker/memory';
 import {
   createDefaultWorkspacePreferences,
   type LayoutState,
@@ -50,6 +50,8 @@ type WorkspaceProps = {
   vaultPath: string | null;
   vaultRevision: number;
   activeSkillsRevision: number;
+  memorySweepState: MemoryRunState | null;
+  memorySweepBusy: boolean;
   onConnectModel(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
@@ -59,6 +61,8 @@ type WorkspaceProps = {
   onActiveSkillsChanged(): void;
   onRunScheduledJobNow(jobId: string): Promise<void>;
   onSchedulerChanged(): void;
+  onRunMemorySweep(): Promise<void>;
+  onMemoryCommitted(): void;
 };
 
 export const Workspace = ({
@@ -81,11 +85,15 @@ export const Workspace = ({
   onActiveSkillsChanged,
   onRunScheduledJobNow,
   onSchedulerChanged,
+  onRunMemorySweep,
+  onMemoryCommitted,
   opencode,
   session,
   vaultPath,
   vaultRevision,
   activeSkillsRevision,
+  memorySweepState,
+  memorySweepBusy,
 }: WorkspaceProps): JSX.Element => {
   const dockviewApiRef = useRef<DockviewApi | null>(null);
   const saveTimerRef = useRef<number | null>(null);
@@ -249,7 +257,6 @@ export const Workspace = ({
         'vault-browser': (props) => <VaultBrowser {...props} vaultRevision={vaultRevision} />,
         chat: () => (
           <Chat
-            memoryStore={memoryStore}
             skillStore={skillStore}
             modelConnected={modelConnected}
             opencode={opencode}
@@ -257,6 +264,7 @@ export const Workspace = ({
             activeSkillsRevision={activeSkillsRevision}
             onFileWritten={handleAgentFileWritten}
             onOpenNewChat={openNewChatPane}
+            onMemoryCommitted={onMemoryCommitted}
           />
         ),
         today: () => (
@@ -266,6 +274,9 @@ export const Workspace = ({
             vaultPath={vaultPath}
             vaultRevision={vaultRevision}
             schedulerRevision={schedulerRevision}
+            memorySweepState={memorySweepState}
+            memorySweepBusy={memorySweepBusy}
+            onRunMemorySweep={onRunMemorySweep}
           />
         ),
         scheduler: () => (
@@ -311,6 +322,8 @@ export const Workspace = ({
       modelAuthBusy,
       modelAuthMessage,
       modelConnected,
+      memorySweepBusy,
+      memorySweepState,
       googleAuthBusy,
       googleAuthMessage,
       onConnectGoogle,
@@ -318,12 +331,13 @@ export const Workspace = ({
       onCreateVault,
       onDisconnectGoogle,
       onDisconnectModel,
+      onMemoryCommitted,
+      onRunMemorySweep,
       onRunScheduledJobNow,
       onSchedulerChanged,
       onSelectVault,
       opencode,
       handleAgentFileWritten,
-      openFileInWorkspace,
       openNewChatPane,
       schedulerRevision,
       schedulerStore,

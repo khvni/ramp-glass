@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
 import { injectActiveSkills, injectMemoryContext, streamSessionEvents } from '@tinker/bridge';
-import { slugify } from '@tinker/memory';
-import type { MemoryStore, SkillDraft, SkillStore } from '@tinker/shared-types';
+import { resolveRelevantEntities, slugify } from '@tinker/memory';
+import type { SkillDraft, SkillStore } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../bindings.js';
+import { captureConversationMemory } from '../memory.js';
 import { createWorkspaceClient, getOpencodeDirectory } from '../opencode.js';
 import { useDockviewApi } from '../workspace/DockviewContext.js';
 
@@ -14,7 +15,6 @@ type ChatMessage = {
 };
 
 type ChatProps = {
-  memoryStore: MemoryStore;
   skillStore: SkillStore;
   modelConnected: boolean;
   opencode: OpencodeConnection;
@@ -22,6 +22,7 @@ type ChatProps = {
   activeSkillsRevision: number;
   onFileWritten?: (path: string) => void;
   onOpenNewChat?: () => void;
+  onMemoryCommitted?: () => void;
 };
 
 const deriveSkillSlug = (text: string): string => {
@@ -52,7 +53,6 @@ const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): Chat
 };
 
 export const Chat = ({
-  memoryStore,
   skillStore,
   modelConnected,
   opencode,
@@ -60,6 +60,7 @@ export const Chat = ({
   activeSkillsRevision,
   onFileWritten,
   onOpenNewChat,
+  onMemoryCommitted,
 }: ChatProps): JSX.Element => {
   const client = useMemo(
     () => createWorkspaceClient(opencode, getOpencodeDirectory(vaultPath)),
@@ -73,6 +74,7 @@ export const Chat = ({
   const [status, setStatus] = useState(modelConnected ? 'OpenCode is ready.' : 'Connect GPT-5.4 in Settings to start chatting.');
   const mountedRef = useRef(true);
   const sessionIDRef = useRef<string | null>(null);
+  const memoryCommitRef = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
     mountedRef.current = true;
@@ -92,8 +94,6 @@ export const Chat = ({
   }, [modelConnected]);
 
   useEffect(() => {
-    // When the active skill set changes, abandon the current session so the next
-    // prompt spins up a fresh session with the refreshed skill injection.
     const existing = sessionIDRef.current;
     sessionIDRef.current = null;
     if (existing) {
@@ -188,10 +188,11 @@ export const Chat = ({
 
     try {
       const activeSessionID = await ensureSession();
-      const relevantEntities = await memoryStore.recentEntities(5);
+      const relevantEntities = await resolveRelevantEntities(text, 6);
       await injectMemoryContext(client, activeSessionID, relevantEntities);
 
       const stream = streamSessionEvents(client, activeSessionID);
+      const toolResults: Array<{ name: string; output: string }> = [];
       const consumeStream = (async () => {
         for await (const event of stream) {
           if (!mountedRef.current) {
@@ -204,6 +205,7 @@ export const Chat = ({
             setStatus(`Running ${event.name}…`);
           } else if (event.type === 'tool_result') {
             setStatus(`${event.name} finished.`);
+            toolResults.push({ name: event.name, output: event.output });
           } else if (event.type === 'file_written') {
             onFileWritten?.(event.path);
           } else if (event.type === 'error') {
@@ -224,6 +226,28 @@ export const Chat = ({
       if (mountedRef.current) {
         setMessages(formatMessages(history.data ?? []));
         setDraft('');
+      }
+
+      const assistantMessage = formatMessages(history.data ?? [])
+        .filter((message) => message.role === 'assistant')
+        .at(-1)?.text;
+      if (assistantMessage && vaultPath) {
+        memoryCommitRef.current = memoryCommitRef.current.then(async () => {
+          try {
+            const result = await captureConversationMemory(opencode, vaultPath, {
+              observedOn: new Date().toISOString().slice(0, 10),
+              userMessage: text,
+              assistantMessage,
+              toolResults,
+            });
+
+            if (result && result.appendedFacts > 0) {
+              onMemoryCommitted?.();
+            }
+          } catch (error) {
+            console.warn('Failed to append conversation memory.', error);
+          }
+        });
       }
     } catch (error) {
       if (!mountedRef.current) {
