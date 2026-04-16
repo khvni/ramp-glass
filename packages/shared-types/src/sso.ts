@@ -1,4 +1,6 @@
-export type SSOProvider = 'google';
+export const SSO_PROVIDERS = ['google', 'github'] as const;
+
+export type SSOProvider = (typeof SSO_PROVIDERS)[number];
 
 export type SSOSession = {
   provider: SSOProvider;
@@ -26,3 +28,5 @@ export type SSOService = {
   currentSession(): Promise<SSOSession | null>;
   refreshIfNeeded(): Promise<SSOSession | null>;
 };
+
+export type SSOStatus = Record<SSOProvider, SSOSession | null>;

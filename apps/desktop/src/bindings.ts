@@ -1,4 +1,4 @@
-import type { SSOSession } from '@tinker/shared-types';
+import type { SSOProvider, SSOSession, SSOStatus } from '@tinker/shared-types';
 
 export const GOOGLE_SCOPES = [
   'openid',
@@ -9,13 +9,12 @@ export const GOOGLE_SCOPES = [
   'https://www.googleapis.com/auth/drive.readonly',
 ] as const;
 
-export const KEYRING_SERVICE = 'tinker';
-export const GOOGLE_SESSION_ACCOUNT = 'google-session';
 export const ONBOARDING_KEY = 'tinker:onboarded';
 export const VAULT_PATH_KEY = 'tinker:vault-path';
 export const DEFAULT_USER_ID = 'local-user';
 
-export type GoogleOAuthSession = SSOSession;
+export type AuthProvider = SSOProvider;
+export type AuthStatus = SSOStatus;
 export type OpencodeConnection = {
   baseUrl: string;
   username: string;

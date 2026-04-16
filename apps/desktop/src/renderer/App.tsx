@@ -14,17 +14,9 @@ import {
   type MemoryRunState,
 } from '@tinker/memory';
 import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
-import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOSession, VaultConfig } from '@tinker/shared-types';
-import { deletePassword, getPassword, setPassword } from 'tauri-plugin-keyring-api';
-import {
-  DEFAULT_USER_ID,
-  GOOGLE_SESSION_ACCOUNT,
-  KEYRING_SERVICE,
-  ONBOARDING_KEY,
-  VAULT_PATH_KEY,
-  type GoogleOAuthSession,
-  type OpencodeConnection,
-} from '../bindings.js';
+import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus, SSOSession, VaultConfig } from '@tinker/shared-types';
+import { DEFAULT_USER_ID, ONBOARDING_KEY, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
+import type { MCPStatus } from './components/IntegrationsStrip.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import { FirstRun } from './panes/FirstRun.js';
 import { createWorkspaceClient, getOpencodeDirectory, OPENCODE_OPENAI_PROVIDER_ID } from './opencode.js';
@@ -37,7 +29,8 @@ type ReadyAppState = {
   skillStore: SkillStore;
   schedulerStore: ScheduledJobStore;
   opencode: OpencodeConnection;
-  session: SSOSession | null;
+  sessions: SSOStatus;
+  mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
   onboarded: boolean;
   modelConnected: boolean;
@@ -51,49 +44,16 @@ type AppState =
   | { status: 'error'; message: string }
   | ReadyAppState;
 
-type StoredSSOSession = {
-  provider: 'google';
-  userId: string;
-  email: string;
-  displayName: string;
-  avatarUrl?: string;
-  accessToken: string;
-  refreshToken: string;
-  expiresAt: string;
-  scopes: string[];
-};
+type ProviderBusyState = Record<AuthProvider, boolean>;
+type ProviderMessageState = Record<AuthProvider, string | null>;
 
 const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
 const MODEL_CONNECT_TIMEOUT_MS = 180_000;
 const VAULT_REINDEX_DEBOUNCE_MS = 300;
 const OPENCODE_AUTH_HOST = 'auth.openai.com';
-
-const isNonEmptyString = (value: unknown): value is string => {
-  return typeof value === 'string' && value.trim().length > 0;
-};
-
-const isStoredSession = (value: unknown): value is StoredSSOSession => {
-  if (!value || typeof value !== 'object') {
-    return false;
-  }
-
-  const candidate = value as Record<string, unknown>;
-  const { avatarUrl, scopes } = candidate;
-
-  return (
-    candidate.provider === 'google' &&
-    isNonEmptyString(candidate.userId) &&
-    isNonEmptyString(candidate.email) &&
-    isNonEmptyString(candidate.displayName) &&
-    isNonEmptyString(candidate.accessToken) &&
-    isNonEmptyString(candidate.refreshToken) &&
-    isNonEmptyString(candidate.expiresAt) &&
-    !Number.isNaN(Date.parse(candidate.expiresAt)) &&
-    Array.isArray(scopes) &&
-    scopes.every((scope) => isNonEmptyString(scope)) &&
-    (avatarUrl === undefined || isNonEmptyString(avatarUrl))
-  );
-};
+const EMPTY_SESSIONS: SSOStatus = { google: null, github: null };
+const EMPTY_PROVIDER_BUSY: ProviderBusyState = { google: false, github: false };
+const EMPTY_PROVIDER_MESSAGES: ProviderMessageState = { google: null, github: null };
 
 const wait = (ms: number): Promise<void> => {
   return new Promise((resolve) => {
@@ -101,51 +61,15 @@ const wait = (ms: number): Promise<void> => {
   });
 };
 
-const readStoredSession = async (): Promise<SSOSession | null> => {
-  const raw = await getPassword(KEYRING_SERVICE, GOOGLE_SESSION_ACCOUNT);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isStoredSession(parsed)) {
-      throw new Error('Stored Google session was malformed.');
-    }
-
-    return parsed;
-  } catch {
-    await deletePassword(KEYRING_SERVICE, GOOGLE_SESSION_ACCOUNT);
-    return null;
-  }
-};
-
-const storeSession = async (session: SSOSession | null): Promise<void> => {
-  if (!session) {
-    await deletePassword(KEYRING_SERVICE, GOOGLE_SESSION_ACCOUNT);
-    return;
-  }
-
-  await setPassword(KEYRING_SERVICE, GOOGLE_SESSION_ACCOUNT, JSON.stringify(session));
-};
-
-const mergeGoogleSession = (previous: SSOSession | null, next: SSOSession): SSOSession => {
-  if (next.refreshToken.length > 0) {
-    return next;
-  }
-
-  if (!previous) {
-    return next;
-  }
-
-  if (previous.provider !== next.provider || previous.userId !== next.userId) {
-    return next;
-  }
-
+const withDefaultSessions = (status: Partial<SSOStatus> | null | undefined): SSOStatus => {
   return {
-    ...next,
-    refreshToken: previous.refreshToken,
+    google: status?.google ?? null,
+    github: status?.github ?? null,
   };
+};
+
+const readAuthStatus = async (): Promise<SSOStatus> => {
+  return withDefaultSessions(await invoke<AuthStatus>('auth_status'));
 };
 
 const getDefaultVaultPath = async (): Promise<string> => {
@@ -191,6 +115,46 @@ const clearGoogleAuth = async (connection: OpencodeConnection, vaultPath: string
   await client.auth.remove({ providerID: 'google' });
 };
 
+const syncConnectorState = async (
+  connection: OpencodeConnection,
+  vaultPath: string | null,
+  sessions: SSOStatus,
+): Promise<Record<string, MCPStatus>> => {
+  const client = createWorkspaceClient(connection, getOpencodeDirectory(vaultPath));
+
+  if (sessions.google) {
+    await forwardGoogleAuth(connection, vaultPath, sessions.google);
+  } else {
+    try {
+      await clearGoogleAuth(connection, vaultPath);
+    } catch (error) {
+      console.warn('Could not clear Google auth from OpenCode.', error);
+    }
+  }
+
+  if (sessions.github) {
+    try {
+      await client.mcp.connect({ name: 'github' });
+    } catch (error) {
+      console.warn('Could not connect GitHub MCP server.', error);
+    }
+  } else {
+    try {
+      await client.mcp.disconnect({ name: 'github' });
+    } catch (error) {
+      console.warn('Could not disconnect GitHub MCP server.', error);
+    }
+  }
+
+  try {
+    const response = await client.mcp.status();
+    return response.data ?? {};
+  } catch (error) {
+    console.warn('Could not read MCP status from OpenCode.', error);
+    return {};
+  }
+};
+
 const isModelConnected = async (connection: OpencodeConnection, vaultPath: string | null): Promise<boolean> => {
   const client = createWorkspaceClient(connection, getOpencodeDirectory(vaultPath));
   const response = await client.provider.list();
@@ -201,7 +165,7 @@ const probeModelConnection = async (connection: OpencodeConnection, vaultPath: s
   try {
     return await isModelConnected(connection, vaultPath);
   } catch (error) {
-    console.warn('Could not determine whether GPT-5.4 is connected. Continuing with model disconnected.', error);
+    console.warn('Could not determine whether GPT-5.4 is connected. Continuing disconnected.', error);
     return false;
   }
 };
@@ -227,7 +191,7 @@ const connectModelProvider = async (connection: OpencodeConnection, vaultPath: s
   const methodIndex = methods.findIndex((method) => method.type === 'oauth');
 
   if (methodIndex < 0) {
-    throw new Error('OpenCode did not expose an OAuth method for the OpenAI provider.');
+    throw new Error('OpenCode did not expose an OAuth method for OpenAI provider.');
   }
 
   const authorizeResponse = await client.provider.oauth.authorize({
@@ -237,7 +201,7 @@ const connectModelProvider = async (connection: OpencodeConnection, vaultPath: s
   const authorization = authorizeResponse.data;
 
   if (!authorization?.url) {
-    throw new Error('OpenCode did not return an authorization URL for the OpenAI provider.');
+    throw new Error('OpenCode did not return an authorization URL for OpenAI provider.');
   }
 
   const authorizationUrl = new URL(authorization.url);
@@ -246,13 +210,13 @@ const connectModelProvider = async (connection: OpencodeConnection, vaultPath: s
     authorizationUrl.hostname !== OPENCODE_AUTH_HOST ||
     !/^\/(?:oauth|codex)\//u.test(authorizationUrl.pathname)
   ) {
-    throw new Error('OpenCode returned an unexpected authorization URL for the OpenAI provider.');
+    throw new Error('OpenCode returned an unexpected authorization URL for OpenAI provider.');
   }
 
   await openExternal(authorizationUrl.toString());
 
   if (!(await waitForModelConnection(connection, vaultPath))) {
-    throw new Error('OpenCode did not finish connecting GPT-5.4 before the authorization timed out.');
+    throw new Error('OpenCode did not finish connecting GPT-5.4 before authorization timed out.');
   }
 };
 
@@ -270,8 +234,8 @@ export const App = (): JSX.Element => {
   const [state, setState] = useState<AppState>({ status: 'loading' });
   const [modelAuthBusy, setModelAuthBusy] = useState(false);
   const [modelAuthMessage, setModelAuthMessage] = useState<string | null>(null);
-  const [googleAuthBusy, setGoogleAuthBusy] = useState(false);
-  const [googleAuthMessage, setGoogleAuthMessage] = useState<string | null>(null);
+  const [providerBusy, setProviderBusy] = useState<ProviderBusyState>(EMPTY_PROVIDER_BUSY);
+  const [providerMessages, setProviderMessages] = useState<ProviderMessageState>(EMPTY_PROVIDER_MESSAGES);
   const [memorySweepState, setMemorySweepState] = useState<MemoryRunState | null>(null);
   const [memorySweepBusy, setMemorySweepBusy] = useState(false);
   const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
@@ -287,27 +251,21 @@ export const App = (): JSX.Element => {
     );
   };
 
+  const setProviderBusyValue = (provider: AuthProvider, value: boolean): void => {
+    setProviderBusy((current) => ({ ...current, [provider]: value }));
+  };
+
+  const setProviderMessage = (provider: AuthProvider, message: string | null): void => {
+    setProviderMessages((current) => ({ ...current, [provider]: message }));
+  };
+
   useEffect(() => {
     let active = true;
 
     void (async () => {
       try {
-        const [opencode, storedSession] = await Promise.all([
-          invoke<OpencodeConnection>('get_opencode_connection'),
-          readStoredSession(),
-        ]);
+        const [opencode, sessions] = await Promise.all([invoke<OpencodeConnection>('get_opencode_connection'), readAuthStatus()]);
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
-        let session = storedSession;
-
-        if (session) {
-          try {
-            await forwardGoogleAuth(opencode, vaultPath, session);
-          } catch (error) {
-            console.warn('Stored Google session could not be restored. Continuing in local-only mode.', error);
-            await storeSession(null);
-            session = null;
-          }
-        }
 
         let vaultRevision = 0;
         if (vaultPath) {
@@ -319,7 +277,13 @@ export const App = (): JSX.Element => {
           vaultRevision = 1;
         }
 
-        const modelConnected = await probeModelConnection(opencode, vaultPath);
+        const [mcpStatus, modelConnected] = await Promise.all([
+          syncConnectorState(opencode, vaultPath, sessions).catch((error) => {
+            console.warn('Could not restore connector state on boot.', error);
+            return {};
+          }),
+          probeModelConnection(opencode, vaultPath),
+        ]);
 
         if (!active) {
           return;
@@ -332,7 +296,8 @@ export const App = (): JSX.Element => {
           skillStore,
           schedulerStore,
           opencode,
-          session,
+          sessions,
+          mcpStatus,
           vaultPath,
           onboarded: window.localStorage.getItem(ONBOARDING_KEY) === '1',
           modelConnected,
@@ -407,7 +372,7 @@ export const App = (): JSX.Element => {
         });
       } catch (error) {
         if (active) {
-          console.warn('Failed to refresh the vault index after a file change.', error);
+          console.warn('Failed to refresh vault index after file change.', error);
         }
       } finally {
         indexing = false;
@@ -554,8 +519,8 @@ export const App = (): JSX.Element => {
         <main className="tinker-stage">
           <section className="tinker-card">
             <p className="tinker-eyebrow">Booting</p>
-            <h1>Tinker is starting the workspace</h1>
-            <p className="tinker-muted">Launching OpenCode, loading your vault state, and restoring local context.</p>
+            <h1>Tinker is starting workspace</h1>
+            <p className="tinker-muted">Launching OpenCode, loading vault state, restoring local context.</p>
           </section>
         </main>
       </div>
@@ -576,13 +541,47 @@ export const App = (): JSX.Element => {
     );
   }
 
+  const reloadConnectionState = async (connection: OpencodeConnection, vaultPath: string | null) => {
+    const sessions = await readAuthStatus();
+    const [mcpStatus, modelConnected] = await Promise.all([
+      syncConnectorState(connection, vaultPath, sessions),
+      probeModelConnection(connection, vaultPath),
+    ]);
+
+    return { sessions, mcpStatus, modelConnected };
+  };
+
+  const refreshWorkspaceConnection = async (): Promise<void> => {
+    const opencode = await invoke<OpencodeConnection>('restart_opencode');
+    const nextState = await reloadConnectionState(opencode, state.vaultPath);
+
+    setState((current) =>
+      current.status !== 'ready'
+        ? current
+        : {
+            ...current,
+            opencode,
+            sessions: nextState.sessions,
+            mcpStatus: nextState.mcpStatus,
+            modelConnected: nextState.modelConnected,
+          },
+    );
+  };
+
   const setVaultPath = async (config: VaultConfig): Promise<void> => {
     await vaultService.init(config);
     await indexVault(config);
     await skillStore.init(config.path);
     await skillStore.reindex();
     window.localStorage.setItem(VAULT_PATH_KEY, config.path);
-    const modelConnected = await probeModelConnection(state.opencode, config.path);
+
+    const [modelConnected, mcpStatus] = await Promise.all([
+      probeModelConnection(state.opencode, config.path),
+      syncConnectorState(state.opencode, config.path, state.sessions).catch((error) => {
+        console.warn('Could not refresh connector state after vault change.', error);
+        return state.mcpStatus;
+      }),
+    ]);
 
     setState((current) =>
       current.status !== 'ready'
@@ -591,6 +590,7 @@ export const App = (): JSX.Element => {
             ...current,
             vaultPath: config.path,
             modelConnected,
+            mcpStatus,
             vaultRevision: current.vaultRevision + 1,
             activeSkillsRevision: current.activeSkillsRevision + 1,
           },
@@ -604,7 +604,7 @@ export const App = (): JSX.Element => {
         : {
             ...current,
             activeSkillsRevision: current.activeSkillsRevision + 1,
-          },
+        },
     );
   };
 
@@ -641,8 +641,7 @@ export const App = (): JSX.Element => {
 
   const handleConnectModel = async (): Promise<void> => {
     setModelAuthBusy(true);
-    setModelAuthMessage(null);
-    setModelAuthMessage('Waiting for OpenCode to finish the GPT-5.4 sign-in flow…');
+    setModelAuthMessage('Waiting for OpenCode to finish GPT-5.4 sign-in…');
 
     try {
       await connectModelProvider(state.opencode, state.vaultPath);
@@ -654,7 +653,7 @@ export const App = (): JSX.Element => {
               modelConnected: true,
             },
       );
-      setModelAuthMessage('GPT-5.4 is connected through OpenCode.');
+      setModelAuthMessage('GPT-5.4 connected through OpenCode.');
     } catch (error) {
       setModelAuthMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -676,70 +675,76 @@ export const App = (): JSX.Element => {
               modelConnected: false,
             },
       );
-      setModelAuthMessage('GPT-5.4 has been disconnected.');
+      setModelAuthMessage('GPT-5.4 disconnected.');
+    } catch (error) {
+      setModelAuthMessage(error instanceof Error ? error.message : String(error));
     } finally {
       setModelAuthBusy(false);
     }
   };
 
-  const handleGoogleConnect = async (): Promise<void> => {
-    setGoogleAuthBusy(true);
-    setGoogleAuthMessage('Waiting for the Google sign-in flow to finish…');
+  const handleProviderConnect = async (provider: AuthProvider): Promise<void> => {
+    setProviderBusyValue(provider, true);
+    setProviderMessage(provider, provider === 'google' ? 'Waiting for Google sign-in…' : 'Waiting for GitHub sign-in…');
 
     try {
-      const nextSession = await invoke<GoogleOAuthSession>('oauth_flow');
-      const session = mergeGoogleSession(state.session, nextSession);
-      if (session.refreshToken.length === 0) {
-        throw new Error('Google sign-in did not return a refresh token. Try connecting again.');
+      const session = await invoke<SSOSession>('auth_sign_in', { provider });
+      if (provider === 'google' && session.refreshToken.length === 0) {
+        throw new Error('Google sign-in did not return refresh token. Try again.');
       }
 
-      await forwardGoogleAuth(state.opencode, state.vaultPath, session);
-      await storeSession(session);
+      if (provider === 'github') {
+        await refreshWorkspaceConnection();
+      } else {
+        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
+        setState((current) =>
+          current.status !== 'ready'
+            ? current
+            : {
+                ...current,
+                sessions: nextState.sessions,
+                mcpStatus: nextState.mcpStatus,
+                modelConnected: nextState.modelConnected,
+              },
+        );
+      }
 
-      setState((current) =>
-        current.status !== 'ready'
-          ? current
-          : {
-              ...current,
-              session,
-            },
-      );
-      setGoogleAuthMessage(`Google is connected as ${session.email}.`);
+      setProviderMessage(provider, `${provider === 'google' ? 'Google' : 'GitHub'} connected as ${session.email}.`);
     } catch (error) {
-      setGoogleAuthMessage(error instanceof Error ? error.message : String(error));
+      setProviderMessage(provider, error instanceof Error ? error.message : String(error));
     } finally {
-      setGoogleAuthBusy(false);
+      setProviderBusyValue(provider, false);
     }
   };
 
-  const handleGoogleDisconnect = async (): Promise<void> => {
-    setGoogleAuthBusy(true);
-    setGoogleAuthMessage(null);
+  const handleProviderDisconnect = async (provider: AuthProvider): Promise<void> => {
+    setProviderBusyValue(provider, true);
+    setProviderMessage(provider, null);
 
     try {
-      const results = await Promise.allSettled([
-        storeSession(null),
-        clearGoogleAuth(state.opencode, state.vaultPath),
-      ]);
-      const remoteClearFailed = results.some((result) => result.status === 'rejected');
+      await invoke('auth_sign_out', { provider });
 
-      setState((current) =>
-        current.status !== 'ready'
-          ? current
-          : {
-              ...current,
-              session: null,
-            },
-      );
-      setGoogleAuthMessage(
-        remoteClearFailed
-          ? 'Google was disconnected locally, but OpenCode could not clear the remote session.'
-          : 'Google has been disconnected.',
-      );
+      if (provider === 'github') {
+        await refreshWorkspaceConnection();
+      } else {
+        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
+        setState((current) =>
+          current.status !== 'ready'
+            ? current
+            : {
+                ...current,
+                sessions: nextState.sessions,
+                mcpStatus: nextState.mcpStatus,
+                modelConnected: nextState.modelConnected,
+              },
+        );
+      }
+
+      setProviderMessage(provider, `${provider === 'google' ? 'Google' : 'GitHub'} disconnected.`);
     } catch (error) {
-      setGoogleAuthMessage(error instanceof Error ? error.message : String(error));
+      setProviderMessage(provider, error instanceof Error ? error.message : String(error));
     } finally {
-      setGoogleAuthBusy(false);
+      setProviderBusyValue(provider, false);
     }
   };
 
@@ -785,12 +790,16 @@ export const App = (): JSX.Element => {
           modelConnected={state.modelConnected}
           modelAuthBusy={modelAuthBusy}
           modelAuthMessage={modelAuthMessage}
-          googleAuthBusy={googleAuthBusy}
-          googleAuthMessage={googleAuthMessage}
-          session={state.session}
+          googleAuthBusy={providerBusy.google}
+          googleAuthMessage={providerMessages.google}
+          githubAuthBusy={providerBusy.github}
+          githubAuthMessage={providerMessages.github}
+          sessions={state.sessions}
+          mcpStatus={state.mcpStatus}
           vaultPath={state.vaultPath}
           onConnectModel={handleConnectModel}
-          onConnectGoogle={handleGoogleConnect}
+          onConnectGoogle={() => handleProviderConnect('google')}
+          onConnectGithub={() => handleProviderConnect('github')}
           onCreateVault={handleCreateVault}
           onSelectVault={handlePickVault}
           onContinue={finishOnboarding}
@@ -806,17 +815,22 @@ export const App = (): JSX.Element => {
           modelConnected={state.modelConnected}
           modelAuthBusy={modelAuthBusy}
           modelAuthMessage={modelAuthMessage}
-          googleAuthBusy={googleAuthBusy}
-          googleAuthMessage={googleAuthMessage}
+          googleAuthBusy={providerBusy.google}
+          googleAuthMessage={providerMessages.google}
+          githubAuthBusy={providerBusy.github}
+          githubAuthMessage={providerMessages.github}
           opencode={state.opencode}
-          session={state.session}
+          sessions={state.sessions}
+          mcpStatus={state.mcpStatus}
           vaultPath={state.vaultPath}
           vaultRevision={state.vaultRevision}
           activeSkillsRevision={state.activeSkillsRevision}
           memorySweepState={memorySweepState}
           memorySweepBusy={memorySweepBusy}
-          onConnectGoogle={handleGoogleConnect}
-          onDisconnectGoogle={handleGoogleDisconnect}
+          onConnectGoogle={() => handleProviderConnect('google')}
+          onDisconnectGoogle={() => handleProviderDisconnect('google')}
+          onConnectGithub={() => handleProviderConnect('github')}
+          onDisconnectGithub={() => handleProviderDisconnect('github')}
           onConnectModel={handleConnectModel}
           onDisconnectModel={handleDisconnectModel}
           onCreateVault={handleCreateVault}

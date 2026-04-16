@@ -8,10 +8,11 @@ import {
   type MemoryStore,
   type ScheduledJobStore,
   type SkillStore,
-  type SSOSession,
+  type SSOStatus,
   type WorkspacePreferences,
 } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
+import { IntegrationsStrip, type MCPStatus } from '../components/IntegrationsStrip.js';
 import { Chat } from '../panes/Chat.js';
 import { Dojo } from '../panes/Dojo.js';
 import { SchedulerPane } from '../panes/SchedulerPane.js';
@@ -27,8 +28,8 @@ import { MarkdownRenderer } from '../renderers/MarkdownRenderer.js';
 import { isAbsolutePath } from '../renderers/file-utils.js';
 import { DockviewApiContext } from './DockviewContext.js';
 import { openNewChatPanel } from './chat-panels.js';
-import { applyDefaultLayout } from './layout.default.js';
 import { openWorkspaceFile } from './file-open.js';
+import { applyDefaultLayout } from './layout.default.js';
 import { createPaneRegistry } from './pane-registry.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
@@ -45,8 +46,11 @@ type WorkspaceProps = {
   modelAuthMessage: string | null;
   googleAuthBusy: boolean;
   googleAuthMessage: string | null;
+  githubAuthBusy: boolean;
+  githubAuthMessage: string | null;
   opencode: OpencodeConnection;
-  session: SSOSession | null;
+  sessions: SSOStatus;
+  mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
   vaultRevision: number;
   activeSkillsRevision: number;
@@ -55,7 +59,9 @@ type WorkspaceProps = {
   onConnectModel(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
+  onConnectGithub(): Promise<void>;
   onDisconnectGoogle(): Promise<void>;
+  onDisconnectGithub(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
   onActiveSkillsChanged(): void;
@@ -76,9 +82,13 @@ export const Workspace = ({
   modelConnected,
   googleAuthBusy,
   googleAuthMessage,
+  githubAuthBusy,
+  githubAuthMessage,
   onConnectModel,
+  onConnectGithub,
   onConnectGoogle,
   onCreateVault,
+  onDisconnectGithub,
   onDisconnectModel,
   onDisconnectGoogle,
   onSelectVault,
@@ -87,8 +97,9 @@ export const Workspace = ({
   onSchedulerChanged,
   onRunMemorySweep,
   onMemoryCommitted,
+  mcpStatus,
   opencode,
-  session,
+  sessions,
   vaultPath,
   vaultRevision,
   activeSkillsRevision,
@@ -132,19 +143,22 @@ export const Workspace = ({
     }
   }, []);
 
-  const openFileInWorkspace = useCallback((reportedPath: string): void => {
-    const api = dockviewApiRef.current;
-    if (!api) {
-      return;
-    }
+  const openFileInWorkspace = useCallback(
+    (reportedPath: string): void => {
+      const api = dockviewApiRef.current;
+      if (!api) {
+        return;
+      }
 
-    const absolutePath = resolveAgentPath(reportedPath);
-    if (!absolutePath) {
-      return;
-    }
+      const absolutePath = resolveAgentPath(reportedPath);
+      if (!absolutePath) {
+        return;
+      }
 
-    openWorkspaceFile(api, absolutePath);
-  }, [resolveAgentPath]);
+      openWorkspaceFile(api, absolutePath);
+    },
+    [resolveAgentPath],
+  );
 
   const openNewChatPane = useCallback((): void => {
     const api = dockviewApiRef.current;
@@ -295,12 +309,17 @@ export const Workspace = ({
             modelAuthMessage={modelAuthMessage}
             googleAuthBusy={googleAuthBusy}
             googleAuthMessage={googleAuthMessage}
-            session={session}
+            githubAuthBusy={githubAuthBusy}
+            githubAuthMessage={githubAuthMessage}
+            sessions={sessions}
+            mcpStatus={mcpStatus}
             vaultPath={vaultPath}
             onConnectModel={onConnectModel}
             onConnectGoogle={onConnectGoogle}
+            onConnectGithub={onConnectGithub}
             onDisconnectModel={onDisconnectModel}
             onDisconnectGoogle={onDisconnectGoogle}
+            onDisconnectGithub={onDisconnectGithub}
             onCreateVault={onCreateVault}
             onSelectVault={onSelectVault}
             workspacePreferences={workspacePreferences}
@@ -319,6 +338,7 @@ export const Workspace = ({
     [
       activeSkillsRevision,
       memoryStore,
+      skillStore,
       modelAuthBusy,
       modelAuthMessage,
       modelConnected,
@@ -326,10 +346,14 @@ export const Workspace = ({
       memorySweepState,
       googleAuthBusy,
       googleAuthMessage,
+      githubAuthBusy,
+      githubAuthMessage,
       onConnectGoogle,
+      onConnectGithub,
       onConnectModel,
       onCreateVault,
       onDisconnectGoogle,
+      onDisconnectGithub,
       onDisconnectModel,
       onMemoryCommitted,
       onRunMemorySweep,
@@ -337,14 +361,14 @@ export const Workspace = ({
       onSchedulerChanged,
       onSelectVault,
       opencode,
-      handleAgentFileWritten,
-      openNewChatPane,
-      schedulerRevision,
-      schedulerStore,
-      session,
-      skillStore,
+      sessions,
+      mcpStatus,
       vaultPath,
       vaultRevision,
+      schedulerStore,
+      schedulerRevision,
+      handleAgentFileWritten,
+      openNewChatPane,
       handleWorkspacePreferencesChange,
       workspacePreferences,
     ],
@@ -409,6 +433,7 @@ export const Workspace = ({
       });
 
       setDockviewApi(event.api);
+      scheduleLayoutSave(event.api);
     })();
   };
 
@@ -505,10 +530,14 @@ export const Workspace = ({
         </div>
         <div className="tinker-header-meta">
           <span className="tinker-pill">{modelConnected ? 'GPT-5.4 connected' : 'GPT-5.4 disconnected'}</span>
-          <span className="tinker-pill">{session ? session.email : 'Offline mode'}</span>
+          <span className="tinker-pill">{sessions.google?.email ?? sessions.github?.email ?? 'Offline mode'}</span>
           <span className="tinker-pill">{vaultPath ?? 'No vault selected'}</span>
         </div>
       </header>
+
+      <div className="tinker-workspace-integrations">
+        <IntegrationsStrip compact mcpStatus={mcpStatus} sessions={sessions} />
+      </div>
 
       <DockviewApiContext.Provider value={dockviewApi}>
         <DockviewReact className="dockview-theme-abyss tinker-dockview" components={components} onReady={onReady} />

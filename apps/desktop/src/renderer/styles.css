@@ -234,6 +234,10 @@ textarea {
   min-height: 0;
 }
 
+.tinker-workspace-integrations {
+  padding: 0.75rem 1.25rem 0;
+}
+
 .dockview-theme-abyss {
   --dv-background-color: transparent;
   --dv-activegroup-visiblepanel-tab-background-color: rgba(125, 211, 252, 0.18);
@@ -337,6 +341,92 @@ textarea {
 
 .tinker-list-item p {
   margin: 0;
+}
+
+.tinker-integrations-strip {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.tinker-integrations-strip--compact {
+  margin-top: 0;
+  padding: 0.75rem 1rem;
+}
+
+.tinker-integrations-strip__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  align-items: flex-start;
+  margin-bottom: 0.9rem;
+}
+
+.tinker-integrations-strip__header h3 {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.tinker-integrations-strip__header p {
+  margin: 0;
+}
+
+.tinker-integrations-strip__grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.tinker-integration-chip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(10, 16, 28, 0.45);
+}
+
+.tinker-integration-chip strong,
+.tinker-integration-chip span,
+.tinker-integration-chip p {
+  display: block;
+}
+
+.tinker-integration-chip strong {
+  font-size: 0.9rem;
+}
+
+.tinker-integration-chip span {
+  font-size: 0.82rem;
+  white-space: nowrap;
+}
+
+.tinker-integration-chip--connected {
+  border-color: rgba(74, 222, 128, 0.35);
+  background: rgba(74, 222, 128, 0.12);
+}
+
+.tinker-integration-chip--warning {
+  border-color: rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.12);
+}
+
+.tinker-integration-chip--error {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.12);
+}
+
+.tinker-integration-chip--standby {
+  border-color: rgba(125, 211, 252, 0.25);
+  background: rgba(125, 211, 252, 0.1);
+}
+
+.tinker-integration-chip--idle {
+  opacity: 0.75;
 }
 
 .tinker-field,
@@ -901,5 +991,13 @@ textarea {
 
   .tinker-card {
     padding: 1.25rem;
+  }
+
+  .tinker-workspace-integrations {
+    padding: 0.75rem 1rem 0;
+  }
+
+  .tinker-integrations-strip__header {
+    flex-direction: column;
   }
 }

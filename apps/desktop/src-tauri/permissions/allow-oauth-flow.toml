@@ -1,7 +1,7 @@
 [[permission]]
 identifier = "allow-oauth-flow"
-description = "Allows the frontend to start the Google OAuth loopback flow."
+description = "Allows the frontend to manage provider auth state."
 
 [permission.commands]
-allow = ["oauth_flow"]
+allow = ["auth_sign_in", "auth_sign_out", "auth_status"]
 deny = []

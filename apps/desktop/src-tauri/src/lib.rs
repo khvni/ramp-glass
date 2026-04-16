@@ -7,11 +7,14 @@ use rand::{rngs::OsRng, RngCore};
 use serde::Serialize;
 use tauri::async_runtime::Receiver;
 use tauri::{Manager, RunEvent, State};
+use tauri_plugin_keyring::KeyringExt;
 use tauri_plugin_shell::{
   process::{CommandChild, CommandEvent},
   ShellExt,
 };
 use tokio::time::{sleep, timeout, Duration as TokioDuration, Instant};
+
+use crate::commands::auth::{AuthProvider, BetterAuthState, SSOSession, KEYRING_SERVICE};
 
 #[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,14 +30,43 @@ struct OpencodeState {
   connection: Mutex<Option<OpencodeConnection>>,
 }
 
-#[tauri::command]
-fn get_opencode_connection(state: State<'_, OpencodeState>) -> Result<OpencodeConnection, String> {
+fn clone_opencode_connection(state: &OpencodeState) -> Result<OpencodeConnection, String> {
   state
     .connection
     .lock()
     .map_err(|_| "OpenCode connection state lock was poisoned.".to_string())?
     .clone()
     .ok_or_else(|| "OpenCode is not running yet.".to_string())
+}
+
+fn read_keychain_session(app: &tauri::AppHandle, provider: AuthProvider) -> Result<Option<SSOSession>, String> {
+  let account = match provider {
+    AuthProvider::Google => crate::commands::auth::GOOGLE_SESSION_ACCOUNT,
+    AuthProvider::Github => crate::commands::auth::GITHUB_SESSION_ACCOUNT,
+  };
+
+  let raw = app
+    .keyring()
+    .get_password(KEYRING_SERVICE, account)
+    .map_err(|error| format!("Keychain operation failed: {error}"))?;
+
+  let Some(raw) = raw else {
+    return Ok(None);
+  };
+
+  match serde_json::from_str(&raw) {
+    Ok(session) => Ok(Some(session)),
+    Err(error) => {
+      let _ = app.keyring().delete_password(KEYRING_SERVICE, account);
+      eprintln!("[auth] ignoring malformed stored session for {account}: {error}");
+      Ok(None)
+    }
+  }
+}
+
+#[tauri::command]
+fn get_opencode_connection(state: State<'_, OpencodeState>) -> Result<OpencodeConnection, String> {
+  clone_opencode_connection(&state)
 }
 
 fn random_url_safe(bytes: usize) -> String {
@@ -85,6 +117,14 @@ fn ensure_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     .map_err(|error| error.to_string())?;
 
   Ok(())
+}
+
+#[tauri::command]
+async fn restart_opencode(app: tauri::AppHandle) -> Result<OpencodeConnection, String> {
+  stop_opencode(&app);
+  start_opencode(&app).await?;
+  let state = app.state::<OpencodeState>();
+  clone_opencode_connection(&state)
 }
 
 async fn wait_for_opencode(connection: &OpencodeConnection) -> Result<(), String> {
@@ -175,8 +215,11 @@ async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
     .to_path_buf();
   let username = format!("tinker-{}", random_url_safe(8));
   let password = random_url_safe(24);
+  let github_token = read_keychain_session(app, AuthProvider::Github)?
+    .map(|session| session.access_token().to_string())
+    .unwrap_or_default();
 
-  let sidecar = app
+  let mut sidecar = app
     .shell()
     .sidecar("opencode")
     .map_err(|error| error.to_string())?
@@ -187,6 +230,10 @@ async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
       ("OPENCODE_SERVER_PASSWORD", password.clone()),
     ])
     .current_dir(working_dir);
+
+  if !github_token.is_empty() {
+    sidecar = sidecar.env("TINKER_GITHUB_TOKEN", github_token);
+  }
 
   let (mut receiver, child) = sidecar.spawn().map_err(|error| error.to_string())?;
 
@@ -270,8 +317,15 @@ pub fn run() {
     .plugin(tauri_plugin_notification::init())
     .plugin(tauri_plugin_shell::init())
     .plugin(tauri_plugin_sql::Builder::default().build())
+    .manage(BetterAuthState::default())
     .manage(OpencodeState::default())
-    .invoke_handler(tauri::generate_handler![get_opencode_connection, commands::oauth::oauth_flow])
+    .invoke_handler(tauri::generate_handler![
+      get_opencode_connection,
+      restart_opencode,
+      commands::auth::auth_sign_in,
+      commands::auth::auth_sign_out,
+      commands::auth::auth_status
+    ])
     .setup(|app| {
       tauri::async_runtime::block_on(async {
         start_opencode(&app.handle()).await?;
@@ -286,6 +340,7 @@ pub fn run() {
   let handle = app.handle().clone();
   app.run(move |_app, event| {
     if matches!(event, RunEvent::Exit) {
+      crate::commands::auth::stop_better_auth(&handle);
       stop_opencode(&handle);
     }
   });

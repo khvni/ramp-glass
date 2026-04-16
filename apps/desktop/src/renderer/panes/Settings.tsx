@@ -1,5 +1,8 @@
 import type { JSX } from 'react';
-import type { SSOSession, WorkspacePreferences } from '@tinker/shared-types';
+import type { SSOStatus } from '@tinker/shared-types';
+import type { MCPStatus } from '../components/IntegrationsStrip.js';
+import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
+import type { WorkspacePreferences } from '@tinker/shared-types';
 
 type SettingsProps = {
   modelConnected: boolean;
@@ -7,12 +10,17 @@ type SettingsProps = {
   modelAuthMessage: string | null;
   googleAuthBusy: boolean;
   googleAuthMessage: string | null;
-  session: SSOSession | null;
+  githubAuthBusy: boolean;
+  githubAuthMessage: string | null;
+  sessions: SSOStatus;
+  mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
   onConnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
+  onConnectGithub(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onDisconnectGoogle(): Promise<void>;
+  onDisconnectGithub(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
   workspacePreferences: WorkspacePreferences;
@@ -25,14 +33,19 @@ export const Settings = ({
   modelConnected,
   googleAuthBusy,
   googleAuthMessage,
-  onConnectModel,
-  session,
-  vaultPath,
+  githubAuthBusy,
+  githubAuthMessage,
+  mcpStatus,
+  onConnectGithub,
   onConnectGoogle,
+  onConnectModel,
   onCreateVault,
-  onDisconnectModel,
+  onDisconnectGithub,
   onDisconnectGoogle,
+  onDisconnectModel,
   onSelectVault,
+  sessions,
+  vaultPath,
   workspacePreferences,
   onWorkspacePreferencesChange,
 }: SettingsProps): JSX.Element => {
@@ -51,7 +64,7 @@ export const Settings = ({
           <p className="tinker-muted">
             {modelConnected
               ? 'Connected through OpenCode.'
-              : 'Not connected yet. Tinker asks OpenCode to run the provider OAuth flow instead of owning separate OpenAI token plumbing.'}
+              : 'Not connected yet. Tinker asks OpenCode to run provider auth instead of owning separate OpenAI token plumbing.'}
           </p>
           {modelAuthMessage ? <p className="tinker-muted">{modelAuthMessage}</p> : null}
           <div className="tinker-inline-actions">
@@ -70,17 +83,36 @@ export const Settings = ({
         <article className="tinker-list-item">
           <h3>Google</h3>
           <p className="tinker-muted">
-            {session ? `Connected as ${session.email}` : 'Not connected. You can skip this and still use Tinker as a coding workspace.'}
+            {sessions.google ? `Connected as ${sessions.google.email}` : 'Optional. Enables Gmail, Calendar, and Drive.'}
           </p>
           {googleAuthMessage ? <p className="tinker-muted">{googleAuthMessage}</p> : null}
           <div className="tinker-inline-actions">
-            {session ? (
+            {sessions.google ? (
               <button className="tinker-button-secondary" type="button" onClick={() => void onDisconnectGoogle()} disabled={googleAuthBusy}>
                 Disconnect Google
               </button>
             ) : (
               <button className="tinker-button" type="button" onClick={() => void onConnectGoogle()} disabled={googleAuthBusy}>
-                Connect Google
+                {googleAuthBusy ? 'Signing in…' : 'Sign in with Google'}
+              </button>
+            )}
+          </div>
+        </article>
+
+        <article className="tinker-list-item">
+          <h3>GitHub</h3>
+          <p className="tinker-muted">
+            {sessions.github ? `Connected as ${sessions.github.email}` : 'Optional. Enables GitHub repos, issues, and pull requests.'}
+          </p>
+          {githubAuthMessage ? <p className="tinker-muted">{githubAuthMessage}</p> : null}
+          <div className="tinker-inline-actions">
+            {sessions.github ? (
+              <button className="tinker-button-secondary" type="button" onClick={() => void onDisconnectGithub()} disabled={githubAuthBusy}>
+                Disconnect GitHub
+              </button>
+            ) : (
+              <button className="tinker-button" type="button" onClick={() => void onConnectGithub()} disabled={githubAuthBusy}>
+                {githubAuthBusy ? 'Signing in…' : 'Sign in with GitHub'}
               </button>
             )}
           </div>
@@ -118,6 +150,8 @@ export const Settings = ({
           </div>
         </article>
       </div>
+
+      <IntegrationsStrip mcpStatus={mcpStatus} sessions={sessions} />
     </section>
   );
 };
