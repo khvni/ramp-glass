@@ -171,18 +171,36 @@ export const Stack = <TData,>({
 
   const handleTabBarLeave = useCallback(() => setTabInsertIndex(null), []);
 
+  /**
+   * Compute the insert index from pointer X across the tab-bar. Walk every
+   * tab element; pick the first whose midpoint is to the right of the
+   * pointer. Falling through means "append at end".
+   */
+  const computeInsertIndexFromPointer = (tabListEl: HTMLElement, clientX: number): number => {
+    const tabEls = tabListEl.querySelectorAll('[role="tab"][data-pane-id]');
+    for (let i = 0; i < tabEls.length; i += 1) {
+      const rect = (tabEls[i] as HTMLElement).getBoundingClientRect();
+      if (clientX < rect.left + rect.width / 2) return i;
+    }
+    return tabEls.length;
+  };
+
   const handleTabDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       if (!isPaneDrag(event)) return;
       event.preventDefault();
       const sourcePaneId = event.dataTransfer.getData(PANE_DRAG_MIME);
-      const index = tabInsertIndex;
       setTabInsertIndex(null);
       if (!sourcePaneId) return;
+
+      // Compute authoritative insert index at drop time (pointer-accurate,
+      // not reliant on React state propagation from the last dragover).
+      const tabListEl = event.currentTarget as HTMLElement;
+      const insertIndex = computeInsertIndexFromPointer(tabListEl, event.clientX);
+
       // If source belongs to this stack, prefer a pure reorder.
       if (node.paneIds.includes(sourcePaneId)) {
         const currentIndex = node.paneIds.indexOf(sourcePaneId);
-        const insertIndex = index ?? node.paneIds.length;
         // reorderPaneInStack moves source out first, then inserts — so adjust
         // the caller-side target index when the source is currently before it.
         const toIndex = currentIndex < insertIndex ? insertIndex - 1 : insertIndex;
@@ -192,10 +210,10 @@ export const Stack = <TData,>({
       onDropPane({
         sourcePaneId,
         targetStackId: node.id,
-        target: { kind: 'insert', index: index ?? node.paneIds.length },
+        target: { kind: 'insert', index: insertIndex },
       });
     },
-    [node.id, node.paneIds, onDropPane, onReorderPaneInStack, tabInsertIndex],
+    [node.id, node.paneIds, onDropPane, onReorderPaneInStack],
   );
 
   // ────────────────────────────────────────────────────────────────────────
