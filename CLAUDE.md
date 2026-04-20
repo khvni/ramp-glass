@@ -23,13 +23,13 @@
 
 1. `tinker-prd.md` — canonical spec
 2. This file
-3. `knowledge/README.md` — shared research + feature reasoning + reference implementations (if present)
-4. `knowledge/context/tasks.md` — open work, status, priorities (if present)
-5. `knowledge/context/sessions/` — last 2–3 session summaries for continuity (if present)
+3. `agent-knowledge/README.md` — shared research + feature reasoning + reference implementations (if present)
+4. `agent-knowledge/context/tasks.md` — open work, status, priorities (if present)
+5. `agent-knowledge/context/sessions/` — last 2–3 session summaries for continuity (if present)
 6. `opencode.json`
 7. `packages/shared-types/src/`
 
-**If `knowledge/` is absent** (new contributor's fresh clone, or sparse repo): read `knowledge/README.md` bootstrap section — or if it doesn't exist yet, seed it from `tinker-prd.md` + `README.md`. The `knowledge/` folder is version-controlled and shared; contributors extend it as they work.
+**If `agent-knowledge/` is absent** (new contributor's fresh clone, or sparse repo): read `agent-knowledge/README.md` bootstrap section — or if it doesn't exist yet, seed it from `tinker-prd.md` + `README.md`. The `agent-knowledge/` folder is version-controlled and shared; contributors extend it as they work.
 
 **OpenCode SDK reference:** https://opencode.ai/docs/sdk/
 
@@ -166,12 +166,12 @@ How this shows up in practice:
 
 ## 10. Knowledge Base Discipline
 
-- **Before building**: check `knowledge/features/NN-*.md` for the matching spec + out-of-scope boundaries.
-- **Before deciding**: check `knowledge/product/decisions.md` — if a decision's already been made, respect it unless you're intentionally reopening it (then update the log).
-- **While working**: if you learn something non-obvious a future contributor will need, update the relevant `knowledge/*.md` file in the same PR.
-- **Ending a session**: append a summary to `knowledge/context/sessions/YYYY-MM-DD-HHMM.md` — prevents context loss for the next agent.
-- **Updating tasks**: move entries in `knowledge/context/tasks.md` as you start, block, or complete work.
-- **New reference material**: when you fetch an external article / research / vendor doc that informs architecture, process into `knowledge/reference/*.md` per the conventions in `knowledge/README.md`.
+- **Before building**: check `agent-knowledge/features/NN-*.md` for the matching spec + out-of-scope boundaries.
+- **Before deciding**: check `agent-knowledge/product/decisions.md` — if a decision's already been made, respect it unless you're intentionally reopening it (then update the log).
+- **While working**: if you learn something non-obvious a future contributor will need, update the relevant `agent-knowledge/*.md` file in the same PR.
+- **Ending a session**: append a summary to `agent-knowledge/context/sessions/YYYY-MM-DD-HHMM.md` — prevents context loss for the next agent.
+- **Updating tasks**: move entries in `agent-knowledge/context/tasks.md` as you start, block, or complete work.
+- **New reference material**: when you fetch an external article / research / vendor doc that informs architecture, process into `agent-knowledge/reference/*.md` per the conventions in `agent-knowledge/README.md`.
 
 ## 11. Things That Will Tempt You
 

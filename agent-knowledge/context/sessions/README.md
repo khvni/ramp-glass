@@ -29,7 +29,7 @@ Agent: [Claude Code / OpenCode / Codex / other]
 - [YYYY-MM-DD] Decision + rationale (anything durable should also land in `product/decisions.md`)
 
 ## Knowledge Base Updates
-- `knowledge/...` files created or modified and why
+- `agent-knowledge/...` files created or modified and why
 
 ## Open Questions / Handoff
 - Anything the next agent needs to know
