@@ -23,13 +23,11 @@
 
 1. `tinker-prd.md` — canonical spec
 2. This file
-3. `agent-knowledge/README.md` — shared research + feature reasoning + reference implementations (if present)
-4. `agent-knowledge/context/tasks.md` — open work, status, priorities (if present)
-5. `agent-knowledge/context/sessions/` — last 2–3 session summaries for continuity (if present)
+3. `agent-knowledge/README.md` — shared research + feature reasoning + reference implementations
+4. `agent-knowledge/context/tasks.md` — open work, status, priorities
+5. `agent-knowledge/context/sessions/` — last 2–3 session summaries for continuity
 6. `opencode.json`
 7. `packages/shared-types/src/`
-
-**If `agent-knowledge/` is absent** (new contributor's fresh clone, or sparse repo): read `agent-knowledge/README.md` bootstrap section — or if it doesn't exist yet, seed it from `tinker-prd.md` + `README.md`. The `agent-knowledge/` folder is version-controlled and shared; contributors extend it as they work.
 
 **OpenCode SDK reference:** https://opencode.ai/docs/sdk/
 
@@ -45,13 +43,13 @@
 
 ## 2. Engineering Algorithm (Musk's 5-step)
 
-Apply these steps **in order**. Reversing them is the most common mistake — Musk himself has flagged automating, accelerating, and simplifying things that should have been deleted entirely.
+Apply these steps **in order**. Reversing them is the most common mistake.
 
-1. **Make requirements less dumb.** Every requirement is suspect until proven — especially ones from smart people, which are the hardest to challenge. Know why each one exists and who still benefits.
-2. **Delete parts or processes.** If you aren't adding 10% of what you delete back later, you aren't deleting enough. Removing stale process beats wrapping it.
+1. **Make requirements less dumb.** Every requirement is suspect until proven — especially from smart people.
+2. **Delete parts or processes.** If you aren't adding 10% of what you delete back later, you aren't deleting enough.
 3. **Simplify / optimize.** Only after deletion. Optimizing something that shouldn't exist is the worst kind of waste.
-4. **Accelerate cycle time.** Shrink the distance between a change and a verified result. Only after simplification — otherwise you accelerate waste.
-5. **Automate.** Last. Never first. Automating a bad process calcifies it.
+4. **Accelerate cycle time.** Only after simplification.
+5. **Automate.** Last. Never first.
 
 How this shows up in practice:
 
@@ -84,13 +82,12 @@ How this shows up in practice:
 
 ---
 
-## 4. Repo Conventions
+## 4. Repo + Git Workflow
 
-- Monorepo root: `tinker`
-- Commits: conventional commits with a real scope, for example `feat(bridge): stream OpenCode events to chat`
-- Branch names match the feature or fix they implement, for example `feat/07-workspace-persistence` or `fix/bridge-stream-shaping`. Do not leave agent-generated throwaway names like `claude/<slug>` on work that will reach review — rename before opening a PR so reviewers see scope, not a codename.
-- Sync against `origin/main`
-- Doc references that mention the future repo name should use `https://github.com/khvni/tinker.git`
+- Monorepo root: `tinker`. Remote: `https://github.com/khvni/tinker.git`. Default branch: `main`.
+- Conventional commits with a real scope, e.g. `feat(bridge): stream OpenCode events to chat`.
+- Branch names match the feature or fix, e.g. `feat/07-workspace-persistence`. Rename agent-generated throwaway names like `claude/<slug>` before opening a PR.
+- Sync against `origin/main`. Never force-push `main`. Never bypass hooks with `--no-verify`. Do not add `Co-Authored-By` trailers.
 
 ---
 
@@ -146,19 +143,19 @@ How this shows up in practice:
 
 ## 8. Workspace UI Invariants
 
-- `@tinker/panes` is the only sanctioned layout engine (per [[D16]]). Don't add `dockview-react` imports. Migration is in-flight — existing Dockview panes keep working until their per-pane PR lands.
+- `@tinker/panes` is the only sanctioned layout engine (per [[D16]]). Don't add `dockview-react` imports. Existing Dockview panes keep working until their per-pane PR lands.
 - Split panes, movable tabs, and restored layout must work. Pane payload is typed (`Pane<TData>`); each `kind` registers a renderer in a `PaneRegistry`.
-- Workspace state serializes via `selectWorkspaceSnapshot()`; persistence uses `WorkspaceState<TData>` from `@tinker/panes`, not Dockview's JSON (see [[07-workspace-persistence]] follow-ups).
+- Workspace state serializes via `selectWorkspaceSnapshot()`; persistence uses `WorkspaceState<TData>` from `@tinker/panes`.
 - The app must stay usable when integrations are disconnected.
 - No modal-heavy core flows. Agent-initiated clarifications use the `ask_user` overlay (per [[D20]]), not freeform chat prompts.
-- Dark, focused UI with persistent workspace state. All colors/spacing/radius/font values come from `@tinker/design` tokens (per [[D14]] / [[D15]]).
+- Dark, focused UI. All colors/spacing/radius/font values come from `@tinker/design` tokens (per [[D14]] / [[D15]]).
 
 ---
 
 ## 9. Architecture — device vs host (per [[D17]])
 
 - **Device** (Tauri shell / `apps/desktop`) owns: window, tray, menu, dialogs, clipboard, notifications, updater, keychain **writes**, renderer UI.
-- **Host** (`packages/host-service`, scaffolded) owns: workspace lifecycle, vault indexing, memory store, OpenCode sidecar lifecycle, git ops, scheduler, chat runtime + memory injection. Deployable standalone (no Tauri awareness).
+- **Host** (`packages/host-service`, scaffolded) owns: workspace lifecycle, vault indexing, memory store, OpenCode sidecar lifecycle, git ops, scheduler, chat runtime + memory injection. Deployable standalone.
 - **Host identity is intrinsic** — generated from machine metadata at first run. Never passed in as config.
 - **No mutate-then-call managers** (per [[D22]]). Pass config per-call; retries use a fresh config object.
 - **Coordinator pattern** for spawned processes: spawn → health-poll → record `{pid, port, secret}` → `unref` → manifest-file adoption across restarts. Never retain the `ChildProcess` handle.
@@ -175,37 +172,26 @@ How this shows up in practice:
 
 ---
 
-## 11. Git Workflow
+## 11. Knowledge Base Discipline
 
-- Remote docs should point at `https://github.com/khvni/tinker.git`
-- Default branch: `main`
-- never force-push `main`
-- never bypass hooks with `--no-verify`
-- do not add `Co-Authored-By` trailers
+- **Before building**: check `agent-knowledge/features/NN-*.md` for the matching spec + out-of-scope boundaries.
+- **Before deciding**: check `agent-knowledge/product/decisions.md` — respect existing decisions unless intentionally reopening (then update the log).
+- **While working**: if you learn something non-obvious a future contributor will need, update the relevant `agent-knowledge/*.md` file in the same PR.
+- **Ending a session**: append a summary to `agent-knowledge/context/sessions/YYYY-MM-DD-HHMM.md`.
+- **Updating tasks**: move entries in `agent-knowledge/context/tasks.md` as you start, block, or complete work.
+- **New reference material**: process external articles / research into `agent-knowledge/reference/*.md`.
 
 ---
 
-## 12. Knowledge Base Discipline
+## 12. Things That Will Tempt You
 
-- **Before building**: check `agent-knowledge/features/NN-*.md` for the matching spec + out-of-scope boundaries.
-- **Before deciding**: check `agent-knowledge/product/decisions.md` — if a decision's already been made, respect it unless you're intentionally reopening it (then update the log).
-- **While working**: if you learn something non-obvious a future contributor will need, update the relevant `agent-knowledge/*.md` file in the same PR.
-- **Ending a session**: append a summary to `agent-knowledge/context/sessions/YYYY-MM-DD-HHMM.md` — prevents context loss for the next agent.
-- **Updating tasks**: move entries in `agent-knowledge/context/tasks.md` as you start, block, or complete work.
-- **New reference material**: when you fetch an external article / research / vendor doc that informs architecture, process into `agent-knowledge/reference/*.md` per the conventions in `agent-knowledge/README.md`.
-
-## 13. Things That Will Tempt You
-
-- "Let me call the OpenAI API directly." No. Use OpenCode.
-- "Let me put business logic in Rust." No. Rust is system plumbing only.
-- "Let me build a custom integration client." No. Use MCP servers.
-- "Let me preserve the old desktop shell behind a flag." No. The old shell is deleted.
-- "Let me add non-GPT providers." No. GPT-5.4 via Codex OAuth is the path.
-- "Let me store tokens in a file." No. Use the system keychain.
-- "Let me add `dockview-react` back for this one pane." No. Register a `kind` in `PaneRegistry` per [[D16]].
-- "Let me stash config on the coordinator and call start later." No. Pass config per call per [[D22]].
-- "Let me derive `hostId` from a config field." No. Intrinsic only per [[D17]].
-- "Let me ship a sync layer alongside host/device split." No. Deferred per [[D18]].
-- "Let me collapse the folder-per-component rule for this trivial button." No. Follow [[D21]] even for trivial components; the exception is `packages/design` primitives only.
-- "Let me ask the user a question by printing plain text in chat." No. Use the `ask_user` overlay per [[D20]].
-
+- "Let me call the OpenAI API directly." No — use OpenCode.
+- "Let me put business logic in Rust." No — Rust is system plumbing only.
+- "Let me build a custom integration client." No — use MCP servers.
+- "Let me add non-GPT providers." No — GPT-5.4 via Codex OAuth is the path.
+- "Let me store tokens in a file." No — use the system keychain.
+- "Let me add `dockview-react` back for this one pane." No — register a `kind` in `PaneRegistry` per [[D16]].
+- "Let me stash config on the coordinator and call start later." No — pass config per call per [[D22]].
+- "Let me derive `hostId` from a config field." No — intrinsic only per [[D17]].
+- "Let me ship a sync layer alongside host/device split." No — deferred per [[D18]].
+- "Let me ask the user a question by printing plain text in chat." No — use `ask_user` overlay per [[D20]].
