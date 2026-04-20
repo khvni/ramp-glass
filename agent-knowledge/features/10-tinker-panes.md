@@ -26,7 +26,7 @@ Dockview was VS-Code-style docking — floating windows, tab-group merging, dock
 - zustand-backed store exposes atomic actions; React bindings via `useSyncExternalStore`.
 - HTML5 drag-and-drop for tab reorder + edge-docking panes.
 - Keyboard: arrow keys between tabs, arrow keys on a resize handle, Cmd/Ctrl-W closes tab.
-- Spatial neighbor finder (`getSpatialNeighborPaneId`) for future shortcut-driven focus moves.
+- Spatial neighbor finder (`getSpatialNeighborStackId`) for future shortcut-driven focus moves.
 
 ## Out of scope (for this feature)
 
@@ -83,9 +83,8 @@ import {
   createWorkspaceStore,
   selectWorkspaceSnapshot,
   findActiveTab,
-  findTabContainingPane,
-  findLayoutRoot,
-  getSpatialNeighborPaneId,
+  getSpatialNeighborStackId,
+  classifyBodyDrop,
   useWorkspaceActions,
   useWorkspaceSelector,
   type PaneRegistry,
@@ -98,10 +97,16 @@ import {
   type Pane,
   type Tab,
   type LayoutNode,
+  type BodyDrop,
 } from '@tinker/panes';
 
 import '@tinker/panes/styles.css';
 ```
+
+**Internalized** `[2026-04-20]`: `findLayoutRoot`, `findTabContainingPane`,
+`findStackPath`, `nodeAtPath` — zero external callers. Promoted
+`classifyBodyDrop` + `BodyDrop` from private `Stack.tsx` helper to public
+tested `layout.ts` export.
 
 Stylesheet consumes `@tinker/design` CSS variables only. Never hex.
 
