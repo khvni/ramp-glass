@@ -1,7 +1,8 @@
 import type { TextareaHTMLAttributes } from 'react';
+import { cx } from './cx.js';
 import './Textarea.css';
 
-export type TextareaResize = 'none' | 'vertical' | 'horizontal' | 'both';
+export type TextareaResize = 'none' | 'vertical';
 
 export type TextareaProps = TextareaHTMLAttributes<HTMLTextAreaElement> & {
   resize?: TextareaResize;
@@ -12,10 +13,10 @@ export const Textarea = ({
   resize = 'vertical',
   rows = 4,
   ...rest
-}: TextareaProps) => {
-  const classes = ['tk-textarea', `tk-textarea--resize-${resize}`, className ?? null]
-    .filter((token): token is string => Boolean(token))
-    .join(' ');
-
-  return <textarea rows={rows} className={classes} {...rest} />;
-};
+}: TextareaProps) => (
+  <textarea
+    rows={rows}
+    className={cx('tk-textarea', `tk-textarea--resize-${resize}`, className)}
+    {...rest}
+  />
+);

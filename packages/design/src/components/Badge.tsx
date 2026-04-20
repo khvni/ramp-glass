@@ -1,4 +1,5 @@
 import type { HTMLAttributes, ReactNode } from 'react';
+import { cx } from './cx.js';
 import './Badge.css';
 
 export type BadgeVariant =
@@ -26,20 +27,12 @@ export const Badge = ({
   className,
   children,
   ...rest
-}: BadgeProps) => {
-  const classes = [
-    'tk-badge',
-    `tk-badge--${variant}`,
-    `tk-badge--size-${size}`,
-    className ?? null,
-  ]
-    .filter((token): token is string => Boolean(token))
-    .join(' ');
-
-  return (
-    <span className={classes} {...rest}>
-      {icon ? <span className="tk-badge__icon">{icon}</span> : null}
-      <span className="tk-badge__label">{children}</span>
-    </span>
-  );
-};
+}: BadgeProps) => (
+  <span
+    className={cx('tk-badge', `tk-badge--${variant}`, `tk-badge--size-${size}`, className)}
+    {...rest}
+  >
+    {icon ? <span className="tk-badge__icon">{icon}</span> : null}
+    <span className="tk-badge__label">{children}</span>
+  </span>
+);

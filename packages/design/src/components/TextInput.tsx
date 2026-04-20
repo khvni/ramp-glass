@@ -1,12 +1,9 @@
 import type { InputHTMLAttributes } from 'react';
+import { cx } from './cx.js';
 import './TextInput.css';
 
 export type TextInputProps = InputHTMLAttributes<HTMLInputElement>;
 
-export const TextInput = ({ className, type = 'text', ...rest }: TextInputProps) => {
-  const classes = ['tk-textinput', className ?? null]
-    .filter((token): token is string => Boolean(token))
-    .join(' ');
-
-  return <input type={type} className={classes} {...rest} />;
-};
+export const TextInput = ({ className, type = 'text', ...rest }: TextInputProps) => (
+  <input type={type} className={cx('tk-textinput', className)} {...rest} />
+);

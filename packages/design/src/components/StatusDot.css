@@ -7,10 +7,6 @@
   background: var(--color-muted);
 }
 
-.tk-statusdot--muted {
-  background: var(--color-muted);
-}
-
 .tk-statusdot--constructive {
   background: var(--color-success);
 }

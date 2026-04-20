@@ -40,11 +40,3 @@
 .tk-textarea--resize-vertical {
   resize: vertical;
 }
-
-.tk-textarea--resize-horizontal {
-  resize: horizontal;
-}
-
-.tk-textarea--resize-both {
-  resize: both;
-}

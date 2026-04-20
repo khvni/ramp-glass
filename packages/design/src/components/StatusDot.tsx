@@ -1,4 +1,5 @@
 import type { HTMLAttributes } from 'react';
+import { cx } from './cx.js';
 import './StatusDot.css';
 
 export type StatusDotState =
@@ -16,19 +17,11 @@ export type StatusDotProps = Omit<HTMLAttributes<HTMLSpanElement>, 'children'> &
   label?: string;
 };
 
-export const StatusDot = ({
-  state = 'muted',
-  label,
-  className,
-  ...rest
-}: StatusDotProps) => {
-  const classes = [
-    'tk-statusdot',
-    `tk-statusdot--${state}`,
-    className ?? null,
-  ]
-    .filter((token): token is string => Boolean(token))
-    .join(' ');
-
-  return <span className={classes} role="status" aria-label={label ?? state} {...rest} />;
-};
+export const StatusDot = ({ state = 'muted', label, className, ...rest }: StatusDotProps) => (
+  <span
+    className={cx('tk-statusdot', `tk-statusdot--${state}`, className)}
+    role="status"
+    aria-label={label ?? state}
+    {...rest}
+  />
+);

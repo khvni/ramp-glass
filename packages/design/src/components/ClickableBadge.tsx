@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import type { BadgeSize, BadgeVariant } from './Badge.js';
+import { cx } from './cx.js';
 import './Badge.css';
 import './ClickableBadge.css';
 
@@ -17,21 +18,19 @@ export const ClickableBadge = ({
   children,
   type = 'button',
   ...rest
-}: ClickableBadgeProps) => {
-  const classes = [
-    'tk-badge',
-    'tk-badge--clickable',
-    `tk-badge--${variant}`,
-    `tk-badge--size-${size}`,
-    className ?? null,
-  ]
-    .filter((token): token is string => Boolean(token))
-    .join(' ');
-
-  return (
-    <button type={type} className={classes} {...rest}>
-      {icon ? <span className="tk-badge__icon">{icon}</span> : null}
-      <span className="tk-badge__label">{children}</span>
-    </button>
-  );
-};
+}: ClickableBadgeProps) => (
+  <button
+    type={type}
+    className={cx(
+      'tk-badge',
+      'tk-badge--clickable',
+      `tk-badge--${variant}`,
+      `tk-badge--size-${size}`,
+      className,
+    )}
+    {...rest}
+  >
+    {icon ? <span className="tk-badge__icon">{icon}</span> : null}
+    <span className="tk-badge__label">{children}</span>
+  </button>
+);

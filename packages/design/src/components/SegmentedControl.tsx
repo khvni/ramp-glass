@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { cx } from './cx.js';
 import './SegmentedControl.css';
 
 export type SegmentedControlOption<Value extends string> = {
@@ -20,28 +21,22 @@ export const SegmentedControl = <Value extends string>({
   onChange,
   label,
   className,
-}: SegmentedControlProps<Value>) => {
-  const classes = ['tk-segmented', className ?? null]
-    .filter((token): token is string => Boolean(token))
-    .join(' ');
-
-  return (
-    <div className={classes} role="tablist" aria-label={label}>
-      {options.map((option) => {
-        const active = option.value === value;
-        return (
-          <button
-            key={option.value}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            className={`tk-segmented__option${active ? ' tk-segmented__option--active' : ''}`}
-            onClick={() => onChange(option.value)}
-          >
-            {option.label}
-          </button>
-        );
-      })}
-    </div>
-  );
-};
+}: SegmentedControlProps<Value>) => (
+  <div className={cx('tk-segmented', className)} role="tablist" aria-label={label}>
+    {options.map((option) => {
+      const active = option.value === value;
+      return (
+        <button
+          key={option.value}
+          type="button"
+          role="tab"
+          aria-selected={active}
+          className={cx('tk-segmented__option', active && 'tk-segmented__option--active')}
+          onClick={() => onChange(option.value)}
+        >
+          {option.label}
+        </button>
+      );
+    })}
+  </div>
+);
