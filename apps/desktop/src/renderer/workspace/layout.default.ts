@@ -7,6 +7,10 @@ type DefaultLayoutOptions = {
   vaultPath: string | null;
 };
 
+// Clean default boot: Chat is always present. If a vault is connected we also
+// surface the vault browser on the left. Scheduler, Settings, Dojo, and Today
+// are reachable on-demand via the workspace header — they would only clutter
+// the first-boot view.
 export const applyDefaultLayout = (api: DockviewApi, options: DefaultLayoutOptions): void => {
   if (options.vaultPath) {
     api.addPanel({
@@ -24,7 +28,7 @@ export const applyDefaultLayout = (api: DockviewApi, options: DefaultLayoutOptio
     });
   }
 
-  const chatPanel = {
+  api.addPanel({
     id: 'chat',
     component: 'chat',
     title: 'Chat',
@@ -36,56 +40,5 @@ export const applyDefaultLayout = (api: DockviewApi, options: DefaultLayoutOptio
           },
         }
       : {}),
-  };
-
-  api.addPanel(chatPanel);
-
-  api.addPanel({
-    id: 'today',
-    component: 'today',
-    title: 'Today',
-    position: {
-      referencePanel: 'chat',
-      direction: 'right',
-    },
   });
-
-  api.addPanel({
-    id: 'scheduler',
-    component: 'scheduler',
-    title: 'Scheduler',
-    inactive: true,
-    position: {
-      referencePanel: 'today',
-      direction: 'within',
-    },
-  });
-
-  api.addPanel({
-    id: 'settings',
-    component: 'settings',
-    title: 'Settings',
-    inactive: true,
-    position: {
-      referencePanel: 'scheduler',
-      direction: 'within',
-    },
-  });
-
-  if (options.vaultPath) {
-    api.addPanel({
-      id: 'dojo',
-      component: 'dojo',
-      title: 'Dojo',
-      inactive: true,
-      params: {
-        skillStore: options.skillStore,
-        vaultPath: options.vaultPath,
-      },
-      position: {
-        referencePanel: 'today',
-        direction: 'within',
-      },
-    });
-  }
 };

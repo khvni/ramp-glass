@@ -238,13 +238,16 @@ export const Workspace = ({
     [saveLayoutNow],
   );
 
-  const openSchedulerPane = (): void => {
+  const openOrFocusPane = (
+    id: 'scheduler' | 'settings' | 'today',
+    title: string,
+  ): void => {
     const api = dockviewApiRef.current;
     if (!api) {
       return;
     }
 
-    const existingPanel = api.panels.find((panel) => panel.id === 'scheduler');
+    const existingPanel = api.panels.find((panel) => panel.id === id);
     if (existingPanel) {
       existingPanel.api.setActive();
       return;
@@ -252,9 +255,9 @@ export const Workspace = ({
 
     const referencePanelId = getReferencePanelId(api);
     api.addPanel({
-      id: 'scheduler',
-      component: 'scheduler',
-      title: 'Scheduler',
+      id,
+      component: id,
+      title,
       ...(referencePanelId
         ? {
             position: {
@@ -265,6 +268,10 @@ export const Workspace = ({
         : {}),
     });
   };
+
+  const openSchedulerPane = (): void => openOrFocusPane('scheduler', 'Scheduler');
+  const openSettingsPane = (): void => openOrFocusPane('settings', 'Settings');
+  const openTodayPane = (): void => openOrFocusPane('today', 'Today');
 
   const components = useMemo(
     () =>
@@ -444,39 +451,27 @@ export const Workspace = ({
       return;
     }
 
+    // Push fresh params into open panels that depend on vault / stores.
     api.panels
       .filter((panel) => panel.id === 'vault-browser')
       .forEach((panel) => {
-        panel.api.updateParameters({
-          memoryStore,
-          vaultPath,
-        });
+        panel.api.updateParameters({ memoryStore, vaultPath });
       });
 
     api.panels
       .filter((panel) => panel.id === 'dojo')
       .forEach((panel) => {
-        panel.api.updateParameters({
-          skillStore,
-          vaultPath,
-          onActiveSkillsChanged,
-        });
+        panel.api.updateParameters({ skillStore, vaultPath, onActiveSkillsChanged });
       });
 
-    if (!vaultPath) {
-      return;
-    }
-
-    if (!api.panels.some((panel) => panel.id === 'vault-browser')) {
+    // When a vault gets connected after boot, surface the vault browser.
+    if (vaultPath && !api.panels.some((panel) => panel.id === 'vault-browser')) {
       const referencePanelId = getReferencePanelId(api);
       api.addPanel({
         id: 'vault-browser',
         component: 'vault-browser',
         title: 'Vault',
-        params: {
-          memoryStore,
-          vaultPath,
-        },
+        params: { memoryStore, vaultPath },
         initialWidth: 280,
         inactive: true,
         ...(referencePanelId
@@ -484,29 +479,6 @@ export const Workspace = ({
               position: {
                 referencePanel: referencePanelId,
                 direction: 'left' as const,
-              },
-            }
-          : {}),
-      });
-    }
-
-    if (!api.panels.some((panel) => panel.id === 'dojo')) {
-      const referencePanelId = getReferencePanelId(api);
-      api.addPanel({
-        id: 'dojo',
-        component: 'dojo',
-        title: 'Dojo',
-        params: {
-          skillStore,
-          vaultPath,
-          onActiveSkillsChanged,
-        },
-        inactive: true,
-        ...(referencePanelId
-          ? {
-              position: {
-                referencePanel: referencePanelId,
-                direction: 'within' as const,
               },
             }
           : {}),
@@ -522,11 +494,17 @@ export const Workspace = ({
           <h1>Tinker</h1>
         </div>
         <div className="tinker-inline-actions">
-          <Button variant="secondary" size="s" onClick={openSchedulerPane} disabled={!dockviewApi}>
-            Open scheduler
-          </Button>
           <Button variant="secondary" size="s" onClick={openNewChatPane} disabled={!dockviewApi}>
-            New chat tab
+            New chat
+          </Button>
+          <Button variant="secondary" size="s" onClick={openTodayPane} disabled={!dockviewApi}>
+            Today
+          </Button>
+          <Button variant="secondary" size="s" onClick={openSchedulerPane} disabled={!dockviewApi}>
+            Scheduler
+          </Button>
+          <Button variant="secondary" size="s" onClick={openSettingsPane} disabled={!dockviewApi}>
+            Settings
           </Button>
         </div>
         <div className="tinker-header-meta">
