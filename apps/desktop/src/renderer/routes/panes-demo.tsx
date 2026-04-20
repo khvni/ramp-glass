@@ -4,7 +4,6 @@ import {
   type PaneRegistry,
   type WorkspaceStore,
   Workspace,
-  findStack,
   isSplit,
   isStack,
   collectStacks,

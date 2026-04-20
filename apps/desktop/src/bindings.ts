@@ -1,4 +1,4 @@
-import type { SSOProvider, SSOSession, SSOStatus } from '@tinker/shared-types';
+import type { SSOProvider, SSOStatus } from '@tinker/shared-types';
 
 export const GOOGLE_SCOPES = [
   'openid',
