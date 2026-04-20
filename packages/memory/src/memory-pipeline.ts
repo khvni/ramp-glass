@@ -102,7 +102,8 @@ const mergeAliases = (current: Record<string, unknown>, nextAliases: string[] | 
     return current;
   }
 
-  if (aliases.length === currentAliases.length && aliases.every((alias, index) => alias === currentAliases[index])) {
+  // Set is monotonic over currentAliases, so identical length means nothing was added.
+  if (aliases.length === currentAliases.length) {
     return current;
   }
 

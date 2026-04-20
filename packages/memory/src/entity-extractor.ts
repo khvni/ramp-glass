@@ -13,10 +13,7 @@ const createEntity = (kind: Entity['kind'], source: string, name: string): Entit
     name,
     aliases: [],
     sources: [{ integration: 'vault', externalId: source }],
-    attributes: {
-      extractedFrom: source,
-      heuristic: true,
-    },
+    attributes: {},
     lastSeenAt: new Date().toISOString(),
   };
 };
