@@ -1,27 +1,36 @@
 import { createStore, type StoreApi } from 'zustand/vanilla';
 import type {
-  DropEdge,
+  DropTarget,
   FocusDirection,
   LayoutNode,
   Pane,
-  SplitPath,
+  PaneId,
+  StackId,
+  StackNode,
   Tab,
+  TabId,
   WorkspaceState,
 } from '../../types.js';
 import {
-  DEFAULT_RATIO,
   clampRatio,
-  findPanePath,
+  collapseEmptyStacks,
+  findStack,
+  findStackContainingPane,
   firstPaneId,
-  getSpatialNeighborPaneId,
-  leaf,
-  removePaneFromLayout,
-  setRatioAtPath,
-  splitAtPath,
+  firstStackId,
+  getSpatialNeighborStackId,
+  insertPaneInStack,
+  movePaneToStack,
+  removePaneFromStack,
+  reorderPaneInStack,
+  replaceStack,
+  setSplitRatioById,
+  splitStackOnEdge,
+  stack,
 } from '../utils/layout.js';
 
 export type CreatePaneInput<TData> = {
-  readonly id: string;
+  readonly id: PaneId;
   readonly kind: string;
   readonly data: TData;
   readonly title?: string;
@@ -29,7 +38,7 @@ export type CreatePaneInput<TData> = {
 };
 
 export type CreateTabInput<TData> = {
-  readonly id: string;
+  readonly id: TabId;
   readonly pane: CreatePaneInput<TData>;
   readonly title?: string;
   readonly createdAt?: number;
@@ -37,66 +46,79 @@ export type CreateTabInput<TData> = {
 };
 
 export type WorkspaceActions<TData> = {
-  /** Replace the whole workspace snapshot. Used for hydrating from persisted state. */
   readonly hydrate: (next: WorkspaceState<TData>) => void;
-  /** Reset to an empty workspace. */
   readonly reset: () => void;
 
-  /** Open a new tab. The tab's layout is seeded with a single pane. */
+  // Tab management
   readonly openTab: (input: CreateTabInput<TData>) => void;
-  /** Close a tab by id. Activates a neighbor tab if the active one is closed. */
-  readonly closeTab: (tabId: string) => void;
-  /** Activate a tab. No-op if `tabId` is unknown. */
-  readonly activateTab: (tabId: string) => void;
-  /** Rename a tab. Pass `undefined` to clear the override. */
-  readonly renameTab: (tabId: string, title: string | undefined) => void;
-  /** Reorder tabs by moving `tabId` to `toIndex` (clamped to [0, tabs.length-1]). */
-  readonly moveTab: (tabId: string, toIndex: number) => void;
+  readonly closeTab: (tabId: TabId) => void;
+  readonly activateTab: (tabId: TabId) => void;
+  readonly renameTab: (tabId: TabId, title: string | undefined) => void;
+  readonly moveTab: (tabId: TabId, toIndex: number) => void;
 
-  /**
-   * Split a target pane along `edge` and insert a new pane in the new side.
-   * Throws if the target pane cannot be found in any tab.
-   */
-  readonly splitPane: (
-    tabId: string,
-    targetPaneId: string,
-    edge: DropEdge,
+  // Pane management — all operate inside a single Tab's layout tree.
+  /** Open a new pane inside an existing stack. If stackId is omitted, uses the tab's active stack. */
+  readonly addPane: (
+    tabId: TabId,
+    pane: CreatePaneInput<TData>,
+    options?: { readonly stackId?: StackId; readonly index?: number; readonly activate?: boolean },
+  ) => void;
+  /** Split a stack along edge and open a new pane in the resulting stack. */
+  readonly splitStack: (
+    tabId: TabId,
+    stackId: StackId,
+    edge: 'top' | 'right' | 'bottom' | 'left',
     pane: CreatePaneInput<TData>,
     ratio?: number,
   ) => void;
-  /** Close a pane. Collapses its parent split. Closes the tab if it was the last pane. */
-  readonly closePane: (tabId: string, paneId: string) => void;
-  /** Mark a pane as active within its tab. */
-  readonly focusPane: (tabId: string, paneId: string) => void;
-  /** Replace the data blob on a pane. */
+  /** Back-compat helper: split the stack containing targetPaneId on `edge`. */
+  readonly splitPane: (
+    tabId: TabId,
+    targetPaneId: PaneId,
+    edge: 'top' | 'right' | 'bottom' | 'left',
+    pane: CreatePaneInput<TData>,
+    ratio?: number,
+  ) => void;
+  readonly closePane: (tabId: TabId, paneId: PaneId) => void;
+  readonly focusPane: (tabId: TabId, paneId: PaneId) => void;
+  readonly focusStack: (tabId: TabId, stackId: StackId) => void;
   readonly updatePaneData: (
-    tabId: string,
-    paneId: string,
+    tabId: TabId,
+    paneId: PaneId,
     updater: (prev: TData) => TData,
   ) => void;
-  /** Rename a pane. Pass `undefined` to clear the override. */
-  readonly renamePane: (tabId: string, paneId: string, title: string | undefined) => void;
-  /** Resize a split. `path` references the split node itself, not a leaf. */
-  readonly setSplitRatio: (tabId: string, path: SplitPath, ratio: number) => void;
+  readonly renamePane: (tabId: TabId, paneId: PaneId, title: string | undefined) => void;
 
+  // Layout manipulation
+  readonly setSplitRatio: (tabId: TabId, splitId: string, ratio: number) => void;
+  /** Reorder a pane within its own stack. */
+  readonly reorderPane: (tabId: TabId, paneId: PaneId, toIndex: number) => void;
   /**
-   * Move an existing pane to a new position relative to another pane in the
-   * same tab. The pane id and data are preserved, so the React subtree stays
-   * mounted across the move. No-op when `sourcePaneId === targetPaneId`.
+   * Move a pane to a drop target relative to a stack. This is the primary
+   * drag-drop entry point.
    */
   readonly movePane: (
-    tabId: string,
-    sourcePaneId: string,
-    targetPaneId: string,
-    edge: DropEdge,
+    tabId: TabId,
+    paneId: PaneId,
+    targetStackId: StackId,
+    target: DropTarget,
+  ) => void;
+  /**
+   * Back-compat helper: move a pane to the position of another pane using the
+   * old edge vocabulary. "center" / "top" / "right" / "bottom" / "left".
+   */
+  readonly movePaneRelativeToPane: (
+    tabId: TabId,
+    sourcePaneId: PaneId,
+    targetPaneId: PaneId,
+    edge: 'top' | 'right' | 'bottom' | 'left' | 'center',
   ) => void;
 
-  /** Move focus in a direction within the active tab. Returns the new pane id or null. */
-  readonly focusNeighbor: (direction: FocusDirection) => string | null;
+  // Keyboard nav
+  readonly focusNeighbor: (direction: FocusDirection) => PaneId | null;
 };
 
 export type WorkspaceStoreState<TData> = WorkspaceState<TData> & { readonly actions: WorkspaceActions<TData> };
-
 export type WorkspaceStore<TData> = StoreApi<WorkspaceStoreState<TData>>;
 
 export type CreateWorkspaceStoreOptions<TData> = {
@@ -104,30 +126,33 @@ export type CreateWorkspaceStoreOptions<TData> = {
 };
 
 const emptyWorkspace = <TData>(): WorkspaceState<TData> => ({
-  version: 1,
+  version: 2,
   tabs: [],
   activeTabId: null,
 });
 
 const clone = <TData>(state: WorkspaceState<TData>): WorkspaceState<TData> => ({
-  version: 1,
+  version: 2,
   activeTabId: state.activeTabId,
-  tabs: state.tabs.map((tab) => ({
-    ...tab,
-    panes: { ...tab.panes },
-  })),
+  tabs: state.tabs.map((tab) => ({ ...tab, panes: { ...tab.panes } })),
 });
 
 const setTab = <TData>(
   state: WorkspaceState<TData>,
-  tabId: string,
+  tabId: TabId,
   transform: (tab: Tab<TData>) => Tab<TData>,
-): WorkspaceState<TData> => {
-  return {
-    ...state,
-    tabs: state.tabs.map((tab) => (tab.id === tabId ? transform(tab) : tab)),
-  };
-};
+): WorkspaceState<TData> => ({
+  ...state,
+  tabs: state.tabs.map((tab) => (tab.id === tabId ? transform(tab) : tab)),
+});
+
+const buildPane = <TData>(input: CreatePaneInput<TData>): Pane<TData> => ({
+  id: input.id,
+  kind: input.kind,
+  data: input.data,
+  ...(input.title === undefined ? {} : { title: input.title }),
+  ...(input.pinned === undefined ? {} : { pinned: input.pinned }),
+});
 
 export const createWorkspaceStore = <TData>(
   options: CreateWorkspaceStoreOptions<TData> = {},
@@ -143,33 +168,30 @@ export const createWorkspaceStore = <TData>(
       reset: () => {
         set({ ...emptyWorkspace<TData>(), actions: get().actions });
       },
+
       openTab: ({ id, pane, title, createdAt, activate = true }) => {
         const existing = get().tabs.find((tab) => tab.id === id);
         if (existing) {
           if (activate) set({ activeTabId: id });
           return;
         }
-        const paneRecord: Pane<TData> = {
-          id: pane.id,
-          kind: pane.kind,
-          data: pane.data,
-          ...(pane.title === undefined ? {} : { title: pane.title }),
-          ...(pane.pinned === undefined ? {} : { pinned: pane.pinned }),
-        };
+        const paneRecord = buildPane(pane);
+        const rootStack = stack([paneRecord.id], paneRecord.id);
         const tab: Tab<TData> = {
           id,
           ...(title === undefined ? {} : { title }),
           createdAt: createdAt ?? Date.now(),
-          activePaneId: pane.id,
-          layout: leaf(pane.id),
-          panes: { [pane.id]: paneRecord },
+          layout: rootStack,
+          panes: { [paneRecord.id]: paneRecord },
+          activePaneId: paneRecord.id,
+          activeStackId: rootStack.id,
         };
-        const nextActive = activate ? id : get().activeTabId ?? id;
         set({
           tabs: [...get().tabs, tab],
-          activeTabId: nextActive,
+          activeTabId: activate ? id : (get().activeTabId ?? id),
         });
       },
+
       closeTab: (tabId) => {
         const current = get();
         const index = current.tabs.findIndex((tab) => tab.id === tabId);
@@ -182,21 +204,24 @@ export const createWorkspaceStore = <TData>(
         }
         set({ tabs: nextTabs, activeTabId: nextActive });
       },
+
       activateTab: (tabId) => {
         if (!get().tabs.some((tab) => tab.id === tabId)) return;
         set({ activeTabId: tabId });
       },
+
       renameTab: (tabId, title) => {
         set(
           setTab(get(), tabId, (tab) => {
             if (title === undefined) {
               const { title: _omit, ...rest } = tab;
-              return { ...rest } as Tab<TData>;
+              return rest as Tab<TData>;
             }
             return { ...tab, title };
           }),
         );
       },
+
       moveTab: (tabId, toIndex) => {
         const current = get();
         const from = current.tabs.findIndex((tab) => tab.id === tabId);
@@ -209,142 +234,236 @@ export const createWorkspaceStore = <TData>(
         next.splice(clamped, 0, moved);
         set({ tabs: next });
       },
-      splitPane: (tabId, targetPaneId, edge, pane, ratio) => {
+
+      addPane: (tabId, paneInput, { stackId, index, activate = true } = {}) => {
         const current = get();
         const tab = current.tabs.find((candidate) => candidate.id === tabId);
-        if (!tab) throw new Error(`splitPane: unknown tab ${tabId}`);
-        const path = findPanePath(tab.layout, targetPaneId);
-        if (!path) throw new Error(`splitPane: pane ${targetPaneId} not in tab ${tabId}`);
-        if (tab.panes[pane.id]) throw new Error(`splitPane: pane id ${pane.id} already exists in tab ${tabId}`);
+        if (!tab) return;
+        if (tab.panes[paneInput.id]) throw new Error(`addPane: pane ${paneInput.id} already exists`);
+        const targetStackId = stackId ?? tab.activeStackId ?? firstStackId(tab.layout);
+        if (!targetStackId) return;
+        const targetStack = findStack(tab.layout, targetStackId);
+        if (!targetStack) return;
+        const paneRecord = buildPane(paneInput);
+        const updatedStack = insertPaneInStack(targetStack, paneRecord.id, index);
+        const withActive = activate ? { ...updatedStack, activePaneId: paneRecord.id } : updatedStack;
+        const nextLayout = replaceStack(tab.layout, targetStack.id, withActive);
+        set(
+          setTab(current, tabId, (existing) => ({
+            ...existing,
+            layout: nextLayout,
+            panes: { ...existing.panes, [paneRecord.id]: paneRecord },
+            activePaneId: activate ? paneRecord.id : existing.activePaneId,
+            activeStackId: targetStack.id,
+          })),
+        );
+      },
 
-        const newLeaf = leaf(pane.id);
-        const nextLayout = splitAtPath(tab.layout, path, newLeaf, edge, ratio ?? DEFAULT_RATIO);
-        const paneRecord: Pane<TData> = {
-          id: pane.id,
-          kind: pane.kind,
-          data: pane.data,
-          ...(pane.title === undefined ? {} : { title: pane.title }),
-          ...(pane.pinned === undefined ? {} : { pinned: pane.pinned }),
-        };
+      splitStack: (tabId, stackId, edge, paneInput, ratio) => {
+        const current = get();
+        const tab = current.tabs.find((candidate) => candidate.id === tabId);
+        if (!tab) throw new Error(`splitStack: tab ${tabId} not found`);
+        const target = findStack(tab.layout, stackId);
+        if (!target) throw new Error(`splitStack: stack ${stackId} not found`);
+        if (tab.panes[paneInput.id]) throw new Error(`splitStack: pane ${paneInput.id} already exists`);
+        const paneRecord = buildPane(paneInput);
+        const newStack = stack([paneRecord.id], paneRecord.id);
+        const nextLayout = splitStackOnEdge(tab.layout, stackId, edge, newStack, ratio);
         set(
           setTab(current, tabId, (existing) => ({
             ...existing,
             layout: nextLayout,
             panes: { ...existing.panes, [paneRecord.id]: paneRecord },
             activePaneId: paneRecord.id,
+            activeStackId: newStack.id,
           })),
         );
       },
+
+      splitPane: (tabId, targetPaneId, edge, paneInput, ratio) => {
+        const current = get();
+        const tab = current.tabs.find((candidate) => candidate.id === tabId);
+        if (!tab) throw new Error(`splitPane: tab ${tabId} not found`);
+        const host = findStackContainingPane(tab.layout, targetPaneId);
+        if (!host) throw new Error(`splitPane: pane ${targetPaneId} not in tab`);
+        get().actions.splitStack(tabId, host.id, edge, paneInput, ratio);
+      },
+
       closePane: (tabId, paneId) => {
         const current = get();
         const tab = current.tabs.find((candidate) => candidate.id === tabId);
         if (!tab) return;
         if (!tab.panes[paneId]) return;
-        const nextLayout = removePaneFromLayout(tab.layout, paneId);
-        if (nextLayout === null) {
+        const host = findStackContainingPane(tab.layout, paneId);
+        if (!host) return;
+        const updatedStack = removePaneFromStack(host, paneId);
+        const layoutWithUpdated = replaceStack(tab.layout, host.id, updatedStack);
+        const collapsed = collapseEmptyStacks(layoutWithUpdated);
+        if (!collapsed) {
           get().actions.closeTab(tabId);
           return;
         }
-        const { [paneId]: _removed, ...rest } = tab.panes;
-        const nextActive = tab.activePaneId === paneId ? firstPaneId(nextLayout) : tab.activePaneId;
+        const { [paneId]: _removed, ...remainingPanes } = tab.panes;
+
+        // Decide next active pane + stack.
+        let nextActiveStackId = tab.activeStackId;
+        if (!nextActiveStackId || !findStack(collapsed, nextActiveStackId)) {
+          nextActiveStackId = firstStackId(collapsed);
+        }
+        let nextActivePaneId: PaneId | null = tab.activePaneId;
+        if (!nextActivePaneId || nextActivePaneId === paneId || !remainingPanes[nextActivePaneId]) {
+          const host2 = nextActiveStackId ? findStack(collapsed, nextActiveStackId) : null;
+          nextActivePaneId = host2?.activePaneId ?? firstPaneId(collapsed);
+        }
+
         set(
           setTab(current, tabId, (existing) => ({
             ...existing,
-            layout: nextLayout,
-            panes: rest,
-            activePaneId: nextActive,
+            layout: collapsed,
+            panes: remainingPanes,
+            activePaneId: nextActivePaneId,
+            activeStackId: nextActiveStackId,
           })),
         );
       },
+
       focusPane: (tabId, paneId) => {
         const current = get();
         const tab = current.tabs.find((candidate) => candidate.id === tabId);
         if (!tab) return;
         if (!tab.panes[paneId]) return;
-        set(setTab(current, tabId, (existing) => ({ ...existing, activePaneId: paneId })));
+        const host = findStackContainingPane(tab.layout, paneId);
+        if (!host) return;
+        const updatedStack: StackNode = { ...host, activePaneId: paneId };
+        const nextLayout = replaceStack(tab.layout, host.id, updatedStack);
+        set(
+          setTab(current, tabId, (existing) => ({
+            ...existing,
+            layout: nextLayout,
+            activePaneId: paneId,
+            activeStackId: host.id,
+          })),
+        );
       },
+
+      focusStack: (tabId, stackId) => {
+        const current = get();
+        const tab = current.tabs.find((candidate) => candidate.id === tabId);
+        if (!tab) return;
+        const target = findStack(tab.layout, stackId);
+        if (!target) return;
+        set(
+          setTab(current, tabId, (existing) => ({
+            ...existing,
+            activeStackId: stackId,
+            activePaneId: target.activePaneId ?? existing.activePaneId,
+          })),
+        );
+      },
+
       updatePaneData: (tabId, paneId, updater) => {
         const current = get();
         set(
           setTab(current, tabId, (tab) => {
             const pane = tab.panes[paneId];
             if (!pane) return tab;
-            const nextPane: Pane<TData> = { ...pane, data: updater(pane.data) };
-            return { ...tab, panes: { ...tab.panes, [paneId]: nextPane } };
+            return { ...tab, panes: { ...tab.panes, [paneId]: { ...pane, data: updater(pane.data) } } };
           }),
         );
       },
+
       renamePane: (tabId, paneId, title) => {
         const current = get();
         set(
           setTab(current, tabId, (tab) => {
             const pane = tab.panes[paneId];
             if (!pane) return tab;
-            let nextPane: Pane<TData>;
+            let next: Pane<TData>;
             if (title === undefined) {
               const { title: _omit, ...rest } = pane;
-              nextPane = { ...rest } as Pane<TData>;
+              next = rest as Pane<TData>;
             } else {
-              nextPane = { ...pane, title };
+              next = { ...pane, title };
             }
-            return { ...tab, panes: { ...tab.panes, [paneId]: nextPane } };
+            return { ...tab, panes: { ...tab.panes, [paneId]: next } };
           }),
         );
       },
-      setSplitRatio: (tabId, path, ratio) => {
+
+      setSplitRatio: (tabId, splitId, ratio) => {
         const current = get();
         const tab = current.tabs.find((candidate) => candidate.id === tabId);
         if (!tab) return;
-        const nextLayout = setRatioAtPath(tab.layout, path, clampRatio(ratio));
+        const nextLayout = setSplitRatioById(tab.layout, splitId, clampRatio(ratio));
+        if (nextLayout === tab.layout) return;
         set(setTab(current, tabId, (existing) => ({ ...existing, layout: nextLayout })));
       },
-      movePane: (tabId, sourcePaneId, targetPaneId, edge) => {
+
+      reorderPane: (tabId, paneId, toIndex) => {
+        const current = get();
+        const tab = current.tabs.find((candidate) => candidate.id === tabId);
+        if (!tab) return;
+        const host = findStackContainingPane(tab.layout, paneId);
+        if (!host) return;
+        const updatedStack = reorderPaneInStack(host, paneId, toIndex);
+        if (updatedStack === host) return;
+        set(
+          setTab(current, tabId, (existing) => ({
+            ...existing,
+            layout: replaceStack(existing.layout, host.id, updatedStack),
+          })),
+        );
+      },
+
+      movePane: (tabId, paneId, targetStackId, target) => {
+        const current = get();
+        const tab = current.tabs.find((candidate) => candidate.id === tabId);
+        if (!tab) return;
+        const result = movePaneToStack(tab.layout, paneId, targetStackId, target);
+        if (!result) return;
+        set(
+          setTab(current, tabId, (existing) => ({
+            ...existing,
+            layout: result.layout,
+            activePaneId: paneId,
+            activeStackId: result.activeStackId,
+          })),
+        );
+      },
+
+      movePaneRelativeToPane: (tabId, sourcePaneId, targetPaneId, edge) => {
         if (sourcePaneId === targetPaneId) return;
         const current = get();
         const tab = current.tabs.find((candidate) => candidate.id === tabId);
         if (!tab) return;
-        if (!tab.panes[sourcePaneId] || !tab.panes[targetPaneId]) return;
-
-        // Remove the source leaf from the tree (collapses empty parents).
-        const withoutSource = removePaneFromLayout(tab.layout, sourcePaneId);
-        if (!withoutSource) return; // source was the sole leaf — nothing to move onto
-
-        const targetPath = findPanePath(withoutSource, targetPaneId);
-        if (!targetPath) return; // target was nested inside the removed subtree (impossible)
-
-        const nextLayout = splitAtPath(
-          withoutSource,
-          targetPath,
-          leaf(sourcePaneId),
-          edge,
-          DEFAULT_RATIO,
-        );
-
-        set(
-          setTab(current, tabId, (existing) => ({
-            ...existing,
-            layout: nextLayout,
-            activePaneId: sourcePaneId,
-          })),
-        );
+        const targetHost = findStackContainingPane(tab.layout, targetPaneId);
+        if (!targetHost) return;
+        const drop: DropTarget =
+          edge === 'center'
+            ? { kind: 'center' }
+            : { kind: 'edge', edge };
+        get().actions.movePane(tabId, sourcePaneId, targetHost.id, drop);
       },
+
       focusNeighbor: (direction) => {
         const current = get();
         const tabId = current.activeTabId;
         if (!tabId) return null;
         const tab = current.tabs.find((candidate) => candidate.id === tabId);
-        if (!tab || !tab.activePaneId) return null;
-        const neighbor = getSpatialNeighborPaneId(tab.layout, tab.activePaneId, direction);
-        if (!neighbor) return null;
-        get().actions.focusPane(tabId, neighbor);
-        return neighbor;
+        if (!tab || !tab.activeStackId) return null;
+        const neighborStackId = getSpatialNeighborStackId(tab.layout, tab.activeStackId, direction);
+        if (!neighborStackId) return null;
+        const neighborStack = findStack(tab.layout, neighborStackId);
+        if (!neighborStack || !neighborStack.activePaneId) return null;
+        get().actions.focusPane(tabId, neighborStack.activePaneId);
+        return neighborStack.activePaneId;
       },
     },
   }));
 };
 
 export const selectWorkspaceSnapshot = <TData>(state: WorkspaceState<TData>): WorkspaceState<TData> => ({
-  version: 1,
+  version: 2,
   activeTabId: state.activeTabId,
   tabs: state.tabs.map((tab) => ({ ...tab, panes: { ...tab.panes } })),
 });
@@ -356,7 +475,7 @@ export const findActiveTab = <TData>(state: WorkspaceState<TData>): Tab<TData> |
 
 export const findTabContainingPane = <TData>(
   state: WorkspaceState<TData>,
-  paneId: string,
+  paneId: PaneId,
 ): Tab<TData> | null => {
   for (const tab of state.tabs) {
     if (tab.panes[paneId]) return tab;
@@ -368,3 +487,6 @@ export const findLayoutRoot = <TData>(state: WorkspaceState<TData>): LayoutNode 
   const tab = findActiveTab(state);
   return tab ? tab.layout : null;
 };
+
+// Type guard re-exported to help callers discriminate.
+export { isStack, isSplit } from '../utils/layout.js';

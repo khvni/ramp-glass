@@ -73,3 +73,20 @@
   font-weight: var(--font-weight-medium);
   color: var(--color-text-strong);
 }
+
+.panes-demo-terminal {
+  margin: 0;
+  padding: var(--space-3);
+  font-family: var(--font-mono, monospace);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-base);
+  background: #111;
+  white-space: pre-wrap;
+}
+
+.panes-demo-footer {
+  padding: var(--space-2) var(--space-6);
+  border-top: 1px solid var(--color-border-base);
+  color: var(--color-text-weak);
+  font-size: var(--font-size-xs);
+}

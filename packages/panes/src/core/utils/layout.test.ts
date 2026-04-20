@@ -1,179 +1,281 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_RATIO,
-  branchFromEdge,
   clampRatio,
+  collapseEmptyStacks,
   collectPaneIds,
-  findPanePath,
+  collectStacks,
+  findStack,
+  findStackContainingPane,
   firstPaneId,
-  getSpatialNeighborPaneId,
-  isLeaf,
-  leaf,
-  nodeAtPath,
-  orientationFromEdge,
-  removePaneFromLayout,
-  replaceAtPath,
-  setRatioAtPath,
-  splitAtPath,
+  firstStackId,
+  getSpatialNeighborStackId,
+  insertPaneInStack,
+  isSplit,
+  isStack,
+  movePaneToStack,
+  removePaneFromStack,
+  reorderPaneInStack,
+  replaceStack,
+  setSplitRatioById,
+  splitNode,
+  splitStackOnEdge,
+  stack,
 } from './layout.js';
-import type { LayoutNode } from '../../types.js';
-
-const seed: LayoutNode = {
-  kind: 'split',
-  orientation: 'row',
-  a: leaf('chat'),
-  b: {
-    kind: 'split',
-    orientation: 'column',
-    a: leaf('today'),
-    b: leaf('vault'),
-    ratio: 0.6,
-  },
-  ratio: 0.3,
-};
 
 describe('clampRatio', () => {
-  it('clamps to 0.1 / 0.9', () => {
-    expect(clampRatio(0)).toBe(0.1);
-    expect(clampRatio(1)).toBe(0.9);
-    expect(clampRatio(0.5)).toBe(0.5);
+  it('clamps below 0.1 up', () => expect(clampRatio(0)).toBe(0.1));
+  it('clamps above 0.9 down', () => expect(clampRatio(1)).toBe(0.9));
+  it('passes valid ratios through', () => expect(clampRatio(0.42)).toBe(0.42));
+  it('falls back to default on NaN', () => expect(clampRatio(Number.NaN)).toBe(DEFAULT_RATIO));
+});
+
+describe('stack constructor', () => {
+  it('defaults active to the first pane', () => {
+    const s = stack(['a', 'b', 'c']);
+    expect(s.activePaneId).toBe('a');
+    expect(s.paneIds).toEqual(['a', 'b', 'c']);
   });
-  it('defaults NaN', () => {
-    expect(clampRatio(Number.NaN)).toBe(DEFAULT_RATIO);
+  it('respects explicit active', () => {
+    const s = stack(['a', 'b'], 'b');
+    expect(s.activePaneId).toBe('b');
+  });
+  it('clears active when empty', () => {
+    const s = stack([]);
+    expect(s.activePaneId).toBeNull();
   });
 });
 
-describe('orientationFromEdge / branchFromEdge', () => {
-  it('maps edges to orientation + branch', () => {
-    expect(orientationFromEdge('left')).toBe('row');
-    expect(orientationFromEdge('right')).toBe('row');
-    expect(orientationFromEdge('top')).toBe('column');
-    expect(orientationFromEdge('bottom')).toBe('column');
-    expect(branchFromEdge('left')).toBe('a');
-    expect(branchFromEdge('top')).toBe('a');
-    expect(branchFromEdge('right')).toBe('b');
-    expect(branchFromEdge('bottom')).toBe('b');
+describe('insertPaneInStack', () => {
+  it('appends to the end by default', () => {
+    const s = stack(['a', 'b']);
+    const next = insertPaneInStack(s, 'c');
+    expect(next.paneIds).toEqual(['a', 'b', 'c']);
+    expect(next.activePaneId).toBe('c');
+  });
+  it('inserts at a specific index', () => {
+    const s = stack(['a', 'b', 'c']);
+    const next = insertPaneInStack(s, 'x', 1);
+    expect(next.paneIds).toEqual(['a', 'x', 'b', 'c']);
+    expect(next.activePaneId).toBe('x');
+  });
+  it('reorders when the pane already exists in the stack', () => {
+    const s = stack(['a', 'b', 'c']);
+    const next = insertPaneInStack(s, 'a', 2);
+    // reorder removes 'a' first → target index 2 applies to ['b','c'] → becomes ['b','c','a']
+    expect(next.paneIds).toEqual(['b', 'c', 'a']);
   });
 });
 
-describe('leaf / isLeaf', () => {
-  it('round-trips', () => {
-    const node = leaf('x');
-    expect(isLeaf(node)).toBe(true);
-    expect(isLeaf(seed)).toBe(false);
+describe('reorderPaneInStack', () => {
+  it('moves pane to a new index', () => {
+    const s = stack(['a', 'b', 'c']);
+    expect(reorderPaneInStack(s, 'a', 2).paneIds).toEqual(['b', 'c', 'a']);
+  });
+  it('is a no-op when pane is not in stack', () => {
+    const s = stack(['a', 'b']);
+    expect(reorderPaneInStack(s, 'z', 0)).toBe(s);
   });
 });
 
-describe('collectPaneIds', () => {
-  it('visits leaves in DFS order', () => {
-    expect(collectPaneIds(seed)).toEqual(['chat', 'today', 'vault']);
+describe('removePaneFromStack', () => {
+  it('picks a nearby pane as new active', () => {
+    const s = stack(['a', 'b', 'c'], 'b');
+    const next = removePaneFromStack(s, 'b');
+    expect(next.paneIds).toEqual(['a', 'c']);
+    expect(next.activePaneId).toBe('c');
+  });
+  it('keeps active if a different pane is removed', () => {
+    const s = stack(['a', 'b', 'c'], 'a');
+    const next = removePaneFromStack(s, 'c');
+    expect(next.activePaneId).toBe('a');
+  });
+  it('returns an empty stack when last pane is removed', () => {
+    const next = removePaneFromStack(stack(['solo']), 'solo');
+    expect(next.paneIds).toEqual([]);
+    expect(next.activePaneId).toBeNull();
   });
 });
 
-describe('findPanePath', () => {
-  it('returns empty array for root leaf', () => {
-    expect(findPanePath(leaf('x'), 'x')).toEqual([]);
+describe('collapseEmptyStacks', () => {
+  it('removes an empty leaf and returns sibling', () => {
+    const left = stack([], null, 'empty-stack');
+    const right = stack(['p1'], 'p1');
+    const tree = splitNode(left, right, 'row');
+    const collapsed = collapseEmptyStacks(tree);
+    expect(collapsed).toBe(right);
   });
-  it('returns null when missing', () => {
-    expect(findPanePath(seed, 'missing')).toBeNull();
+  it('returns null when the whole tree is empty', () => {
+    const tree = stack([]);
+    expect(collapseEmptyStacks(tree)).toBeNull();
   });
-  it('returns the correct branch path', () => {
-    expect(findPanePath(seed, 'chat')).toEqual(['a']);
-    expect(findPanePath(seed, 'today')).toEqual(['b', 'a']);
-    expect(findPanePath(seed, 'vault')).toEqual(['b', 'b']);
-  });
-});
-
-describe('nodeAtPath / replaceAtPath', () => {
-  it('reads and replaces', () => {
-    const node = nodeAtPath(seed, ['b', 'a']);
-    expect(isLeaf(node) && node.paneId).toBe('today');
-    const replaced = replaceAtPath(seed, ['b', 'a'], leaf('timeline'));
-    expect(collectPaneIds(replaced)).toEqual(['chat', 'timeline', 'vault']);
-  });
-  it('throws when path descends into leaf', () => {
-    expect(() => nodeAtPath(leaf('x'), ['a'])).toThrow(/leaf/i);
-    expect(() => replaceAtPath(leaf('x'), ['a'], leaf('y'))).toThrow(/leaf/i);
+  it('recurses into nested splits', () => {
+    const innerEmpty = stack([], null);
+    const innerFull = stack(['keep']);
+    const inner = splitNode(innerEmpty, innerFull, 'column');
+    const outer = splitNode(inner, stack(['other']), 'row');
+    const collapsed = collapseEmptyStacks(outer);
+    expect(collapsed && !isStack(collapsed)).toBe(true);
   });
 });
 
-describe('splitAtPath', () => {
-  it('inserts a new leaf on the requested edge and clamps ratio', () => {
-    const next = splitAtPath(seed, ['a'], leaf('notes'), 'right', 0.7);
-    expect(collectPaneIds(next)).toEqual(['chat', 'notes', 'today', 'vault']);
-    const insertedSplit = nodeAtPath(next, ['a']);
-    if (insertedSplit.kind !== 'split') throw new Error('expected split');
-    expect(insertedSplit.orientation).toBe('row');
-    expect(insertedSplit.a.kind === 'leaf' && insertedSplit.a.paneId).toBe('chat');
-    expect(insertedSplit.b.kind === 'leaf' && insertedSplit.b.paneId).toBe('notes');
-    expect(insertedSplit.ratio).toBeCloseTo(0.7);
+describe('splitStackOnEdge', () => {
+  it('creates a new split with the new stack on the requested side', () => {
+    const s = stack(['p1'], 'p1', 'orig');
+    const newer = stack(['new'], 'new');
+    const next = splitStackOnEdge(s, 'orig', 'right', newer);
+    expect(isSplit(next)).toBe(true);
+    if (isSplit(next)) {
+      expect(next.orientation).toBe('row');
+      expect(isStack(next.a) && next.a.paneIds).toEqual(['p1']);
+      expect(isStack(next.b) && next.b.paneIds).toEqual(['new']);
+    }
   });
-  it('inserts on top / bottom edges with correct branch ordering', () => {
-    const top = splitAtPath(leaf('a'), [], leaf('b'), 'top');
-    if (top.kind !== 'split') throw new Error('expected split');
-    expect(top.orientation).toBe('column');
-    expect(top.a.kind === 'leaf' && top.a.paneId).toBe('b');
-    expect(top.b.kind === 'leaf' && top.b.paneId).toBe('a');
-  });
-});
-
-describe('removePaneFromLayout', () => {
-  it('removes a leaf and collapses the parent', () => {
-    const next = removePaneFromLayout(seed, 'today');
-    if (!next) throw new Error('expected remaining layout');
-    expect(collectPaneIds(next)).toEqual(['chat', 'vault']);
-    const rightChild = nodeAtPath(next, ['b']);
-    expect(rightChild.kind === 'leaf' && rightChild.paneId).toBe('vault');
-  });
-  it('returns null when the last pane is removed', () => {
-    expect(removePaneFromLayout(leaf('only'), 'only')).toBeNull();
+  it('puts new stack on the A side for left edges', () => {
+    const s = stack(['p1'], 'p1', 'orig');
+    const newer = stack(['new'], 'new');
+    const next = splitStackOnEdge(s, 'orig', 'left', newer);
+    if (isSplit(next)) {
+      expect(isStack(next.a) && next.a.paneIds).toEqual(['new']);
+      expect(isStack(next.b) && next.b.paneIds).toEqual(['p1']);
+    }
   });
 });
 
-describe('setRatioAtPath', () => {
-  it('sets ratio on a split node', () => {
-    const next = setRatioAtPath(seed, [], 0.8);
-    if (next.kind !== 'split') throw new Error('expected split');
-    expect(next.ratio).toBeCloseTo(0.8);
-  });
-  it('throws on a leaf', () => {
-    expect(() => setRatioAtPath(leaf('x'), [], 0.5)).toThrow(/leaf/i);
-  });
-});
-
-describe('firstPaneId', () => {
-  it('returns deepest a-branch leaf first', () => {
-    expect(firstPaneId(seed)).toBe('chat');
-  });
-});
-
-describe('getSpatialNeighborPaneId', () => {
-  const layout: LayoutNode = {
-    kind: 'split',
-    orientation: 'row',
-    a: leaf('left'),
-    b: {
-      kind: 'split',
-      orientation: 'column',
-      a: leaf('topRight'),
-      b: leaf('bottomRight'),
-      ratio: 0.5,
-    },
-    ratio: 0.5,
+describe('movePaneToStack — cross-stack', () => {
+  const build = () => {
+    const a = stack(['pa'], 'pa', 'stack-a');
+    const b = stack(['pb'], 'pb', 'stack-b');
+    return { root: splitNode(a, b, 'row', 0.5, 'split-root'), a, b };
   };
 
-  it('finds right neighbor when available', () => {
-    expect(getSpatialNeighborPaneId(layout, 'left', 'right')).toBe('topRight');
+  it('merges into center of target', () => {
+    const { root } = build();
+    const result = movePaneToStack(root, 'pa', 'stack-b', { kind: 'center' });
+    expect(result).not.toBeNull();
+    const collapsed = result?.layout;
+    expect(collapsed && isStack(collapsed)).toBe(true);
+    if (collapsed && isStack(collapsed)) {
+      expect(collapsed.paneIds).toEqual(['pb', 'pa']);
+      expect(collapsed.id).toBe('stack-b');
+    }
   });
-  it('finds left neighbor', () => {
-    expect(getSpatialNeighborPaneId(layout, 'topRight', 'left')).toBe('left');
+
+  it('inserts at a specific tab position', () => {
+    const a = stack(['pa'], 'pa', 'stack-a');
+    const b = stack(['pb1', 'pb2'], 'pb1', 'stack-b');
+    const root = splitNode(a, b, 'row');
+    const result = movePaneToStack(root, 'pa', 'stack-b', { kind: 'insert', index: 1 });
+    expect(result).not.toBeNull();
+    const collapsed = result?.layout;
+    if (collapsed && isStack(collapsed)) {
+      expect(collapsed.paneIds).toEqual(['pb1', 'pa', 'pb2']);
+    }
   });
-  it('finds down neighbor between split children', () => {
-    expect(getSpatialNeighborPaneId(layout, 'topRight', 'down')).toBe('bottomRight');
-    expect(getSpatialNeighborPaneId(layout, 'bottomRight', 'up')).toBe('topRight');
+
+  it('splits target stack when dropped on an edge', () => {
+    const { root } = build();
+    const result = movePaneToStack(root, 'pa', 'stack-b', { kind: 'edge', edge: 'right' });
+    expect(result).not.toBeNull();
+    const nextLayout = result?.layout;
+    if (nextLayout && isSplit(nextLayout)) {
+      expect(nextLayout.orientation).toBe('row');
+      if (isStack(nextLayout.a)) expect(nextLayout.a.id).toBe('stack-b');
+      if (isStack(nextLayout.b)) expect(nextLayout.b.paneIds).toEqual(['pa']);
+    }
   });
-  it('returns null when no neighbor', () => {
-    expect(getSpatialNeighborPaneId(leaf('only'), 'only', 'right')).toBeNull();
-    expect(getSpatialNeighborPaneId(layout, 'left', 'left')).toBeNull();
+});
+
+describe('movePaneToStack — same stack', () => {
+  it('reorders to a new index', () => {
+    const s = stack(['a', 'b', 'c'], 'a', 'only');
+    const result = movePaneToStack(s, 'a', 'only', { kind: 'insert', index: 2 });
+    expect(result).not.toBeNull();
+    if (result && isStack(result.layout)) {
+      expect(result.layout.paneIds).toEqual(['b', 'c', 'a']);
+    }
+  });
+  it('splits off a pane into a new sibling stack when dropped on edge', () => {
+    const s = stack(['a', 'b'], 'a', 'only');
+    const result = movePaneToStack(s, 'a', 'only', { kind: 'edge', edge: 'bottom' });
+    expect(result).not.toBeNull();
+    if (result && isSplit(result.layout)) {
+      expect(result.layout.orientation).toBe('column');
+      if (isStack(result.layout.a)) expect(result.layout.a.paneIds).toEqual(['b']);
+      if (isStack(result.layout.b)) expect(result.layout.b.paneIds).toEqual(['a']);
+    }
+  });
+  it('refuses to split when the source is the only pane', () => {
+    const s = stack(['solo'], 'solo', 'only');
+    expect(movePaneToStack(s, 'solo', 'only', { kind: 'edge', edge: 'right' })).toBeNull();
+  });
+});
+
+describe('setSplitRatioById', () => {
+  it('updates the ratio for the matching split', () => {
+    const left = stack(['a'], 'a');
+    const right = stack(['b'], 'b');
+    const root = splitNode(left, right, 'row', 0.5, 'target');
+    const next = setSplitRatioById(root, 'target', 0.75);
+    if (isSplit(next)) expect(next.ratio).toBe(0.75);
+  });
+  it('leaves unrelated splits alone', () => {
+    const leaf1 = stack(['a'], 'a');
+    const leaf2 = stack(['b'], 'b');
+    const root = splitNode(leaf1, leaf2, 'row', 0.5, 'target');
+    const next = setSplitRatioById(root, 'other-id', 0.75);
+    expect(next).toBe(root);
+  });
+});
+
+describe('getSpatialNeighborStackId', () => {
+  it('finds the stack to the right', () => {
+    const left = stack(['a'], 'a', 'L');
+    const right = stack(['b'], 'b', 'R');
+    const root = splitNode(left, right, 'row', 0.5);
+    expect(getSpatialNeighborStackId(root, 'L', 'right')).toBe('R');
+    expect(getSpatialNeighborStackId(root, 'R', 'left')).toBe('L');
+  });
+  it('returns null when no neighbor exists', () => {
+    const solo = stack(['a'], 'a', 'only');
+    expect(getSpatialNeighborStackId(solo, 'only', 'up')).toBeNull();
+  });
+  it('navigates across nested splits', () => {
+    const tl = stack(['tl'], 'tl', 'tl');
+    const tr = stack(['tr'], 'tr', 'tr');
+    const b = stack(['b'], 'b', 'b');
+    const top = splitNode(tl, tr, 'row', 0.5);
+    const root = splitNode(top, b, 'column', 0.5);
+    expect(getSpatialNeighborStackId(root, 'tl', 'down')).toBe('b');
+    expect(getSpatialNeighborStackId(root, 'tr', 'down')).toBe('b');
+  });
+});
+
+describe('traversal helpers', () => {
+  it('collectStacks walks every leaf', () => {
+    const layout = splitNode(stack(['a'], 'a'), splitNode(stack(['b'], 'b'), stack(['c'], 'c'), 'row'), 'column');
+    const all = collectStacks(layout);
+    expect(all.length).toBe(3);
+  });
+  it('collectPaneIds flattens ids', () => {
+    const layout = splitNode(stack(['a', 'b'], 'a'), stack(['c'], 'c'), 'row');
+    expect(collectPaneIds(layout)).toEqual(['a', 'b', 'c']);
+  });
+  it('findStack + findStackContainingPane work', () => {
+    const s = stack(['a', 'b'], 'a', 'my-stack');
+    expect(findStack(s, 'my-stack')).toBe(s);
+    expect(findStackContainingPane(s, 'b')).toBe(s);
+    expect(findStackContainingPane(s, 'not-there')).toBeNull();
+  });
+  it('firstStackId + firstPaneId traverse left-first', () => {
+    const layout = splitNode(stack(['a'], 'a', 's1'), stack(['b'], 'b', 's2'), 'row');
+    expect(firstStackId(layout)).toBe('s1');
+    expect(firstPaneId(layout)).toBe('a');
+  });
+  it('replaceStack swaps a node', () => {
+    const s = stack(['a'], 'a', 'orig');
+    const other = splitNode(stack(['x'], 'x'), stack(['y'], 'y'), 'row');
+    const next = replaceStack(s, 'orig', other);
+    expect(next).toBe(other);
   });
 });

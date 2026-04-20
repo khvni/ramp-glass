@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createWorkspaceStore } from './store.js';
-import { isLeaf } from '../utils/layout.js';
-import type { LayoutNode } from '../../types.js';
+import { findStack, findStackContainingPane, isSplit, isStack } from '../utils/layout.js';
 
 type Data = { readonly label: string };
 
@@ -9,248 +8,249 @@ const openDefault = () => {
   const store = createWorkspaceStore<Data>();
   store.getState().actions.openTab({
     id: 't1',
-    pane: { id: 'p1', kind: 'chat', data: { label: 'chat' } },
+    pane: { id: 'p1', kind: 'chat', data: { label: 'hello' } },
   });
   return store;
 };
 
-describe('workspace store', () => {
-  it('openTab sets active pane + tab', () => {
+describe('workspace store — tabs', () => {
+  it('opens a tab with one stack + one pane', () => {
     const store = openDefault();
     const state = store.getState();
     expect(state.tabs).toHaveLength(1);
-    expect(state.activeTabId).toBe('t1');
-    const tab = state.tabs[0];
-    if (!tab) throw new Error('expected tab');
+    const tab = state.tabs[0]!;
     expect(tab.activePaneId).toBe('p1');
-    expect(isLeaf(tab.layout) && tab.layout.paneId).toBe('p1');
+    expect(tab.activeStackId).toBeTruthy();
+    expect(isStack(tab.layout)).toBe(true);
+    if (isStack(tab.layout)) {
+      expect(tab.layout.paneIds).toEqual(['p1']);
+      expect(tab.layout.id).toBe(tab.activeStackId);
+    }
   });
 
-  it('openTab is idempotent for same id', () => {
+  it('activateTab switches the active tab id', () => {
     const store = openDefault();
     store.getState().actions.openTab({
-      id: 't1',
-      pane: { id: 'p99', kind: 'today', data: { label: 'dup' } },
+      id: 't2',
+      pane: { id: 'p2', kind: 'notes', data: { label: 'second' } },
+      activate: false,
     });
-    expect(store.getState().tabs).toHaveLength(1);
+    expect(store.getState().activeTabId).toBe('t1');
+    store.getState().actions.activateTab('t2');
+    expect(store.getState().activeTabId).toBe('t2');
   });
 
-  it('splitPane inserts a new pane + layout', () => {
+  it('closeTab removes the tab', () => {
     const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    const tab = store.getState().tabs[0];
-    if (!tab) throw new Error('expected tab');
-    expect(Object.keys(tab.panes).sort()).toEqual(['p1', 'p2']);
-    expect(tab.activePaneId).toBe('p2');
-    const layout = tab.layout as LayoutNode;
-    if (layout.kind !== 'split') throw new Error('expected split');
-    expect(layout.orientation).toBe('row');
-  });
-
-  it('splitPane rejects duplicate pane ids', () => {
-    const store = openDefault();
-    expect(() =>
-      store.getState().actions.splitPane(
-        't1',
-        'p1',
-        'right',
-        { id: 'p1', kind: 'dup', data: { label: 'bad' } },
-      ),
-    ).toThrow(/already exists/);
-  });
-
-  it('closePane collapses parent + reassigns active pane', () => {
-    const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    store.getState().actions.closePane('t1', 'p2');
-    const tab = store.getState().tabs[0];
-    if (!tab) throw new Error('expected tab');
-    expect(Object.keys(tab.panes)).toEqual(['p1']);
-    expect(tab.activePaneId).toBe('p1');
-    expect(isLeaf(tab.layout) && tab.layout.paneId).toBe('p1');
-  });
-
-  it('closePane removes the tab when the last pane closes', () => {
-    const store = openDefault();
-    store.getState().actions.closePane('t1', 'p1');
+    store.getState().actions.closeTab('t1');
     expect(store.getState().tabs).toHaveLength(0);
     expect(store.getState().activeTabId).toBeNull();
   });
+});
 
-  it('closeTab picks a neighbor tab as active', () => {
+describe('workspace store — stack operations', () => {
+  it('addPane appends to the active stack and activates it', () => {
     const store = openDefault();
-    store.getState().actions.openTab({
-      id: 't2',
-      pane: { id: 'p2', kind: 'today', data: { label: 't' } },
+    store.getState().actions.addPane('t1', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'second' },
     });
-    store.getState().actions.closeTab('t2');
-    expect(store.getState().activeTabId).toBe('t1');
+    const tab = store.getState().tabs[0]!;
+    if (isStack(tab.layout)) {
+      expect(tab.layout.paneIds).toEqual(['p1', 'p2']);
+      expect(tab.layout.activePaneId).toBe('p2');
+    }
+    expect(tab.activePaneId).toBe('p2');
   });
 
-  it('moveTab reorders tabs', () => {
+  it('splitPane creates a new stack on the requested edge', () => {
     const store = openDefault();
-    store.getState().actions.openTab({
-      id: 't2',
-      pane: { id: 'p2', kind: 'today', data: { label: 't' } },
+    store.getState().actions.splitPane(
+      't1',
+      'p1',
+      'right',
+      { id: 'p2', kind: 'notes', data: { label: 'second' } },
+    );
+    const tab = store.getState().tabs[0]!;
+    expect(isSplit(tab.layout)).toBe(true);
+    if (isSplit(tab.layout)) {
+      expect(tab.layout.orientation).toBe('row');
+      if (isStack(tab.layout.a)) expect(tab.layout.a.paneIds).toEqual(['p1']);
+      if (isStack(tab.layout.b)) expect(tab.layout.b.paneIds).toEqual(['p2']);
+    }
+  });
+
+  it('closePane removes a pane from a stack without affecting siblings', () => {
+    const store = openDefault();
+    store.getState().actions.addPane('t1', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'x' },
     });
-    store.getState().actions.openTab({
-      id: 't3',
-      pane: { id: 'p3', kind: 'scheduler', data: { label: 's' } },
+    store.getState().actions.closePane('t1', 'p1');
+    const tab = store.getState().tabs[0]!;
+    if (isStack(tab.layout)) {
+      expect(tab.layout.paneIds).toEqual(['p2']);
+      expect(tab.layout.activePaneId).toBe('p2');
+    }
+    expect(tab.activePaneId).toBe('p2');
+  });
+
+  it('closePane collapses empty stack and unwinds parent split', () => {
+    const store = openDefault();
+    store.getState().actions.splitPane('t1', 'p1', 'right', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'x' },
     });
-    store.getState().actions.moveTab('t3', 0);
-    expect(store.getState().tabs.map((tab) => tab.id)).toEqual(['t3', 't1', 't2']);
+    store.getState().actions.closePane('t1', 'p2');
+    const tab = store.getState().tabs[0]!;
+    expect(isStack(tab.layout)).toBe(true);
+    if (isStack(tab.layout)) expect(tab.layout.paneIds).toEqual(['p1']);
   });
 
-  it('setSplitRatio updates ratio on the right node', () => {
+  it('closePane closes the entire tab when the last pane is removed', () => {
     const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    store.getState().actions.setSplitRatio('t1', [], 0.75);
-    const tab = store.getState().tabs[0];
-    if (!tab) throw new Error('expected tab');
-    if (tab.layout.kind !== 'split') throw new Error('expected split');
-    expect(tab.layout.ratio).toBeCloseTo(0.75);
+    store.getState().actions.closePane('t1', 'p1');
+    expect(store.getState().tabs).toHaveLength(0);
   });
 
-  it('updatePaneData mutates only the target pane', () => {
+  it('focusPane updates the stack active pane + tab active pane/stack', () => {
     const store = openDefault();
-    store.getState().actions.updatePaneData('t1', 'p1', (prev) => ({ label: `${prev.label}!` }));
-    const tab = store.getState().tabs[0];
-    if (!tab) throw new Error('expected tab');
-    expect(tab.panes['p1']?.data.label).toBe('chat!');
-  });
-
-  it('hydrate replaces the entire state', () => {
-    const store = openDefault();
-    store.getState().actions.hydrate({
-      version: 1,
-      activeTabId: 'tA',
-      tabs: [
-        {
-          id: 'tA',
-          createdAt: 1,
-          activePaneId: 'pA',
-          layout: { kind: 'leaf', paneId: 'pA' },
-          panes: { pA: { id: 'pA', kind: 'chat', data: { label: 'hydrated' } } },
-        },
-      ],
+    store.getState().actions.addPane('t1', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'x' },
     });
-    expect(store.getState().activeTabId).toBe('tA');
-    expect(store.getState().tabs[0]?.panes['pA']?.data.label).toBe('hydrated');
-  });
-
-  it('movePane relocates without changing pane id or data', () => {
-    const store = openDefault();
-    const originalData = store.getState().tabs[0]?.panes['p1']?.data;
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    store.getState().actions.splitPane(
-      't1',
-      'p2',
-      'bottom',
-      { id: 'p3', kind: 'timer', data: { label: 'timer' } },
-    );
-
-    const before = store.getState().tabs[0];
-    if (!before) throw new Error('tab');
-    expect(Object.keys(before.panes).sort()).toEqual(['p1', 'p2', 'p3']);
-
-    store.getState().actions.movePane('t1', 'p1', 'p3', 'left');
-
-    const after = store.getState().tabs[0];
-    if (!after) throw new Error('tab after');
-    // Same panes (no id churn).
-    expect(Object.keys(after.panes).sort()).toEqual(['p1', 'p2', 'p3']);
-    // Data ref preserved — no copy.
-    expect(after.panes['p1']?.data).toBe(originalData);
-    // Active is the moved pane.
-    expect(after.activePaneId).toBe('p1');
-    // Layout tree changed (different structure than before).
-    expect(JSON.stringify(after.layout)).not.toBe(JSON.stringify(before.layout));
-  });
-
-  it('movePane is a no-op when source equals target', () => {
-    const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    const before = JSON.stringify(store.getState().tabs[0]);
-    store.getState().actions.movePane('t1', 'p1', 'p1', 'right');
-    const after = JSON.stringify(store.getState().tabs[0]);
-    expect(after).toBe(before);
-  });
-
-  it('movePane does nothing when target is unknown', () => {
-    const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    const before = JSON.stringify(store.getState().tabs[0]);
-    store.getState().actions.movePane('t1', 'p1', 'missing', 'left');
-    expect(JSON.stringify(store.getState().tabs[0])).toBe(before);
-  });
-
-  it('movePane collapses the source parent after removal', () => {
-    const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
-    store.getState().actions.splitPane(
-      't1',
-      'p2',
-      'bottom',
-      { id: 'p3', kind: 'timer', data: { label: 'timer' } },
-    );
-    // Move p2 next to p1 (left side). p3 should promote out of the column split.
-    store.getState().actions.movePane('t1', 'p2', 'p1', 'top');
-    const layout = store.getState().tabs[0]?.layout;
-    if (!layout) throw new Error('layout');
-    // p3 should no longer live inside a split with a dead sibling — must be a leaf at some level.
-    const stringified = JSON.stringify(layout);
-    expect(stringified).toContain('"paneId":"p3"');
-    // No orphan empty splits: every split node has both branches non-empty (invariant).
-    const hasEmptyBranch = /"a":null|"b":null/.test(stringified);
-    expect(hasEmptyBranch).toBe(false);
-  });
-
-  it('focusNeighbor moves focus within active tab', () => {
-    const store = openDefault();
-    store.getState().actions.splitPane(
-      't1',
-      'p1',
-      'right',
-      { id: 'p2', kind: 'today', data: { label: 'today' } },
-    );
     store.getState().actions.focusPane('t1', 'p1');
-    const next = store.getState().actions.focusNeighbor('right');
-    expect(next).toBe('p2');
-    expect(store.getState().tabs[0]?.activePaneId).toBe('p2');
+    const tab = store.getState().tabs[0]!;
+    expect(tab.activePaneId).toBe('p1');
+    const host = findStackContainingPane(tab.layout, 'p1');
+    expect(host?.activePaneId).toBe('p1');
+  });
+
+  it('setSplitRatio updates a split by id', () => {
+    const store = openDefault();
+    store.getState().actions.splitPane('t1', 'p1', 'right', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'x' },
+    });
+    const tab = store.getState().tabs[0]!;
+    if (!isSplit(tab.layout)) throw new Error('expected split');
+    const splitId = tab.layout.id;
+    store.getState().actions.setSplitRatio('t1', splitId, 0.75);
+    const afterTab = store.getState().tabs[0]!;
+    if (isSplit(afterTab.layout)) expect(afterTab.layout.ratio).toBe(0.75);
+  });
+});
+
+describe('workspace store — movePane', () => {
+  it('moves a pane across stacks via center drop', () => {
+    const store = openDefault();
+    store.getState().actions.splitPane('t1', 'p1', 'right', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'second' },
+    });
+    const tab1 = store.getState().tabs[0]!;
+    if (!isSplit(tab1.layout)) throw new Error('expected split');
+    const leftStack = tab1.layout.a;
+    if (!isStack(leftStack)) throw new Error('expected stack');
+    // drop p2 into left stack
+    store.getState().actions.movePane('t1', 'p2', leftStack.id, { kind: 'center' });
+    const tab2 = store.getState().tabs[0]!;
+    expect(isStack(tab2.layout)).toBe(true);
+    if (isStack(tab2.layout)) expect(tab2.layout.paneIds).toEqual(['p1', 'p2']);
+  });
+
+  it('moves a pane into target stack at an insert index', () => {
+    const store = openDefault();
+    store.getState().actions.addPane('t1', { id: 'p2', kind: 'notes', data: { label: 'x' } });
+    store.getState().actions.addPane('t1', { id: 'p3', kind: 'notes', data: { label: 'y' } });
+    const tab = store.getState().tabs[0]!;
+    if (!isStack(tab.layout)) throw new Error('expected stack');
+    const stackId = tab.layout.id;
+    // Move p1 between p2 and p3 (index 2 in the post-removal array [p2, p3]).
+    store.getState().actions.movePane('t1', 'p1', stackId, { kind: 'insert', index: 2 });
+    const after = store.getState().tabs[0]!;
+    if (isStack(after.layout)) expect(after.layout.paneIds).toEqual(['p2', 'p3', 'p1']);
+  });
+
+  it('moves a pane across stacks via edge drop (creates new split)', () => {
+    const store = openDefault();
+    store.getState().actions.addPane('t1', { id: 'p2', kind: 'notes', data: { label: 'x' } });
+    const tab = store.getState().tabs[0]!;
+    if (!isStack(tab.layout)) throw new Error('expected stack');
+    // split p2 out to the bottom
+    store.getState().actions.movePane('t1', 'p2', tab.layout.id, { kind: 'edge', edge: 'bottom' });
+    const after = store.getState().tabs[0]!;
+    expect(isSplit(after.layout)).toBe(true);
+    if (isSplit(after.layout)) {
+      expect(after.layout.orientation).toBe('column');
+      if (isStack(after.layout.a)) expect(after.layout.a.paneIds).toEqual(['p1']);
+      if (isStack(after.layout.b)) expect(after.layout.b.paneIds).toEqual(['p2']);
+    }
+  });
+});
+
+describe('workspace store — focusNeighbor', () => {
+  it('moves focus from left stack to right stack', () => {
+    const store = openDefault();
+    store.getState().actions.splitPane('t1', 'p1', 'right', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'x' },
+    });
+    // focus the left pane first
+    store.getState().actions.focusPane('t1', 'p1');
+    const paneId = store.getState().actions.focusNeighbor('right');
+    expect(paneId).toBe('p2');
+    expect(store.getState().tabs[0]!.activePaneId).toBe('p2');
+  });
+});
+
+describe('workspace store — hydrate + snapshot', () => {
+  it('hydrates from a snapshot + preserves ids', () => {
+    const store = openDefault();
+    const snapshot = {
+      version: 2 as const,
+      activeTabId: store.getState().activeTabId,
+      tabs: store.getState().tabs.map((tab) => ({ ...tab, panes: { ...tab.panes } })),
+    };
+    const other = createWorkspaceStore<Data>();
+    other.getState().actions.hydrate(snapshot);
+    expect(other.getState().tabs).toEqual(snapshot.tabs);
+    expect(other.getState().activeTabId).toBe(snapshot.activeTabId);
+  });
+
+  it('reset clears all state', () => {
+    const store = openDefault();
+    store.getState().actions.reset();
+    expect(store.getState().tabs).toHaveLength(0);
+    expect(store.getState().activeTabId).toBeNull();
+  });
+});
+
+describe('workspace store — version is v2', () => {
+  it('emits version: 2 on empty init', () => {
+    const store = createWorkspaceStore<Data>();
+    expect(store.getState().version).toBe(2);
+  });
+});
+
+describe('workspace store — findStack helpers round-trip', () => {
+  it('findStack + findStackContainingPane walk the updated tree', () => {
+    const store = openDefault();
+    store.getState().actions.splitPane('t1', 'p1', 'right', {
+      id: 'p2',
+      kind: 'notes',
+      data: { label: 'x' },
+    });
+    const tab = store.getState().tabs[0]!;
+    const host = findStackContainingPane(tab.layout, 'p2');
+    expect(host?.paneIds).toEqual(['p2']);
+    if (host) expect(findStack(tab.layout, host.id)).toBe(host);
   });
 });

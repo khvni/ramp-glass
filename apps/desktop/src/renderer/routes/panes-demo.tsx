@@ -4,18 +4,27 @@ import {
   type PaneRegistry,
   type WorkspaceStore,
   Workspace,
+  findStack,
+  isSplit,
+  isStack,
+  collectStacks,
 } from '@tinker/panes';
 import '@tinker/panes/styles.css';
 import '@tinker/design/styles/tokens.css';
 import { Badge, Button, TextInput } from '@tinker/design';
 import './panes-demo.css';
 
+// ────────────────────────────────────────────────────────────────────────────
+// Demo data shapes
+// ────────────────────────────────────────────────────────────────────────────
+
 type DemoData =
   | { readonly kind: 'chat'; readonly messages: ReadonlyArray<{ readonly id: string; readonly body: string }> }
   | { readonly kind: 'notes'; readonly body: string }
-  | { readonly kind: 'timer'; readonly startedAt: number };
+  | { readonly kind: 'timer'; readonly startedAt: number }
+  | { readonly kind: 'terminal'; readonly transcript: ReadonlyArray<string> };
 
-const chatRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
+const ChatRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
   if (pane.data.kind !== 'chat') return <div />;
   return (
     <div className="panes-demo-chat">
@@ -28,12 +37,12 @@ const chatRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
   );
 };
 
-const notesRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
+const NotesRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
   if (pane.data.kind !== 'notes') return <div />;
   return <pre className="panes-demo-notes">{pane.data.body}</pre>;
 };
 
-const timerRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
+const TimerRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
   if (pane.data.kind !== 'timer') return <div />;
   const [now, setNow] = useState(() => Date.now());
   useMemo(() => {
@@ -44,105 +53,135 @@ const timerRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
   return <div className="panes-demo-timer">Elapsed: {elapsed}s</div>;
 };
 
-const registry: PaneRegistry<DemoData> = {
-  chat: {
-    kind: 'chat',
-    defaultTitle: 'Chat',
-    render: chatRenderer,
-  },
-  notes: {
-    kind: 'notes',
-    defaultTitle: 'Notes',
-    render: notesRenderer,
-  },
-  timer: {
-    kind: 'timer',
-    defaultTitle: 'Timer',
-    render: timerRenderer,
-  },
+const TerminalRenderer = ({ pane }: { pane: { data: DemoData } }): JSX.Element => {
+  if (pane.data.kind !== 'terminal') return <div />;
+  return (
+    <pre className="panes-demo-terminal">
+      {pane.data.transcript.map((line, index) => (
+        <div key={index}>{line}</div>
+      ))}
+    </pre>
+  );
 };
+
+const registry: PaneRegistry<DemoData> = {
+  chat: { kind: 'chat', defaultTitle: 'Chat', render: ChatRenderer },
+  notes: { kind: 'notes', defaultTitle: 'Notes', render: NotesRenderer },
+  timer: { kind: 'timer', defaultTitle: 'Timer', render: TimerRenderer },
+  terminal: { kind: 'terminal', defaultTitle: 'Terminal', render: TerminalRenderer },
+};
+
+// ────────────────────────────────────────────────────────────────────────────
+// Seed store
+// ────────────────────────────────────────────────────────────────────────────
 
 const seedStore = (): WorkspaceStore<DemoData> => {
   const store = createWorkspaceStore<DemoData>();
-  store.getState().actions.openTab({
+  const actions = store.getState().actions;
+
+  actions.openTab({
     id: 'workspace-1',
-    title: 'Workspace',
+    title: 'Main',
     pane: {
       id: 'p-chat',
       kind: 'chat',
       data: {
         kind: 'chat',
         messages: [
-          { id: 'm1', body: 'Welcome to the @tinker/panes demo.' },
-          { id: 'm2', body: 'Drag pane headers to re-dock on any edge.' },
+          { id: 'm1', body: 'Welcome to @tinker/panes — VSCode-style split + tab groups.' },
+          { id: 'm2', body: 'Drag a tab onto another pane edge to split.' },
+          { id: 'm3', body: 'Drag onto the body center to merge it in as a new tab.' },
         ],
       },
     },
   });
-  store.getState().actions.splitPane(
-    'workspace-1',
-    'p-chat',
-    'right',
-    {
-      id: 'p-notes',
-      kind: 'notes',
-      data: { kind: 'notes', body: '# Notes\n\nThese are scratch notes for the demo.' },
-    },
-  );
+
+  // Split right — new stack with Notes
+  actions.splitPane('workspace-1', 'p-chat', 'right', {
+    id: 'p-notes',
+    kind: 'notes',
+    data: { kind: 'notes', body: '# Notes\n\nScratch pad.' },
+  });
+
+  // Add a second pane *into* the right stack (tab group with 2 panes)
+  const tab = store.getState().tabs[0]!;
+  const stacks = collectStacks(tab.layout);
+  const rightStack = stacks[1];
+  if (rightStack) {
+    actions.addPane('workspace-1', {
+      id: 'p-timer',
+      kind: 'timer',
+      data: { kind: 'timer', startedAt: Date.now() },
+    }, { stackId: rightStack.id });
+  }
+
+  // Split the left stack bottom — Terminal
+  actions.splitPane('workspace-1', 'p-chat', 'bottom', {
+    id: 'p-term',
+    kind: 'terminal',
+    data: { kind: 'terminal', transcript: ['$ echo hello', 'hello', '$ ls'] },
+  });
+
+  actions.openTab({
+    id: 'workspace-2',
+    title: 'Scratch',
+    pane: { id: 'p-scratch', kind: 'notes', data: { kind: 'notes', body: 'Second workspace tab.' } },
+    activate: false,
+  });
+
   return store;
 };
 
+// ────────────────────────────────────────────────────────────────────────────
+// Demo page
+// ────────────────────────────────────────────────────────────────────────────
+
 export const PanesDemo = (): JSX.Element => {
   const storeRef = useRef<WorkspaceStore<DemoData> | null>(null);
-  if (!storeRef.current) {
-    storeRef.current = seedStore();
-  }
+  if (!storeRef.current) storeRef.current = seedStore();
   const store = storeRef.current;
 
-  const [tabCounter, setTabCounter] = useState(2);
-  const [paneCounter, setPaneCounter] = useState(3);
+  const [paneCounter, setPaneCounter] = useState(100);
+  const [tabCounter, setTabCounter] = useState(3);
   const [paneTitle, setPaneTitle] = useState('');
 
   const addTab = useCallback(() => {
     const id = `workspace-${tabCounter}`;
     const paneId = `p-${paneCounter}`;
-    setTabCounter((value) => value + 1);
-    setPaneCounter((value) => value + 1);
+    setTabCounter((v) => v + 1);
+    setPaneCounter((v) => v + 1);
     store.getState().actions.openTab({
       id,
       pane: {
         id: paneId,
         kind: 'chat',
-        data: {
-          kind: 'chat',
-          messages: [{ id: 'seed', body: `Fresh workspace ${id} opened.` }],
-        },
+        data: { kind: 'chat', messages: [{ id: 'seed', body: `Fresh workspace ${id}.` }] },
       },
     });
   }, [paneCounter, store, tabCounter]);
 
-  const addNotesToActive = useCallback(() => {
+  const addPaneToActiveStack = useCallback(() => {
     const state = store.getState();
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
-    if (!activeTab || !activeTab.activePaneId) return;
+    if (!activeTab) return;
     const paneId = `p-${paneCounter}`;
-    setPaneCounter((value) => value + 1);
-    const trimmedTitle = paneTitle.trim();
-    store.getState().actions.splitPane(activeTab.id, activeTab.activePaneId, 'bottom', {
+    setPaneCounter((v) => v + 1);
+    const trimmed = paneTitle.trim();
+    store.getState().actions.addPane(activeTab.id, {
       id: paneId,
       kind: 'notes',
-      ...(trimmedTitle ? { title: trimmedTitle } : {}),
-      data: { kind: 'notes', body: `Pane ${paneId} created at ${new Date().toLocaleTimeString()}.` },
+      ...(trimmed ? { title: trimmed } : {}),
+      data: { kind: 'notes', body: `Pane ${paneId} @ ${new Date().toLocaleTimeString()}` },
     });
     setPaneTitle('');
   }, [paneCounter, paneTitle, store]);
 
-  const addTimerToActive = useCallback(() => {
+  const splitActiveRight = useCallback(() => {
     const state = store.getState();
     const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
     if (!activeTab || !activeTab.activePaneId) return;
     const paneId = `p-${paneCounter}`;
-    setPaneCounter((value) => value + 1);
+    setPaneCounter((v) => v + 1);
     store.getState().actions.splitPane(activeTab.id, activeTab.activePaneId, 'right', {
       id: paneId,
       kind: 'timer',
@@ -150,12 +189,42 @@ export const PanesDemo = (): JSX.Element => {
     });
   }, [paneCounter, store]);
 
+  const splitActiveBottom = useCallback(() => {
+    const state = store.getState();
+    const activeTab = state.tabs.find((tab) => tab.id === state.activeTabId);
+    if (!activeTab || !activeTab.activePaneId) return;
+    const paneId = `p-${paneCounter}`;
+    setPaneCounter((v) => v + 1);
+    store.getState().actions.splitPane(activeTab.id, activeTab.activePaneId, 'bottom', {
+      id: paneId,
+      kind: 'terminal',
+      data: { kind: 'terminal', transcript: [`$ tail ${paneId}.log`, 'ok'] },
+    });
+  }, [paneCounter, store]);
+
+  const stats = useMemo(() => {
+    const state = store.getState();
+    const tab = state.tabs.find((t) => t.id === state.activeTabId);
+    if (!tab) return { stacks: 0, panes: 0, splits: 0 };
+    let splits = 0;
+    const count = (node: typeof tab.layout): void => {
+      if (isStack(node)) return;
+      if (isSplit(node)) {
+        splits += 1;
+        count(node.a);
+        count(node.b);
+      }
+    };
+    count(tab.layout);
+    return { stacks: collectStacks(tab.layout).length, panes: Object.keys(tab.panes).length, splits };
+  }, [store]);
+
   return (
     <main className="panes-demo-shell">
       <header className="panes-demo-header">
         <div>
-          <p className="panes-demo-eyebrow">@tinker/panes demo</p>
-          <h1>Workspace layout preview</h1>
+          <p className="panes-demo-eyebrow">@tinker/panes v2</p>
+          <h1>Workspace with stacks + splits</h1>
         </div>
         <div className="panes-demo-actions">
           <TextInput
@@ -164,17 +233,20 @@ export const PanesDemo = (): JSX.Element => {
             placeholder="Title (optional)"
             aria-label="New pane title"
           />
-          <Button variant="secondary" size="s" onClick={addNotesToActive}>
-            + Notes pane (split bottom)
+          <Button variant="secondary" size="s" onClick={addPaneToActiveStack}>
+            + Pane in active stack
           </Button>
-          <Button variant="secondary" size="s" onClick={addTimerToActive}>
-            + Timer pane (split right)
+          <Button variant="secondary" size="s" onClick={splitActiveRight}>
+            + Split right
+          </Button>
+          <Button variant="secondary" size="s" onClick={splitActiveBottom}>
+            + Split bottom
           </Button>
           <Button variant="primary" size="s" onClick={addTab}>
-            + New tab
+            + New workspace tab
           </Button>
           <Badge variant="accent" size="small">
-            data-testid=&quot;panes-demo-root&quot;
+            stacks {stats.stacks} · panes {stats.panes} · splits {stats.splits}
           </Badge>
         </div>
       </header>
@@ -184,12 +256,17 @@ export const PanesDemo = (): JSX.Element => {
           store={store}
           registry={registry}
           ariaLabel="Tinker panes demo"
-          tabStripActions={[
-            { id: 'new-tab', label: 'New tab', onSelect: addTab, icon: '+' },
-          ]}
-          emptyState={<p>Click &quot;New tab&quot; to begin.</p>}
+          tabStripActions={[{ id: 'new-tab', label: 'New tab', onSelect: addTab, icon: '+' }]}
+          emptyState={<p>Click &quot;New workspace tab&quot; to begin.</p>}
         />
       </section>
+
+      <footer className="panes-demo-footer">
+        <p>
+          Drag pane tabs between stacks · drop on a stack edge to split · drop on a stack body
+          center to merge · use arrow keys in the pane-tab bar to cycle
+        </p>
+      </footer>
     </main>
   );
 };

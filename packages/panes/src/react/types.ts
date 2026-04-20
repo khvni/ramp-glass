@@ -1,5 +1,5 @@
 import type { ComponentType, ReactNode } from 'react';
-import type { DropEdge, Pane, Tab } from '../types.js';
+import type { DropEdge, DropTarget, Pane, StackId, Tab } from '../types.js';
 import type { WorkspaceStore } from '../core/store/store.js';
 
 export type PaneRendererProps<TData> = {
@@ -17,6 +17,10 @@ export type PaneDefinition<TData> = {
   readonly render: PaneRenderer<TData>;
   /** Optional human label used when no `pane.title` override is set. */
   readonly defaultTitle?: string | ((pane: Pane<TData>) => string);
+  /** Optional icon shown next to the tab title. */
+  readonly icon?: ReactNode | ((pane: Pane<TData>) => ReactNode);
+  /** Render a custom body when this pane is the sole one in its stack and no frame is desired. */
+  readonly chromeless?: boolean;
 };
 
 export type PaneRegistry<TData> = Readonly<Record<string, PaneDefinition<TData>>>;
@@ -29,12 +33,21 @@ export type TabStripAction = {
   readonly disabled?: boolean;
 };
 
+export type DropPaneEvent = {
+  readonly tabId: string;
+  readonly sourcePaneId: string;
+  readonly targetStackId: StackId;
+  readonly target: DropTarget;
+};
+
 export type WorkspaceProps<TData> = {
   readonly store: WorkspaceStore<TData>;
   readonly registry: PaneRegistry<TData>;
-  /** Rendered on the right side of the tab strip. Good spot for "+" or menu. */
+  /** Rendered on the right side of the workspace tab strip. Good spot for "+" or menu. */
   readonly tabStripActions?: ReadonlyArray<TabStripAction>;
-  /** Callback when the user drops a pane on an edge of another pane. */
+  /** Intercept a pane drop. Return without calling preventDefault to let the default movePane run. */
+  readonly onDropPane?: (event: DropPaneEvent) => void;
+  /** Legacy pane-on-pane drop hook; retained for consumer shim compatibility. */
   readonly onDropPaneOnPane?: (info: {
     readonly tabId: string;
     readonly sourcePaneId: string;

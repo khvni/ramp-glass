@@ -1,5 +1,6 @@
 import { useCallback, useMemo, type ReactNode } from 'react';
-import type { DropEdge, SplitPath } from '../../types.js';
+import type { DropTarget, StackId } from '../../types.js';
+import { findStack } from '../../core/utils/layout.js';
 import { useWorkspaceActions, useWorkspaceSelector } from '../hooks/useWorkspaceStore.js';
 import type { WorkspaceProps } from '../types.js';
 import { SplitTree } from './SplitTree.js';
@@ -13,29 +14,12 @@ export const Workspace = <TData,>(props: WorkspaceProps<TData>): ReactNode => {
 
   const activeTab = useMemo(() => tabs.find((tab) => tab.id === activeTabId) ?? null, [tabs, activeTabId]);
 
-  const handleActivateTab = useCallback(
-    (tabId: string) => {
-      actions.activateTab(tabId);
-    },
-    [actions],
-  );
-
-  const handleCloseTab = useCallback(
-    (tabId: string) => {
-      actions.closeTab(tabId);
-    },
-    [actions],
-  );
-
-  const handleMoveTab = useCallback(
-    (tabId: string, toIndex: number) => {
-      actions.moveTab(tabId, toIndex);
-    },
-    [actions],
-  );
+  const handleActivateTab = useCallback((tabId: string) => actions.activateTab(tabId), [actions]);
+  const handleCloseTab = useCallback((tabId: string) => actions.closeTab(tabId), [actions]);
+  const handleMoveTab = useCallback((tabId: string, toIndex: number) => actions.moveTab(tabId, toIndex), [actions]);
 
   const handleFocusPane = useCallback(
-    (paneId: string) => {
+    (_stackId: StackId, paneId: string) => {
       if (!activeTab) return;
       actions.focusPane(activeTab.id, paneId);
     },
@@ -50,25 +34,50 @@ export const Workspace = <TData,>(props: WorkspaceProps<TData>): ReactNode => {
     [actions, activeTab],
   );
 
-  const handleSetRatio = useCallback(
-    (path: SplitPath, ratio: number) => {
+  const handleReorderPane = useCallback(
+    (paneId: string, toIndex: number) => {
       if (!activeTab) return;
-      actions.setSplitRatio(activeTab.id, path, ratio);
+      actions.reorderPane(activeTab.id, paneId, toIndex);
+    },
+    [actions, activeTab],
+  );
+
+  const handleSetRatio = useCallback(
+    (splitId: string, ratio: number) => {
+      if (!activeTab) return;
+      actions.setSplitRatio(activeTab.id, splitId, ratio);
     },
     [actions, activeTab],
   );
 
   const handleDrop = useCallback(
-    ({ sourcePaneId, targetPaneId, edge }: { sourcePaneId: string; targetPaneId: string; edge: DropEdge }) => {
+    ({ sourcePaneId, targetStackId, target }: { sourcePaneId: string; targetStackId: StackId; target: DropTarget }) => {
       if (!activeTab) return;
-      const custom = props.onDropPaneOnPane;
+
+      // Modern hook — if the consumer supplied one, they drive movement themselves.
+      const custom = props.onDropPane;
       if (custom) {
-        custom({ tabId: activeTab.id, sourcePaneId, targetPaneId, edge });
+        custom({ tabId: activeTab.id, sourcePaneId, targetStackId, target });
         return;
       }
-      actions.movePane(activeTab.id, sourcePaneId, targetPaneId, edge);
+
+      // Legacy pane-on-pane bridge — resolve a representative target pane from
+      // the target stack so shim callers keep working while they migrate.
+      const legacy = props.onDropPaneOnPane;
+      if (legacy) {
+        const targetStack = findStack(activeTab.layout, targetStackId);
+        const representative = targetStack?.activePaneId ?? targetStack?.paneIds[0];
+        if (representative) {
+          const edge: 'top' | 'right' | 'bottom' | 'left' | 'center' =
+            target.kind === 'edge' ? target.edge : 'center';
+          legacy({ tabId: activeTab.id, sourcePaneId, targetPaneId: representative, edge });
+          return;
+        }
+      }
+
+      actions.movePane(activeTab.id, sourcePaneId, targetStackId, target);
     },
-    [actions, activeTab, props],
+    [actions, activeTab, props.onDropPane, props.onDropPaneOnPane],
   );
 
   return (
@@ -97,8 +106,9 @@ export const Workspace = <TData,>(props: WorkspaceProps<TData>): ReactNode => {
             registry={registry}
             onFocusPane={handleFocusPane}
             onClosePane={handleClosePane}
+            onReorderPaneInStack={handleReorderPane}
             onSetRatio={handleSetRatio}
-            onDropPaneOnPane={handleDrop}
+            onDropPane={handleDrop}
           />
         ) : (
           <div className="tinker-panes-empty">

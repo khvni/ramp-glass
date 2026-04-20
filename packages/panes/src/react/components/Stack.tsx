@@ -1,0 +1,336 @@
+import {
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type KeyboardEvent,
+  type PointerEvent,
+  type ReactNode,
+} from 'react';
+import type { DropTarget, Pane, StackId, StackNode, Tab } from '../../types.js';
+import type { PaneDefinition, PaneRegistry } from '../types.js';
+
+const PANE_DRAG_MIME = 'application/x-tinker-pane';
+const STACK_DRAG_MIME = 'application/x-tinker-stack';
+
+/**
+ * Fraction of the body that counts as "edge" vs. "center" when a drag hovers a
+ * stack. 0.28 means the outer 28% on every side is an edge zone and the inner
+ * 44% square is the center. Mirrors Dockview's `_rootDropTarget` geometry.
+ */
+const EDGE_ZONE_FRACTION = 0.28;
+
+type StackProps<TData> = {
+  readonly tab: Tab<TData>;
+  readonly node: StackNode;
+  readonly registry: PaneRegistry<TData>;
+  readonly isActiveStack: boolean;
+  readonly onFocusPane: (stackId: StackId, paneId: string) => void;
+  readonly onClosePane: (paneId: string) => void;
+  readonly onReorderPaneInStack: (paneId: string, toIndex: number) => void;
+  readonly onDropPane: (info: { sourcePaneId: string; targetStackId: StackId; target: DropTarget }) => void;
+};
+
+type BodyDropState = { readonly kind: 'edge'; readonly edge: 'top' | 'right' | 'bottom' | 'left' } | { readonly kind: 'center' } | null;
+
+/**
+ * Classify a pointer position inside the stack body into one of five drop
+ * zones. Returns `null` when the dataTransfer payload isn't a pane.
+ */
+const classifyBodyDrop = (rect: DOMRect, clientX: number, clientY: number): BodyDropState => {
+  const ratioX = (clientX - rect.left) / rect.width;
+  const ratioY = (clientY - rect.top) / rect.height;
+  if (Number.isNaN(ratioX) || Number.isNaN(ratioY)) return null;
+
+  const insideCenter =
+    ratioX > EDGE_ZONE_FRACTION &&
+    ratioX < 1 - EDGE_ZONE_FRACTION &&
+    ratioY > EDGE_ZONE_FRACTION &&
+    ratioY < 1 - EDGE_ZONE_FRACTION;
+  if (insideCenter) return { kind: 'center' };
+
+  const distLeft = ratioX;
+  const distRight = 1 - ratioX;
+  const distTop = ratioY;
+  const distBottom = 1 - ratioY;
+  const min = Math.min(distLeft, distRight, distTop, distBottom);
+  if (min === distLeft) return { kind: 'edge', edge: 'left' };
+  if (min === distRight) return { kind: 'edge', edge: 'right' };
+  if (min === distTop) return { kind: 'edge', edge: 'top' };
+  return { kind: 'edge', edge: 'bottom' };
+};
+
+const resolveTitle = <TData,>(definition: PaneDefinition<TData>, pane: Pane<TData>): string => {
+  if (pane.title) return pane.title;
+  if (typeof definition.defaultTitle === 'function') return definition.defaultTitle(pane);
+  return definition.defaultTitle ?? pane.kind;
+};
+
+const resolveIcon = <TData,>(definition: PaneDefinition<TData>, pane: Pane<TData>): ReactNode => {
+  if (typeof definition.icon === 'function') return definition.icon(pane);
+  return definition.icon ?? null;
+};
+
+export const Stack = <TData,>({
+  tab,
+  node,
+  registry,
+  isActiveStack,
+  onFocusPane,
+  onClosePane,
+  onReorderPaneInStack,
+  onDropPane,
+}: StackProps<TData>): ReactNode => {
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+  const [bodyDrop, setBodyDrop] = useState<BodyDropState>(null);
+  const [tabInsertIndex, setTabInsertIndex] = useState<number | null>(null);
+
+  const activePaneId = node.activePaneId;
+  const activePane = activePaneId ? tab.panes[activePaneId] : undefined;
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Drag sources — tab → pane move
+  // ────────────────────────────────────────────────────────────────────────
+
+  const handleTabDragStart = useCallback(
+    (paneId: string) => (event: DragEvent<HTMLDivElement>) => {
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData(PANE_DRAG_MIME, paneId);
+      event.dataTransfer.setData('text/plain', paneId);
+    },
+    [],
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Drop targets — body (edge + center) and tab-bar (insert index)
+  // ────────────────────────────────────────────────────────────────────────
+
+  const isPaneDrag = (event: DragEvent<HTMLElement>): boolean =>
+    Array.from(event.dataTransfer.types).includes(PANE_DRAG_MIME);
+
+  const handleBodyDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!isPaneDrag(event)) return;
+      const body = bodyRef.current;
+      if (!body) return;
+      const state = classifyBodyDrop(body.getBoundingClientRect(), event.clientX, event.clientY);
+      if (!state) {
+        setBodyDrop(null);
+        return;
+      }
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      setBodyDrop(state);
+    },
+    [],
+  );
+
+  const handleBodyDragLeave = useCallback(() => setBodyDrop(null), []);
+
+  const handleBodyDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!isPaneDrag(event)) return;
+      event.preventDefault();
+      const body = bodyRef.current;
+      if (!body) return;
+      const sourcePaneId = event.dataTransfer.getData(PANE_DRAG_MIME);
+      const state = classifyBodyDrop(body.getBoundingClientRect(), event.clientX, event.clientY);
+      setBodyDrop(null);
+      if (!sourcePaneId || !state) return;
+      const target: DropTarget =
+        state.kind === 'center'
+          ? { kind: 'center' }
+          : { kind: 'edge', edge: state.edge };
+      onDropPane({ sourcePaneId, targetStackId: node.id, target });
+    },
+    [node.id, onDropPane],
+  );
+
+  const handleTabBarDragOver = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!isPaneDrag(event)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    },
+    [],
+  );
+
+  const handleTabDragOver = useCallback(
+    (index: number) => (event: DragEvent<HTMLDivElement>) => {
+      if (!isPaneDrag(event)) return;
+      const rect = (event.currentTarget as HTMLElement).getBoundingClientRect();
+      const midpoint = rect.left + rect.width / 2;
+      const effectiveIndex = event.clientX < midpoint ? index : index + 1;
+      setTabInsertIndex(effectiveIndex);
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+    },
+    [],
+  );
+
+  const handleTabBarLeave = useCallback(() => setTabInsertIndex(null), []);
+
+  const handleTabDrop = useCallback(
+    (event: DragEvent<HTMLDivElement>) => {
+      if (!isPaneDrag(event)) return;
+      event.preventDefault();
+      const sourcePaneId = event.dataTransfer.getData(PANE_DRAG_MIME);
+      const index = tabInsertIndex;
+      setTabInsertIndex(null);
+      if (!sourcePaneId) return;
+      // If source belongs to this stack, prefer a pure reorder.
+      if (node.paneIds.includes(sourcePaneId)) {
+        const currentIndex = node.paneIds.indexOf(sourcePaneId);
+        const insertIndex = index ?? node.paneIds.length;
+        // reorderPaneInStack moves source out first, then inserts — so adjust
+        // the caller-side target index when the source is currently before it.
+        const toIndex = currentIndex < insertIndex ? insertIndex - 1 : insertIndex;
+        onReorderPaneInStack(sourcePaneId, toIndex);
+        return;
+      }
+      onDropPane({
+        sourcePaneId,
+        targetStackId: node.id,
+        target: { kind: 'insert', index: index ?? node.paneIds.length },
+      });
+    },
+    [node.id, node.paneIds, onDropPane, onReorderPaneInStack, tabInsertIndex],
+  );
+
+  // ────────────────────────────────────────────────────────────────────────
+  // Keyboard nav across tabs (within this stack)
+  // ────────────────────────────────────────────────────────────────────────
+
+  const handleTabKeyDown = useCallback(
+    (index: number) => (event: KeyboardEvent<HTMLDivElement>) => {
+      const pane = tab.panes[node.paneIds[index] ?? ''];
+      if (!pane) return;
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        const neighbor = node.paneIds[Math.min(index + 1, node.paneIds.length - 1)];
+        if (neighbor) onFocusPane(node.id, neighbor);
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        const neighbor = node.paneIds[Math.max(index - 1, 0)];
+        if (neighbor) onFocusPane(node.id, neighbor);
+      } else if (event.key === 'Delete' || (event.metaKey && event.key === 'w')) {
+        event.preventDefault();
+        onClosePane(pane.id);
+      }
+    },
+    [node.id, node.paneIds, onClosePane, onFocusPane, tab.panes],
+  );
+
+  const handleStackActivate = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      // Don't hijack close-button clicks.
+      if ((event.target as HTMLElement).closest('[data-tinker-pane-action]')) return;
+      if (activePaneId) onFocusPane(node.id, activePaneId);
+    },
+    [activePaneId, node.id, onFocusPane],
+  );
+
+  const paneTabs = useMemo(() => node.paneIds.map((id) => tab.panes[id]).filter((p): p is Pane<TData> => Boolean(p)), [node.paneIds, tab.panes]);
+
+  return (
+    <div
+      className={`tinker-stack${isActiveStack ? ' tinker-stack--active' : ''}`}
+      data-stack-id={node.id}
+      data-drop-center={bodyDrop?.kind === 'center' || undefined}
+      onPointerDown={handleStackActivate}
+    >
+      <div
+        role="tablist"
+        aria-label="Pane tabs"
+        className="tinker-stack__tabs"
+        onDragOver={handleTabBarDragOver}
+        onDragLeave={handleTabBarLeave}
+        onDrop={handleTabDrop}
+      >
+        {paneTabs.map((pane, index) => {
+          const definition = registry[pane.kind];
+          const title = definition ? resolveTitle(definition, pane) : pane.kind;
+          const icon = definition ? resolveIcon(definition, pane) : null;
+          const isActive = pane.id === activePaneId;
+          const showInsertBefore = tabInsertIndex === index;
+          const showInsertAfter = tabInsertIndex === index + 1 && index === paneTabs.length - 1;
+          return (
+            <div
+              key={pane.id}
+              role="tab"
+              aria-selected={isActive}
+              tabIndex={isActive ? 0 : -1}
+              draggable
+              data-pane-id={pane.id}
+              className={`tinker-stack__tab${isActive ? ' tinker-stack__tab--active' : ''}`}
+              data-insert-before={showInsertBefore || undefined}
+              data-insert-after={showInsertAfter || undefined}
+              onDragStart={handleTabDragStart(pane.id)}
+              onDragOver={handleTabDragOver(index)}
+              onClick={() => onFocusPane(node.id, pane.id)}
+              onKeyDown={handleTabKeyDown(index)}
+              title={title}
+            >
+              {icon ? <span className="tinker-stack__tab-icon" aria-hidden>{icon}</span> : null}
+              <span className="tinker-stack__tab-label">{title}</span>
+              <span
+                role="button"
+                tabIndex={-1}
+                aria-label={`Close ${title}`}
+                data-tinker-pane-action="close"
+                className="tinker-stack__tab-close"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onClosePane(pane.id);
+                }}
+              >
+                ×
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      <div
+        ref={bodyRef}
+        className="tinker-stack__body"
+        onDragOver={handleBodyDragOver}
+        onDragLeave={handleBodyDragLeave}
+        onDrop={handleBodyDrop}
+      >
+        {activePane ? <ActivePaneRenderer tab={tab} pane={activePane} registry={registry} isActive={isActiveStack} /> : null}
+        {bodyDrop ? (
+          <div
+            className={`tinker-stack__drop tinker-stack__drop--${bodyDrop.kind === 'center' ? 'center' : bodyDrop.edge}`}
+            aria-hidden
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
+type ActivePaneRendererProps<TData> = {
+  readonly tab: Tab<TData>;
+  readonly pane: Pane<TData>;
+  readonly registry: PaneRegistry<TData>;
+  readonly isActive: boolean;
+};
+
+const ActivePaneRenderer = <TData,>({ tab, pane, registry, isActive }: ActivePaneRendererProps<TData>): ReactNode => {
+  const definition = registry[pane.kind];
+  if (!definition) {
+    return (
+      <div className="tinker-stack__missing" role="alert">
+        No renderer registered for kind &quot;{pane.kind}&quot;.
+      </div>
+    );
+  }
+  const RenderContent = definition.render;
+  return <RenderContent tabId={tab.id} pane={pane} isActive={isActive} />;
+};
+
+// Helper exported for tests — pure drop classification of pointer position.
+export const __classifyBodyDropForTests = classifyBodyDrop;
+export const __MIMES = { PANE_DRAG_MIME, STACK_DRAG_MIME };

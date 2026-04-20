@@ -12,6 +12,8 @@
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
+/* ── Workspace-level tab strip (top-level tabs) ─────────────────────────── */
+
 .tinker-panes-tabstrip {
   display: flex;
   align-items: stretch;
@@ -136,7 +138,9 @@
   color: var(--color-text-weak, inherit);
 }
 
-.tinker-panes-split {
+/* ── Split tree ─────────────────────────────────────────────────────────── */
+
+.tinker-split {
   display: grid;
   flex: 1 1 auto;
   min-height: 0;
@@ -147,15 +151,15 @@
   transition: grid-template-columns 180ms ease, grid-template-rows 180ms ease;
 }
 
-.tinker-panes-split[data-resizing='true'] {
+.tinker-split[data-resizing='true'] {
   transition: none;
 }
 
-.tinker-panes-split--row {
+.tinker-split--row {
   grid-template-rows: 1fr;
 }
 
-.tinker-panes-split--column {
+.tinker-split--column {
   grid-template-columns: 1fr;
 }
 
@@ -165,7 +169,6 @@
   background: var(--color-border-base, rgba(255, 255, 255, 0.08));
   padding: 0;
   margin: 0;
-  cursor: col-resize;
   position: relative;
   touch-action: none;
 }
@@ -192,7 +195,9 @@
   background: var(--color-accent-base, currentColor);
 }
 
-.tinker-panes-frame {
+/* ── Stack (pane tab group) ─────────────────────────────────────────────── */
+
+.tinker-stack {
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -205,64 +210,123 @@
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
-.tinker-panes-frame--active {
+.tinker-stack--active {
   border-color: var(--color-accent-base, currentColor);
   box-shadow: 0 0 0 1px var(--color-accent-base, currentColor) inset;
 }
 
-.tinker-panes-frame[data-drop-hover='true'] {
+.tinker-stack[data-drop-center='true'] {
   box-shadow: 0 0 0 2px var(--color-accent-base, currentColor) inset;
 }
 
-.tinker-panes-header {
+.tinker-stack__tabs {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-2, 8px);
+  align-items: stretch;
+  gap: var(--space-1, 4px);
   padding: var(--space-1, 4px) var(--space-2, 8px);
   background: var(--color-surface-raised-base, transparent);
   border-bottom: 1px solid var(--color-border-base, rgba(255, 255, 255, 0.08));
-  cursor: grab;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+  min-height: 32px;
   user-select: none;
 }
 
-.tinker-panes-header:active {
+.tinker-stack__tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2, 8px);
+  padding: var(--space-1, 4px) var(--space-2, 8px);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm, 4px);
+  background: transparent;
+  color: var(--color-text-weak, inherit);
+  font: inherit;
+  font-size: var(--font-size-sm, 13px);
+  line-height: 1.2;
+  cursor: grab;
+  max-width: 240px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+.tinker-stack__tab:active {
   cursor: grabbing;
 }
 
-.tinker-panes-title {
-  font-size: var(--font-size-sm, 13px);
-  font-weight: var(--font-weight-medium, 500);
+.tinker-stack__tab:hover {
+  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.06));
+  color: var(--color-text-base, inherit);
+}
+
+.tinker-stack__tab--active {
+  background: var(--color-surface-sunken, rgba(255, 255, 255, 0.08));
   color: var(--color-text-strong, inherit);
+  border-color: var(--color-border-strong, rgba(255, 255, 255, 0.2));
+}
+
+.tinker-stack__tab[data-insert-before]::before,
+.tinker-stack__tab[data-insert-after]::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  width: 2px;
+  background: var(--color-accent-base, currentColor);
+  border-radius: 1px;
+}
+
+.tinker-stack__tab[data-insert-before]::before { left: -3px; }
+.tinker-stack__tab[data-insert-after]::after { right: -3px; }
+
+.tinker-stack__tab-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-weak, inherit);
+}
+
+.tinker-stack__tab-label {
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1 1 auto;
+  max-width: 200px;
 }
 
-.tinker-panes-close {
-  appearance: none;
-  border: none;
-  background: transparent;
+.tinker-stack__tab-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-sm, 4px);
   color: var(--color-text-weak, inherit);
-  cursor: pointer;
   font-size: 14px;
-  padding: 0 var(--space-1, 4px);
   line-height: 1;
+  cursor: pointer;
 }
 
-.tinker-panes-close:hover {
+.tinker-stack__tab-close:hover {
+  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.1));
   color: var(--color-text-strong, inherit);
 }
 
-.tinker-panes-body {
+.tinker-stack__body {
+  position: relative;
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
   overflow: auto;
 }
 
-.tinker-panes-drop {
+.tinker-stack__missing {
+  padding: var(--space-3, 12px);
+  color: var(--color-text-weak, inherit);
+}
+
+/* ── Drop overlay (5 zones) ─────────────────────────────────────────────── */
+
+.tinker-stack__drop {
   pointer-events: none;
   position: absolute;
   background: var(--color-accent-base, currentColor);
@@ -270,37 +334,11 @@
   border: 1px dashed var(--color-accent-base, currentColor);
   transition: opacity 120ms ease, transform 160ms ease;
   box-shadow: 0 0 0 1px var(--color-border-base, rgba(255, 255, 255, 0.08)) inset;
+  z-index: 2;
 }
 
-.tinker-panes-drop--left {
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 40%;
-}
-
-.tinker-panes-drop--right {
-  top: 0;
-  bottom: 0;
-  right: 0;
-  width: 40%;
-}
-
-.tinker-panes-drop--top {
-  left: 0;
-  right: 0;
-  top: 0;
-  height: 40%;
-}
-
-.tinker-panes-drop--bottom {
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 40%;
-}
-
-.tinker-panes-missing {
-  padding: var(--space-3, 12px);
-  color: var(--color-text-weak, inherit);
-}
+.tinker-stack__drop--left   { top: 0; bottom: 0; left: 0; width: 50%; }
+.tinker-stack__drop--right  { top: 0; bottom: 0; right: 0; width: 50%; }
+.tinker-stack__drop--top    { left: 0; right: 0; top: 0; height: 50%; }
+.tinker-stack__drop--bottom { left: 0; right: 0; bottom: 0; height: 50%; }
+.tinker-stack__drop--center { inset: 0; }
