@@ -90,12 +90,6 @@ textarea {
   align-items: center;
 }
 
-.tinker-section {
-  display: grid;
-  gap: var(--space-3);
-  margin-top: var(--space-5);
-}
-
 .tinker-workspace-shell {
   display: grid;
   grid-template-rows: auto auto 1fr;
@@ -124,55 +118,6 @@ textarea {
   display: flex;
   gap: var(--space-2);
   flex-wrap: wrap;
-}
-
-.tinker-header-strip {
-  padding: var(--space-3) var(--space-5) 0;
-}
-
-.tinker-pill {
-  padding: var(--space-1) var(--space-3);
-  border-radius: var(--radius-pill);
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-panel);
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-medium);
-}
-
-.tinker-pill--accent {
-  background: var(--color-accent-soft);
-  border-color: var(--color-accent-ring);
-  color: var(--color-accent);
-}
-
-.tinker-integrations {
-  display: grid;
-  gap: var(--space-3);
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.tinker-integrations--compact {
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-}
-
-.tinker-integration-card {
-  display: grid;
-  gap: var(--space-1);
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  border: 1px solid var(--color-border-subtle);
-  background: var(--color-bg-elevated);
-}
-
-.tinker-integration-card strong {
-  font-size: var(--font-size-sm);
-  font-weight: var(--font-weight-semibold);
-}
-
-.tinker-integration-card span {
-  color: var(--color-text-muted);
-  font-size: var(--font-size-xs);
 }
 
 .tinker-dockview {
