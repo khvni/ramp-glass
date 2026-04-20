@@ -1,5 +1,5 @@
 import { exists, mkdir, readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
-import type { Entity, EntityKind, EntitySource } from '@tinker/shared-types';
+import type { EntityKind, EntitySource } from '@tinker/shared-types';
 import type { VaultConfig } from '@tinker/shared-types/vault';
 import { getDatabase } from './database.js';
 import {
@@ -298,8 +298,4 @@ export const applyMemoryUpdates = async (
       throw error;
     }
   });
-};
-
-export const summarizeEntityNames = (entities: Entity[]): string => {
-  return entities.map((entity) => entity.name).join(', ');
 };
