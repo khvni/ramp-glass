@@ -1,0 +1,52 @@
+.tk-statusdot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-pill);
+  flex-shrink: 0;
+  background: var(--color-muted);
+}
+
+.tk-statusdot--muted {
+  background: var(--color-muted);
+}
+
+.tk-statusdot--constructive {
+  background: var(--color-success);
+}
+
+.tk-statusdot--warning {
+  background: var(--color-warning);
+}
+
+.tk-statusdot--danger {
+  background: var(--color-error);
+}
+
+.tk-statusdot--info {
+  background: var(--color-info);
+}
+
+.tk-statusdot--claude {
+  background: var(--color-claude);
+}
+
+.tk-statusdot--skill {
+  background: var(--color-skill);
+}
+
+.tk-statusdot--pulse {
+  background: var(--color-accent);
+  animation: tk-statusdot-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes tk-statusdot-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 var(--color-accent-soft);
+  }
+  50% {
+    opacity: 0.65;
+    box-shadow: 0 0 0 4px transparent;
+  }
+}

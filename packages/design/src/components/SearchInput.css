@@ -1,0 +1,23 @@
+.tk-searchinput {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.tk-searchinput__icon {
+  position: absolute;
+  left: var(--space-3);
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--color-text-muted);
+  pointer-events: none;
+}
+
+.tk-searchinput__input {
+  padding-left: calc(var(--space-3) + 14px + var(--space-1));
+}
+
+.tk-searchinput__input::-webkit-search-cancel-button {
+  display: none;
+}

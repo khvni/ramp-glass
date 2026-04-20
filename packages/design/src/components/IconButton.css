@@ -1,0 +1,71 @@
+.tk-iconbutton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-pill);
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.tk-iconbutton--size-s {
+  width: 24px;
+  height: 24px;
+}
+
+.tk-iconbutton--size-m {
+  width: 28px;
+  height: 28px;
+}
+
+.tk-iconbutton__icon {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+}
+
+.tk-iconbutton--primary {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+.tk-iconbutton--primary:hover:not(.tk-iconbutton--disabled) {
+  background: var(--color-accent-strong);
+}
+
+.tk-iconbutton--secondary {
+  background: var(--color-bg-input);
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+}
+.tk-iconbutton--secondary:hover:not(.tk-iconbutton--disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.tk-iconbutton--ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+}
+.tk-iconbutton--ghost:hover:not(.tk-iconbutton--disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-elevated);
+}
+
+.tk-iconbutton--danger {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+  border-color: transparent;
+}
+.tk-iconbutton--danger:hover:not(.tk-iconbutton--disabled) {
+  background: var(--color-error);
+  color: #ffffff;
+}
+
+.tk-iconbutton--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}

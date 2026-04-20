@@ -1,0 +1,34 @@
+.tk-segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: var(--space-1);
+  background: var(--color-bg-input);
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill);
+  gap: 2px;
+}
+
+.tk-segmented__option {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+  line-height: var(--line-height-tight);
+}
+
+.tk-segmented__option:hover:not(.tk-segmented__option--active) {
+  color: var(--color-text-primary);
+}
+
+.tk-segmented__option--active {
+  background: var(--color-bg-panel);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
