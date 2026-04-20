@@ -1,44 +1,59 @@
+/*
+ * Tinker design tokens.
+ *
+ * Light mode is the default. Dark mode opts in via [data-theme="dark"] on
+ * :root (or any ancestor). Theme-neutral primitives (spacing, radius, type,
+ * motion) live on :root and are inherited by both themes.
+ *
+ * Mood:
+ *   light — bookish editorial: warm cream paper, ink text, amber brass accent
+ *   dark  — candlelit terminal: warm near-black, ink-white text, amber accent
+ *
+ * The amber brand value (#f9c041) is constant across themes; only its ink
+ * counterpart and soft alpha shift.
+ */
+
 :root {
-  color-scheme: dark;
+  color-scheme: light;
 
-  /* bg (warm near-black) */
-  --color-bg-primary: #1a1612;
-  --color-bg-elevated: #221d17;
-  --color-bg-panel: #16120e;
-  --color-bg-input: #120f0c;
-  --color-bg-hover: #25201a;
+  /* bg (warm paper) */
+  --color-bg-primary: #fbf8f2;
+  --color-bg-elevated: #ffffff;
+  --color-bg-panel: #f3ede1;
+  --color-bg-input: #ffffff;
+  --color-bg-hover: #efe8db;
 
-  /* border (warm-tinted white alpha) */
-  --color-border-subtle: rgba(255, 240, 220, 0.06);
-  --color-border-default: rgba(255, 240, 220, 0.1);
-  --color-border-strong: rgba(255, 240, 220, 0.18);
+  /* border (ink alpha) */
+  --color-border-subtle: rgba(26, 22, 18, 0.06);
+  --color-border-default: rgba(26, 22, 18, 0.1);
+  --color-border-strong: rgba(26, 22, 18, 0.18);
 
-  /* text (warm neutrals) */
-  --color-text-primary: #f5efe6;
-  --color-text-secondary: #a8a097;
-  --color-text-muted: #6f665c;
-  --color-text-inverse: #1a1612;
+  /* text (ink) */
+  --color-text-primary: #1a1612;
+  --color-text-secondary: #5f564c;
+  --color-text-muted: #a8a097;
+  --color-text-inverse: #fbf8f2;
 
   /* accent (amber) */
   --color-accent: #f9c041;
   --color-accent-strong: #e5ad2d;
-  --color-accent-soft: rgba(249, 192, 65, 0.18);
-  --color-accent-ring: rgba(249, 192, 65, 0.35);
-  --color-accent-ink: #201402;
+  --color-accent-soft: rgba(249, 192, 65, 0.22);
+  --color-accent-ring: rgba(249, 192, 65, 0.45);
+  --color-accent-ink: #1a1612;
 
   /* semantic */
-  --color-success: #4ade80;
-  --color-success-soft: rgba(74, 222, 128, 0.18);
-  --color-error: #ef4444;
-  --color-error-soft: rgba(239, 68, 68, 0.18);
-  --color-warning: #f59e0b;
-  --color-warning-soft: rgba(245, 158, 11, 0.2);
-  --color-info: #60a5fa;
-  --color-info-soft: rgba(96, 165, 250, 0.2);
-  --color-skill: #a78bfa;
-  --color-skill-soft: rgba(167, 139, 250, 0.2);
-  --color-claude: #f2c94c;
-  --color-muted: #6b625a;
+  --color-success: #22a355;
+  --color-success-soft: rgba(34, 163, 85, 0.14);
+  --color-error: #d33030;
+  --color-error-soft: rgba(211, 48, 48, 0.12);
+  --color-warning: #d48806;
+  --color-warning-soft: rgba(212, 136, 6, 0.14);
+  --color-info: #2d6ecb;
+  --color-info-soft: rgba(45, 110, 203, 0.12);
+  --color-skill: #7255d9;
+  --color-skill-soft: rgba(114, 85, 217, 0.12);
+  --color-claude: #d5a82e;
+  --color-muted: #a8a097;
 
   /* spacing (4px base) */
   --space-0: 0;
@@ -84,4 +99,47 @@
   --duration-slow: 240ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
   --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  /* bg (warm near-black) */
+  --color-bg-primary: #1a1612;
+  --color-bg-elevated: #221d17;
+  --color-bg-panel: #16120e;
+  --color-bg-input: #120f0c;
+  --color-bg-hover: #25201a;
+
+  /* border (warm-tinted white alpha) */
+  --color-border-subtle: rgba(255, 240, 220, 0.06);
+  --color-border-default: rgba(255, 240, 220, 0.1);
+  --color-border-strong: rgba(255, 240, 220, 0.18);
+
+  /* text (warm neutrals) */
+  --color-text-primary: #f5efe6;
+  --color-text-secondary: #a8a097;
+  --color-text-muted: #6f665c;
+  --color-text-inverse: #1a1612;
+
+  /* accent (amber) */
+  --color-accent: #f9c041;
+  --color-accent-strong: #e5ad2d;
+  --color-accent-soft: rgba(249, 192, 65, 0.18);
+  --color-accent-ring: rgba(249, 192, 65, 0.35);
+  --color-accent-ink: #201402;
+
+  /* semantic */
+  --color-success: #4ade80;
+  --color-success-soft: rgba(74, 222, 128, 0.18);
+  --color-error: #ef4444;
+  --color-error-soft: rgba(239, 68, 68, 0.18);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.2);
+  --color-info: #60a5fa;
+  --color-info-soft: rgba(96, 165, 250, 0.2);
+  --color-skill: #a78bfa;
+  --color-skill-soft: rgba(167, 139, 250, 0.2);
+  --color-claude: #f2c94c;
+  --color-muted: #6b625a;
 }

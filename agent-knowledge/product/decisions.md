@@ -204,6 +204,17 @@ Log of what's explicitly OUT of scope or deferred, with reasoning. Coding agents
 - **Why**: Temporal coupling hides bugs. The mutate + call pair often races with restart/retry logic and makes unit-testing impossible.
 - **How to apply**: New APIs take `(config, args)`. Retry logic calls with a fresh config object, not a bound value.
 
+### `[2026-04-20]` D23 — Reopens D15: dual-theme palette, light default
+- **Decision**: D15 ("dark-only") is reopened. Tinker now ships a dual-theme palette: **light mode is the default**, dark mode opts in via `[data-theme="dark"]` on any ancestor of the UI tree. The amber brand value (`#f9c041`) stays constant across themes; only surfaces, ink, and semantic hues flip.
+- **Why**: Design exploration against Ramp Glass reference shots showed the workspace + Memory + Agents layouts read more naturally on warm cream paper than on warm near-black — the light ground gives long-session content (tables, markdown, run history) the readability users actually want. Dark mode remains a first-class alternate, not a deprecation.
+- **How to apply**:
+  - Token-layer change only — `packages/design/src/styles/tokens.css`. No per-app palette branches.
+  - Light-mode mood: *bookish editorial* — warm cream (`#fbf8f2`) ground, white elevated surfaces, ink text (`#1a1612`), amber accent with dark ink counterpart.
+  - Dark-mode mood (unchanged): *candlelit terminal* — warm near-black ground, warm-white text, amber accent with warm-black ink.
+  - New UI work designs in light mode first; dark mode verified as a review pass, not a separate design.
+  - Don't introduce light-mode branches in component CSS — tokens are theme-aware, components stay theme-neutral.
+  - If `prefers-color-scheme` respect becomes desired later, route it through the same `[data-theme]` attribute (set once at app boot), not per-component media queries.
+
 ## Open Questions (not yet decided)
 
 - **Scheduler implementation**: in-process TypeScript cron vs. OS-level (launchd/Task Scheduler/systemd). Leaning in-process for cross-platform simplicity; revisit when app sleep/wake behavior is tested.

@@ -292,35 +292,35 @@ const ComponentsTab = (): JSX.Element => {
 type Swatch = { name: string; varName: string; hex: string; note?: string };
 
 const SURFACE_SWATCHES: ReadonlyArray<Swatch> = [
-  { name: 'bg-primary', varName: '--color-bg-primary', hex: '#1a1612', note: 'canvas' },
-  { name: 'bg-elevated', varName: '--color-bg-elevated', hex: '#221d17', note: 'sidebar / titlebar' },
-  { name: 'bg-panel', varName: '--color-bg-panel', hex: '#16120e', note: 'recessed surface' },
-  { name: 'bg-input', varName: '--color-bg-input', hex: '#120f0c', note: 'TextInput / Textarea / secondary icon bg' },
-  { name: 'bg-hover', varName: '--color-bg-hover', hex: '#25201a', note: 'interactive hover' },
+  { name: 'bg-primary', varName: '--color-bg-primary', hex: '#fbf8f2', note: 'canvas · dark #1a1612' },
+  { name: 'bg-elevated', varName: '--color-bg-elevated', hex: '#ffffff', note: 'cards / modals · dark #221d17' },
+  { name: 'bg-panel', varName: '--color-bg-panel', hex: '#f3ede1', note: 'sidebar · dark #16120e' },
+  { name: 'bg-input', varName: '--color-bg-input', hex: '#ffffff', note: 'inputs · dark #120f0c' },
+  { name: 'bg-hover', varName: '--color-bg-hover', hex: '#efe8db', note: 'interactive hover · dark #25201a' },
 ];
 
 const TEXT_SWATCHES: ReadonlyArray<Swatch> = [
-  { name: 'text-primary', varName: '--color-text-primary', hex: '#f5efe6' },
-  { name: 'text-secondary', varName: '--color-text-secondary', hex: '#a8a097' },
-  { name: 'text-muted', varName: '--color-text-muted', hex: '#6f665c' },
-  { name: 'text-inverse', varName: '--color-text-inverse', hex: '#1a1612', note: 'text on accent' },
+  { name: 'text-primary', varName: '--color-text-primary', hex: '#1a1612', note: 'dark #f5efe6' },
+  { name: 'text-secondary', varName: '--color-text-secondary', hex: '#5f564c', note: 'dark #a8a097' },
+  { name: 'text-muted', varName: '--color-text-muted', hex: '#a8a097', note: 'dark #6f665c' },
+  { name: 'text-inverse', varName: '--color-text-inverse', hex: '#fbf8f2', note: 'text on dark surfaces' },
 ];
 
 const ACCENT_SWATCHES: ReadonlyArray<Swatch> = [
-  { name: 'accent', varName: '--color-accent', hex: '#f9c041', note: 'primary CTA, active states' },
+  { name: 'accent', varName: '--color-accent', hex: '#f9c041', note: 'brand constant both themes' },
   { name: 'accent-strong', varName: '--color-accent-strong', hex: '#e5ad2d', note: 'hover' },
-  { name: 'accent-soft', varName: '--color-accent-soft', hex: 'rgba(249,192,65,0.18)', note: 'tint fills' },
-  { name: 'accent-ink', varName: '--color-accent-ink', hex: '#201402', note: 'ink on accent' },
+  { name: 'accent-soft', varName: '--color-accent-soft', hex: 'rgba(249,192,65,0.22)', note: 'tint · dark 0.18' },
+  { name: 'accent-ink', varName: '--color-accent-ink', hex: '#1a1612', note: 'ink on accent · dark #201402' },
 ];
 
 const SEMANTIC_SWATCHES: ReadonlyArray<Swatch> = [
-  { name: 'success', varName: '--color-success', hex: '#4ade80' },
-  { name: 'error', varName: '--color-error', hex: '#ef4444' },
-  { name: 'warning', varName: '--color-warning', hex: '#f59e0b' },
-  { name: 'info', varName: '--color-info', hex: '#60a5fa', note: 'Toggle ON' },
-  { name: 'skill', varName: '--color-skill', hex: '#a78bfa' },
-  { name: 'claude', varName: '--color-claude', hex: '#f2c94c', note: 'OpenCode dot' },
-  { name: 'muted', varName: '--color-muted', hex: '#6b625a' },
+  { name: 'success', varName: '--color-success', hex: '#22a355', note: 'dark #4ade80' },
+  { name: 'error', varName: '--color-error', hex: '#d33030', note: 'dark #ef4444' },
+  { name: 'warning', varName: '--color-warning', hex: '#d48806', note: 'dark #f59e0b' },
+  { name: 'info', varName: '--color-info', hex: '#2d6ecb', note: 'Toggle ON · dark #60a5fa' },
+  { name: 'skill', varName: '--color-skill', hex: '#7255d9', note: 'dark #a78bfa' },
+  { name: 'claude', varName: '--color-claude', hex: '#d5a82e', note: 'OpenCode dot · dark #f2c94c' },
+  { name: 'muted', varName: '--color-muted', hex: '#a8a097', note: 'dark #6b625a' },
 ];
 
 const SwatchTile = ({ swatch }: { swatch: Swatch }): JSX.Element => (
