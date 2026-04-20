@@ -1,0 +1,76 @@
+.tk-badge {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  gap: 5px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  font-family: var(--font-sans);
+  font-weight: var(--font-weight-medium);
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.tk-badge--size-small {
+  min-height: 24px;
+  height: 24px;
+  padding: 0 10px;
+  font-size: var(--font-size-xs);
+}
+
+.tk-badge--size-medium {
+  min-height: 32px;
+  height: 32px;
+  padding: 0 14px;
+  font-size: var(--font-size-md);
+}
+
+.tk-badge__icon {
+  display: inline-flex;
+  width: 12px;
+  height: 12px;
+  align-items: center;
+  justify-content: center;
+}
+
+.tk-badge--default {
+  background: var(--color-bg-input);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-subtle);
+}
+
+.tk-badge--success {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.tk-badge--error {
+  background: var(--color-error-soft);
+  color: var(--color-error);
+}
+
+.tk-badge--warning {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.tk-badge--info {
+  background: var(--color-info-soft);
+  color: var(--color-info);
+}
+
+.tk-badge--accent {
+  background: var(--color-accent);
+  color: var(--color-accent-ink);
+}
+
+.tk-badge--skill {
+  background: var(--color-skill-soft);
+  color: var(--color-skill);
+}
+
+.tk-badge--ghost {
+  background: transparent;
+  color: var(--color-text-secondary);
+  border-color: var(--color-border-subtle);
+}

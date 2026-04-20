@@ -23,13 +23,13 @@
 
 1. `tinker-prd.md` — canonical spec
 2. This file
-3. `knowledge/README.md` — shared research + feature reasoning + reference implementations (if present)
-4. `knowledge/context/tasks.md` — open work, status, priorities (if present)
-5. `knowledge/context/sessions/` — last 2–3 session summaries for continuity (if present)
+3. `agent-knowledge/README.md` — shared research + feature reasoning + reference implementations (if present)
+4. `agent-knowledge/context/tasks.md` — open work, status, priorities (if present)
+5. `agent-knowledge/context/sessions/` — last 2–3 session summaries for continuity (if present)
 6. `opencode.json`
 7. `packages/shared-types/src/`
 
-**If `knowledge/` is absent** (new contributor's fresh clone, or sparse repo): read `knowledge/README.md` bootstrap section — or if it doesn't exist yet, seed it from `tinker-prd.md` + `README.md`. The `knowledge/` folder is version-controlled and shared; contributors extend it as they work.
+**If `agent-knowledge/` is absent** (new contributor's fresh clone, or sparse repo): read `agent-knowledge/README.md` bootstrap section — or if it doesn't exist yet, seed it from `tinker-prd.md` + `README.md`. The `agent-knowledge/` folder is version-controlled and shared; contributors extend it as they work.
 
 **OpenCode SDK reference:** https://opencode.ai/docs/sdk/
 
@@ -166,12 +166,12 @@ How this shows up in practice:
 
 ## 10. Knowledge Base Discipline
 
-- **Before building**: check `knowledge/features/NN-*.md` for the matching spec + out-of-scope boundaries.
-- **Before deciding**: check `knowledge/product/decisions.md` — if a decision's already been made, respect it unless you're intentionally reopening it (then update the log).
-- **While working**: if you learn something non-obvious a future contributor will need, update the relevant `knowledge/*.md` file in the same PR.
-- **Ending a session**: append a summary to `knowledge/context/sessions/YYYY-MM-DD-HHMM.md` — prevents context loss for the next agent.
-- **Updating tasks**: move entries in `knowledge/context/tasks.md` as you start, block, or complete work.
-- **New reference material**: when you fetch an external article / research / vendor doc that informs architecture, process into `knowledge/reference/*.md` per the conventions in `knowledge/README.md`.
+- **Before building**: check `agent-knowledge/features/NN-*.md` for the matching spec + out-of-scope boundaries.
+- **Before deciding**: check `agent-knowledge/product/decisions.md` — if a decision's already been made, respect it unless you're intentionally reopening it (then update the log).
+- **While working**: if you learn something non-obvious a future contributor will need, update the relevant `agent-knowledge/*.md` file in the same PR.
+- **Ending a session**: append a summary to `agent-knowledge/context/sessions/YYYY-MM-DD-HHMM.md` — prevents context loss for the next agent.
+- **Updating tasks**: move entries in `agent-knowledge/context/tasks.md` as you start, block, or complete work.
+- **New reference material**: when you fetch an external article / research / vendor doc that informs architecture, process into `agent-knowledge/reference/*.md` per the conventions in `agent-knowledge/README.md`.
 
 ## 11. Things That Will Tempt You
 
@@ -182,44 +182,3 @@ How this shows up in practice:
 - "Let me add non-GPT providers." No. GPT-5.4 via Codex OAuth is the path.
 - "Let me store tokens in a file." No. Use the system keychain.
 
----
-
-## 12. Response Style — Caveman Mode
-
-Default response style for all prose output (chat replies, session summaries, PR descriptions, task notes). Conserves tokens during long build sessions without losing technical substance.
-
-### Rules
-
-- **Drop**: articles (a/an/the), filler (just/really/basically/actually/simply), pleasantries (sure/certainly/of course/happy to), hedging
-- **Fragments OK**. Pattern: `[thing] [action] [reason]. [next step].`
-- **Short synonyms** (big not extensive, fix not "implement a solution for")
-- **All technical substance stays**. Only fluff dies.
-
-### Not / Yes examples
-
-- Not: "Sure! I'd be happy to help. The issue you're experiencing is likely caused by..."
-- Yes: "Bug in auth middleware. Token expiry check use `<` not `<=`. Fix:"
-
-### Auto-clarity exceptions
-
-Drop caveman mode and write normally for:
-
-- Security warnings
-- Irreversible action confirmations (destructive git commands, deletions, force pushes)
-- Multi-step sequences where fragment order risks misread
-- User repeats a question or asks for clarification
-- Errors quoted exact (never paraphrased)
-
-Resume caveman after the clarity-required section ends.
-
-### What STAYS normal — do not cavemanify
-
-- **Code** — full types, proper naming, comments where logic isn't self-evident
-- **Commit messages** — conventional commits (`feat(scope): <summary>`); already terse by convention
-- **Knowledge base files** — use the vault convention (atomic bullets with `[YYYY-MM-DD]` prefix), not caveman prose
-- **Session summary Markdown structure** — headings and lists stay; only the prose inside them goes caveman
-- **User-facing error messages / UI copy** — must be readable by nontechnical users (product principle 1)
-
-### Turning it off
-
-If a user or session says `stop caveman` or `normal mode`, revert for that session. Default resumes in new sessions.

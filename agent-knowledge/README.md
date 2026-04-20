@@ -2,9 +2,11 @@
 type: index
 ---
 
-# Tinker Knowledge
+# Tinker Agent Knowledge
 
-Shared, version-controlled brain for Tinker. Lives in the repo. Every contributor's coding agent reads from it and writes back to it as work progresses.
+Shared, version-controlled brain for Tinker's coding agents. Lives in the repo. Every contributor's coding agent reads from it and writes back to it as work progresses.
+
+> **Not the same as `docs/`.** `docs/` is public, human-authored project documentation (authoritative, stable). `agent-knowledge/` is agent-facing scratchpad, work-in-progress specs, session logs, and research. Content graduates from `agent-knowledge/features/` to `docs/` when it stabilizes.
 
 ## Why This Exists
 
@@ -32,7 +34,7 @@ Without a shared knowledge base, every contributor's agent starts cold, asks the
 ## Structure
 
 ```
-knowledge/
+agent-knowledge/
 ├── README.md                     # This file
 ├── context/                      # Session-level state (updated frequently)
 │   ├── tasks.md                  # Open features + status + priorities
@@ -63,25 +65,25 @@ knowledge/
 - **Frontmatter** — every note has `type:` (`concept`, `tool`, `organization`, `person`, or `index`)
 - **Atomic bullets** — one fact per bullet, prefixed with `[YYYY-MM-DD]` ingestion date
 - **Dense and scannable** — no narrative prose, no filler phrases, no emojis unless part of source material
-- **Wikilinks** — `[[bare-filename]]` form (no paths); resolves anywhere in `knowledge/`
+- **Wikilinks** — `[[bare-filename]]` form (no paths); resolves anywhere in `agent-knowledge/`
 - **No sensitive info** — this is public in the repo; no personal PII, no private company data, no secrets
 - **Update timestamps** — when appending new facts, use today's date; don't rewrite old timestamps
 
 ## Bootstrap Guide (If This Folder Is Missing or Stale)
 
-If you're a new contributor's agent and `knowledge/` is missing, thin, or contradicts the current codebase:
+If you're a new contributor's agent and `agent-knowledge/` is missing, thin, or contradicts the current codebase:
 
 1. **Read `tinker-prd.md` first** — it's canonical
 2. **Read `CLAUDE.md` / `AGENTS.md`** — build principles
 3. **Read repo `README.md`** — public-facing project intent
-4. **Create `knowledge/README.md`** from this template if absent
+4. **Create `agent-knowledge/README.md`** from this template if absent
 5. **Seed the three pillars before building**:
    - `product/vision.md` — mission, target user, tech foundation
    - `product/decisions.md` — empty log; add entries as you learn what's out of scope
    - `context/tasks.md` — list of open features from the PRD
 6. **Add reference docs as you encounter them** — when an agent fetches an external article or reference, process it into `reference/*.md` per the conventions above
 7. **Write session summaries** — every agent session should end with a `context/sessions/YYYY-MM-DD-HHMM.md` entry
-8. **Don't let `knowledge/` drift** — if something in the PRD changes, update `product/vision.md` in the same PR
+8. **Don't let `agent-knowledge/` drift** — if something in the PRD changes, update `product/vision.md` in the same PR
 
 ## Update Discipline
 

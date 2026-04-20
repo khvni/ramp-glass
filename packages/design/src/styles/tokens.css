@@ -1,0 +1,87 @@
+:root {
+  color-scheme: dark;
+
+  /* bg (warm near-black) */
+  --color-bg-primary: #1a1612;
+  --color-bg-elevated: #221d17;
+  --color-bg-panel: #16120e;
+  --color-bg-input: #120f0c;
+  --color-bg-hover: #25201a;
+
+  /* border (warm-tinted white alpha) */
+  --color-border-subtle: rgba(255, 240, 220, 0.06);
+  --color-border-default: rgba(255, 240, 220, 0.1);
+  --color-border-strong: rgba(255, 240, 220, 0.18);
+
+  /* text (warm neutrals) */
+  --color-text-primary: #f5efe6;
+  --color-text-secondary: #a8a097;
+  --color-text-muted: #6f665c;
+  --color-text-inverse: #1a1612;
+
+  /* accent (amber) */
+  --color-accent: #f9c041;
+  --color-accent-strong: #e5ad2d;
+  --color-accent-soft: rgba(249, 192, 65, 0.18);
+  --color-accent-ring: rgba(249, 192, 65, 0.35);
+  --color-accent-ink: #201402;
+
+  /* semantic */
+  --color-success: #4ade80;
+  --color-success-soft: rgba(74, 222, 128, 0.18);
+  --color-error: #ef4444;
+  --color-error-soft: rgba(239, 68, 68, 0.18);
+  --color-warning: #f59e0b;
+  --color-warning-soft: rgba(245, 158, 11, 0.2);
+  --color-info: #60a5fa;
+  --color-info-soft: rgba(96, 165, 250, 0.2);
+  --color-skill: #a78bfa;
+  --color-skill-soft: rgba(167, 139, 250, 0.2);
+  --color-claude: #f2c94c;
+  --color-muted: #6b625a;
+
+  /* spacing (4px base) */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* radius */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 9999px;
+
+  /* typography */
+  --font-sans: "Host Grotesk Variable", "Host Grotesk", -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Monaco, Consolas, monospace;
+  --font-size-xs: 11px;
+  --font-size-sm: 12px;
+  --font-size-base: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-xxl: 28px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-normal: 1.45;
+  --line-height-relaxed: 1.6;
+  --letter-spacing-label: 0.08em;
+
+  /* motion */
+  --duration-fast: 120ms;
+  --duration-base: 160ms;
+  --duration-slow: 240ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasized: cubic-bezier(0.3, 0, 0, 1);
+}
