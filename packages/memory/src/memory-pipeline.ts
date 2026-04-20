@@ -65,13 +65,7 @@ const enqueueMemoryWrite = <T>(task: () => Promise<T>): Promise<T> => {
 
 const hydrateRunState = (row: MemoryRunRow | undefined, key: MemoryRunKey): MemoryRunState => {
   if (!row) {
-    return {
-      key,
-      status: 'idle',
-      lastStartedAt: null,
-      lastCompletedAt: null,
-      lastError: null,
-    };
+    return { key, status: 'idle', lastStartedAt: null, lastCompletedAt: null, lastError: null };
   }
 
   return {
@@ -98,19 +92,12 @@ const mergeAliases = (current: Record<string, unknown>, nextAliases: string[] | 
   const currentAliases = readStringArray(current.aliases);
   const aliases = Array.from(new Set([...currentAliases, ...(nextAliases ?? [])]));
 
-  if (aliases.length === 0) {
-    return current;
-  }
-
   // Set is monotonic over currentAliases, so identical length means nothing was added.
-  if (aliases.length === currentAliases.length) {
+  if (aliases.length === 0 || aliases.length === currentAliases.length) {
     return current;
   }
 
-  return {
-    ...current,
-    aliases,
-  };
+  return { ...current, aliases };
 };
 
 const normalizeUpdate = (update: MemoryEntityUpdate): MemoryEntityUpdate | null => {

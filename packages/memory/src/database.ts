@@ -98,17 +98,14 @@ const schema = [
   )`,
 ];
 
-const bootstrap = async (database: Database): Promise<Database> => {
-  for (const statement of schema) {
-    await database.execute(statement);
-  }
-
-  return database;
-};
-
 export const getDatabase = async (sqlUrl = DEFAULT_SQL_URL): Promise<Database> => {
   if (!databasePromise) {
-    databasePromise = Database.load(sqlUrl).then(bootstrap);
+    databasePromise = Database.load(sqlUrl).then(async (database) => {
+      for (const statement of schema) {
+        await database.execute(statement);
+      }
+      return database;
+    });
   }
 
   return databasePromise;

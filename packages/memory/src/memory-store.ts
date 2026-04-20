@@ -68,14 +68,7 @@ const getVaultEntityIds = async (database: Awaited<ReturnType<typeof getDatabase
   const rows = await database.select<Array<{ id: string; sources_json: string }>>('SELECT id, sources_json FROM entities');
 
   return rows
-    .filter((row) => {
-      try {
-        const sources = JSON.parse(row.sources_json) as EntitySource[];
-        return sources.some((source) => source.integration === 'vault');
-      } catch {
-        return false;
-      }
-    })
+    .filter((row) => (JSON.parse(row.sources_json) as EntitySource[]).some((source) => source.integration === 'vault'))
     .map((row) => row.id);
 };
 
@@ -343,26 +336,12 @@ export const findVaultNotePathByEntityName = async (name: string): Promise<strin
   );
 
   for (const row of rows) {
-    try {
-      const sources = JSON.parse(row.sources_json) as EntitySource[];
-      const vaultSource = sources.find((source) => source.integration === 'vault');
-      if (vaultSource?.externalId) {
-        return vaultSource.externalId;
-      }
-    } catch {
-      continue;
+    const sources = JSON.parse(row.sources_json) as EntitySource[];
+    const vaultSource = sources.find((source) => source.integration === 'vault');
+    if (vaultSource?.externalId) {
+      return vaultSource.externalId;
     }
   }
 
   return null;
-};
-
-export const runDailySynthesis = async (userId: string): Promise<{ summary: string }> => {
-  const recentEntities = await createMemoryStore().recentEntities(5);
-  const summary =
-    recentEntities.length === 0
-      ? `No recent entities available for ${userId}.`
-      : `Recent entities for ${userId}: ${recentEntities.map((entity) => entity.name).join(', ')}`;
-
-  return { summary };
 };

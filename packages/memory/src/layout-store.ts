@@ -50,16 +50,12 @@ export const serializeLayoutState = (state: LayoutState): string => {
   return JSON.stringify(payload);
 };
 
-const isVersionCompatible = (version: number): version is 1 => {
-  return version === CURRENT_LAYOUT_VERSION;
-};
-
 export const hydrateLayoutRow = (row: LayoutRow | undefined, userId: string): LayoutState | null => {
   if (!row) {
     return null;
   }
 
-  if (!isVersionCompatible(row.version)) {
+  if (row.version !== CURRENT_LAYOUT_VERSION) {
     console.warn(
       `Ignoring stored layout for user ${userId}: version ${row.version} is not compatible with app version ${CURRENT_LAYOUT_VERSION}.`,
     );
@@ -67,14 +63,15 @@ export const hydrateLayoutRow = (row: LayoutRow | undefined, userId: string): La
   }
 
   const model = parseDockviewModel(row.dockview_model_json);
-  if (model === null || typeof model !== 'object') {
+  if (!model || typeof model !== 'object') {
     console.warn(`Ignoring stored layout for user ${userId}: payload was not valid JSON.`);
     return null;
   }
 
   const candidate = model as Record<string, unknown>;
-  const dockviewModel = 'dockviewModel' in candidate ? candidate.dockviewModel : model;
-  const preferences = 'dockviewModel' in candidate ? normalizePreferences(candidate.preferences) : createDefaultWorkspacePreferences();
+  const hasWrapper = 'dockviewModel' in candidate;
+  const dockviewModel = hasWrapper ? candidate.dockviewModel : model;
+  const preferences = hasWrapper ? normalizePreferences(candidate.preferences) : createDefaultWorkspacePreferences();
 
   if (!dockviewModel || typeof dockviewModel !== 'object') {
     console.warn(`Ignoring stored layout for user ${userId}: payload was not valid JSON.`);
