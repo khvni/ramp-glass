@@ -16,12 +16,12 @@
 :root {
   color-scheme: light;
 
-  /* bg (near-white with a whisper of warmth — not sterile, not yellowed) */
-  --color-bg-primary: #fefcf8;
-  --color-bg-elevated: #ffffff;
-  --color-bg-panel: #f9f5ec;
-  --color-bg-input: #ffffff;
-  --color-bg-hover: #f4efe4;
+  /* bg — cool neutral canvas, warm cream on elevated surfaces (D23 layer reversal) */
+  --color-bg-primary: #f4f3f2;
+  --color-bg-elevated: #fefcf8;
+  --color-bg-panel: #ebe9e6;
+  --color-bg-input: #fefcf8;
+  --color-bg-hover: #ecebe9;
 
   /* border (ink alpha) */
   --color-border-subtle: rgba(26, 22, 18, 0.06);
@@ -107,6 +107,9 @@
   --shadow-toggle-knob: 0 1px 2px rgba(26, 22, 18, 0.18);
 
   --shadow-sm: 0 1px 2px rgba(26, 22, 18, 0.08);
+
+  /* modal scrim */
+  --color-scrim: rgba(26, 22, 18, 0.38);
 }
 
 [data-theme="dark"] {
@@ -158,4 +161,7 @@
   --shadow-toggle-knob: 0 1px 2px rgba(0, 0, 0, 0.35);
 
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+
+  /* modal scrim */
+  --color-scrim: rgba(0, 0, 0, 0.55);
 }

@@ -32,14 +32,14 @@
 }
 
 .tk-statusdot--pulse {
-  background: var(--color-accent);
+  background: var(--color-success);
   animation: tk-statusdot-pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes tk-statusdot-pulse {
   0%, 100% {
     opacity: 1;
-    box-shadow: 0 0 0 0 var(--color-accent-soft);
+    box-shadow: 0 0 0 0 var(--color-success-soft);
   }
   50% {
     opacity: 0.65;

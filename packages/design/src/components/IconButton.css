@@ -11,8 +11,8 @@
 }
 
 .tk-iconbutton--size-s {
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
 }
 
 .tk-iconbutton--size-m {
@@ -32,8 +32,8 @@
 }
 
 .tk-iconbutton--size-s .tk-iconbutton__icon {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .tk-iconbutton--size-m .tk-iconbutton__icon {
