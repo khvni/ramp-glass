@@ -1,9 +1,11 @@
 import { StrictMode, Suspense, lazy, type JSX } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/host-grotesk';
-import 'dockview-react/dist/styles/dockview.css';
 import { App } from './App.js';
+import { applyTheme, readTheme } from './theme.js';
 import './styles.css';
+
+applyTheme(readTheme() ?? 'light');
 
 const container = document.getElementById('root');
 if (!container) {
