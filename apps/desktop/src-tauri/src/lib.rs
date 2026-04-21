@@ -325,6 +325,7 @@ pub fn run() {
       commands::auth::auth_sign_in,
       commands::auth::auth_sign_out,
       commands::auth::auth_status,
+      commands::dialog::open_folder_picker,
       commands::opencode::start_opencode
     ])
     .setup(|app| {
