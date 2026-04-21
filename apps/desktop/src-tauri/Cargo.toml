@@ -33,3 +33,6 @@ tauri-plugin-sql = { version = "2", features = ["sqlite"] }
 tokio = { version = "1", features = ["io-util", "net", "time"] }
 url = "2"
 webbrowser = "1"
+
+[dev-dependencies]
+tempfile = "3"
