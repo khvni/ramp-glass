@@ -5,12 +5,20 @@ const STORAGE_KEY = 'tinker.theme';
 const isTheme = (value: string | null): value is Theme => value === 'light' || value === 'dark';
 
 export const readTheme = (): Theme | null => {
-  const raw = localStorage.getItem(STORAGE_KEY);
-  return isTheme(raw) ? raw : null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return isTheme(raw) ? raw : null;
+  } catch {
+    return null;
+  }
 };
 
 export const writeTheme = (theme: Theme): void => {
-  localStorage.setItem(STORAGE_KEY, theme);
+  try {
+    localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // privacy mode / quota / disabled storage — expected, swallow
+  }
 };
 
 export const applyTheme = (theme: Theme): void => {

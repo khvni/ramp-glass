@@ -13,7 +13,7 @@ const createStubStorage = (): StubStorage => {
   const store = new Map<string, string>();
   return {
     store,
-    getItem: (key) => (store.has(key) ? (store.get(key) ?? null) : null),
+    getItem: (key) => store.get(key) ?? null,
     setItem: (key, value) => {
       store.set(key, value);
     },
@@ -72,5 +72,29 @@ describe('theme', () => {
 
     applyTheme('light');
     expect(doc.documentElement.dataset.theme).toBe('light');
+  });
+
+  it('returns null when localStorage.getItem throws', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => {
+        throw new Error('denied');
+      },
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+    });
+    expect(readTheme()).toBeNull();
+  });
+
+  it('does not throw when localStorage.setItem throws', () => {
+    vi.stubGlobal('localStorage', {
+      getItem: () => null,
+      setItem: () => {
+        throw new Error('quota');
+      },
+      removeItem: () => {},
+      clear: () => {},
+    });
+    expect(() => writeTheme('dark')).not.toThrow();
   });
 });
