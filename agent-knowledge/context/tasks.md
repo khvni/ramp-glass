@@ -89,6 +89,14 @@ Open work + status + priorities. Agents update this file when starting, progress
 | `ask_user` overlay component | p2 | not started | Chat migration | Per [[D20]]. Keyboard-navigable. |
 | Chat pane wires `ask_user` events through overlay | p2 | not started | overlay component | Host-service emits `ask_user` events over SSE; Chat pane renders overlay. |
 
+## MVP pillars (per [[D25]])
+
+### M5 — Context usage badge
+
+| Task | Priority | Status | Notes |
+|------|----------|--------|-------|
+| M5.1 Research: OpenCode SDK field paths for token usage + context window (TIN-53) | p1 | review | `[2026-04-21]` Reference doc `agent-knowledge/reference/opencode-sdk-usage.md` drafted — PR pending. Unblocks M5.2, M5.3. |
+
 ## Cross-cutting / Infrastructure
 
 | Task | Priority | Status | Notes |
