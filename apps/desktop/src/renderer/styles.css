@@ -415,7 +415,7 @@ textarea {
   display: grid;
   place-items: center;
   padding: var(--space-8);
-  background: color-mix(in oklab, var(--color-bg-primary) 82%, transparent);
+  background: var(--color-scrim, rgba(26, 22, 18, 0.38));
   backdrop-filter: blur(8px);
   z-index: 20;
 }

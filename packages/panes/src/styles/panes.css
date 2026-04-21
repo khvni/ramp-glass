@@ -7,8 +7,8 @@
   width: 100%;
   min-height: 0;
   min-width: 0;
-  color: var(--color-text-base, inherit);
-  background: var(--color-surface-base, transparent);
+  color: var(--color-text-primary);
+  background: var(--color-bg-primary);
   font-family: var(--font-sans, system-ui, sans-serif);
 }
 
@@ -19,8 +19,8 @@
   align-items: stretch;
   justify-content: space-between;
   gap: var(--space-2, 8px);
-  border-bottom: 1px solid var(--color-border-base, rgba(255, 255, 255, 0.08));
-  background: var(--color-surface-raised-base, transparent);
+  border-bottom: 1px solid var(--color-border-subtle);
+  background: var(--color-bg-elevated);
   padding: var(--space-1, 4px) var(--space-2, 8px);
   min-height: 36px;
 }
@@ -44,7 +44,7 @@
 .tinker-panes-tabstrip__action {
   border: 1px solid transparent;
   background: transparent;
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
   border-radius: var(--radius-sm, 4px);
   padding: var(--space-1, 4px) var(--space-2, 8px);
   font: inherit;
@@ -53,8 +53,8 @@
 }
 
 .tinker-panes-tabstrip__action:hover:not(:disabled) {
-  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.06));
-  color: var(--color-text-strong, inherit);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .tinker-panes-tabstrip__action:disabled {
@@ -70,7 +70,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm, 4px);
   background: transparent;
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
   font: inherit;
   line-height: 1.2;
   cursor: pointer;
@@ -79,23 +79,23 @@
 }
 
 .tinker-panes-tab:hover {
-  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.06));
-  color: var(--color-text-base, inherit);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .tinker-panes-tab--active {
-  background: var(--color-surface-sunken, rgba(255, 255, 255, 0.08));
-  color: var(--color-text-strong, inherit);
-  border-color: var(--color-border-strong, rgba(255, 255, 255, 0.2));
+  background: var(--color-bg-panel);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
 }
 
 .tinker-panes-tab:focus-visible {
-  outline: 2px solid var(--color-accent-base, currentColor);
+  outline: 2px solid var(--color-accent);
   outline-offset: 2px;
 }
 
 .tinker-panes-tab[data-drop-target] {
-  box-shadow: inset 2px 0 0 var(--color-accent-base, currentColor);
+  box-shadow: inset 2px 0 0 var(--color-accent);
 }
 
 .tinker-panes-tab__label {
@@ -110,15 +110,15 @@
   width: 18px;
   height: 18px;
   border-radius: var(--radius-sm, 4px);
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
 
 .tinker-panes-tab__close:hover {
-  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.1));
-  color: var(--color-text-strong, inherit);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .tinker-panes-surface {
@@ -127,7 +127,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--color-surface-base, transparent);
+  background: var(--color-bg-primary);
 }
 
 .tinker-panes-empty {
@@ -135,7 +135,7 @@
   align-items: center;
   justify-content: center;
   flex: 1 1 auto;
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
 }
 
 /* ── Split tree ─────────────────────────────────────────────────────────── */
@@ -166,7 +166,7 @@
 .tinker-panes-resize {
   appearance: none;
   border: none;
-  background: var(--color-border-base, rgba(255, 255, 255, 0.08));
+  background: var(--color-border-subtle);
   padding: 0;
   margin: 0;
   position: relative;
@@ -174,7 +174,7 @@
 }
 
 .tinker-panes-resize:focus-visible {
-  outline: 2px solid var(--color-accent-base, currentColor);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -192,7 +192,7 @@
 
 .tinker-panes-resize:hover,
 .tinker-panes-resize:active {
-  background: var(--color-accent-base, currentColor);
+  background: var(--color-accent);
 }
 
 /* ── Stack (pane tab group) ─────────────────────────────────────────────── */
@@ -204,19 +204,19 @@
   min-width: 0;
   height: 100%;
   width: 100%;
-  background: var(--color-surface-base, transparent);
+  background: var(--color-bg-primary);
   position: relative;
   border: 1px solid transparent;
   transition: border-color 140ms ease, box-shadow 140ms ease;
 }
 
 .tinker-stack--active {
-  border-color: var(--color-accent-base, currentColor);
-  box-shadow: 0 0 0 1px var(--color-accent-base, currentColor) inset;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent) inset;
 }
 
 .tinker-stack[data-drop-center='true'] {
-  box-shadow: 0 0 0 2px var(--color-accent-base, currentColor) inset;
+  box-shadow: 0 0 0 2px var(--color-accent) inset;
 }
 
 .tinker-stack__tabs {
@@ -224,8 +224,8 @@
   align-items: stretch;
   gap: var(--space-1, 4px);
   padding: var(--space-1, 4px) var(--space-2, 8px);
-  background: var(--color-surface-raised-base, transparent);
-  border-bottom: 1px solid var(--color-border-base, rgba(255, 255, 255, 0.08));
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border-subtle);
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: thin;
@@ -242,7 +242,7 @@
   border: 1px solid transparent;
   border-radius: var(--radius-sm, 4px);
   background: transparent;
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
   font: inherit;
   font-size: var(--font-size-sm, 13px);
   line-height: 1.2;
@@ -257,14 +257,14 @@
 }
 
 .tinker-stack__tab:hover {
-  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.06));
-  color: var(--color-text-base, inherit);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .tinker-stack__tab--active {
-  background: var(--color-surface-sunken, rgba(255, 255, 255, 0.08));
-  color: var(--color-text-strong, inherit);
-  border-color: var(--color-border-strong, rgba(255, 255, 255, 0.2));
+  background: var(--color-bg-panel);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
 }
 
 .tinker-stack__tab[data-insert-before]::before,
@@ -274,7 +274,7 @@
   top: 2px;
   bottom: 2px;
   width: 2px;
-  background: var(--color-accent-base, currentColor);
+  background: var(--color-accent);
   border-radius: 1px;
 }
 
@@ -284,7 +284,7 @@
 .tinker-stack__tab-icon {
   display: inline-flex;
   align-items: center;
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
 }
 
 .tinker-stack__tab-label {
@@ -300,15 +300,15 @@
   width: 18px;
   height: 18px;
   border-radius: var(--radius-sm, 4px);
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
   font-size: 14px;
   line-height: 1;
   cursor: pointer;
 }
 
 .tinker-stack__tab-close:hover {
-  background: var(--color-surface-raised-base-hover, rgba(255, 255, 255, 0.1));
-  color: var(--color-text-strong, inherit);
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
 }
 
 .tinker-stack__body {
@@ -321,7 +321,7 @@
 
 .tinker-stack__missing {
   padding: var(--space-3, 12px);
-  color: var(--color-text-weak, inherit);
+  color: var(--color-text-secondary);
 }
 
 /* ── Drop overlay (5 zones) ─────────────────────────────────────────────── */
@@ -329,11 +329,11 @@
 .tinker-stack__drop {
   pointer-events: none;
   position: absolute;
-  background: var(--color-accent-base, currentColor);
+  background: var(--color-accent);
   opacity: 0.18;
-  border: 1px dashed var(--color-accent-base, currentColor);
+  border: 1px dashed var(--color-accent);
   transition: opacity 120ms ease, transform 160ms ease;
-  box-shadow: 0 0 0 1px var(--color-border-base, rgba(255, 255, 255, 0.08)) inset;
+  box-shadow: 0 0 0 1px var(--color-border-subtle) inset;
   z-index: 2;
 }
 

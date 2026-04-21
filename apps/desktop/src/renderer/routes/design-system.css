@@ -391,7 +391,7 @@
   align-self: flex-end;
   background: var(--color-accent-soft);
   color: var(--color-text-primary);
-  border-color: rgba(249, 192, 65, 0.28);
+  border-color: var(--color-accent-ring);
 }
 
 .ds-msg--assistant {
