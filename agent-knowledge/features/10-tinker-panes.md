@@ -1,7 +1,10 @@
 ---
 type: concept
 tags: [panes, layout, design-system]
+mvp_linked: true
 ---
+
+> **[2026-04-21] Architectural reference retained; MVP execution continues under [[20-mvp-panes-workspace]] (M1) per [[decisions]] D25.** This file stays canonical for `@tinker/panes` architecture + API shape. Atomic MVP tasks live in `context/tasks.md` §M1.
 
 # Feature 10 — `@tinker/panes` workspace layout
 
@@ -122,7 +125,7 @@ Parallel-agent work order, one PR per bullet:
 2. **Today pane** — register `{ kind: 'today' }`.
 3. **Scheduler pane** — register `{ kind: 'scheduler' }`.
 4. **Settings pane** — register `{ kind: 'settings' }`.
-5. **Dojo pane** — register `{ kind: 'dojo' }`; drop its `params` hack.
+5. **Playbook pane** — register `{ kind: 'playbook' }`; drop its `params` hack.
 6. **VaultBrowser pane** — register `{ kind: 'vault-browser' }`.
 7. **File renderers** (CodeRenderer, CsvRenderer, HtmlRenderer, ImageRenderer, MarkdownEditor, MarkdownRenderer) — each registers a kind; `file-open.ts` maps file extension → `pane.kind`.
 8. **Retire Dockview** — remove `dockview-react` dep; replace `LayoutState.dockviewModel` in `@tinker/shared-types` with `WorkspaceState`; add a one-shot migration reading old snapshots and dropping them (layout is re-populatable from defaults).
