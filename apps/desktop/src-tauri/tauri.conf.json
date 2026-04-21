@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../dist",
     "devUrl": "http://127.0.0.1:1420",
-    "beforeDevCommand": "pnpm exec node ./scripts/prepare-opencode-sidecar.mjs && pnpm exec vite --host 127.0.0.1 --port 1420",
+    "beforeDevCommand": "pnpm exec node ./scripts/dev-web-or-reuse.mjs",
     "beforeBuildCommand": "pnpm exec node ./scripts/prepare-opencode-sidecar.mjs && pnpm exec vite build"
   },
   "app": {

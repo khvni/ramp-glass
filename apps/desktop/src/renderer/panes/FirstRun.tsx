@@ -5,6 +5,8 @@ import type { MCPStatus } from '../components/IntegrationsStrip.js';
 import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 
 type FirstRunProps = {
+  nativeRuntimeAvailable?: boolean;
+  runtimeNotice?: string | null;
   modelConnected: boolean;
   modelAuthBusy: boolean;
   modelAuthMessage: string | null;
@@ -24,6 +26,8 @@ type FirstRunProps = {
 };
 
 export const FirstRun = ({
+  nativeRuntimeAvailable = true,
+  runtimeNotice = null,
   modelAuthBusy,
   modelAuthMessage,
   modelConnected,
@@ -47,22 +51,27 @@ export const FirstRun = ({
         <p className="tinker-eyebrow">First run</p>
         <h1>Tinker is ready to set up your local workspace</h1>
         <p className="tinker-muted">
-          Connect GPT-5.4 if you want chat live on first boot. Google and GitHub are optional. Skip them and Tinker
-          still works as a local coding agent.
+          Connect an AI model if you want chat live on first boot. Signing in with Google, GitHub, or Microsoft is
+          optional. Skip them and Tinker still works as a local coding agent.
         </p>
+        {runtimeNotice ? <p className="tinker-muted">{runtimeNotice}</p> : null}
 
         <div className="tinker-first-run-grid">
           <article className="tinker-list-item">
-            <h3>1. GPT-5.4 sign-in</h3>
+            <h3>1. AI model sign-in</h3>
             <p className="tinker-muted">
               {modelConnected
                 ? 'Connected through OpenCode.'
-                : 'Optional on first launch. Tinker asks OpenCode to run provider auth instead of duplicating OpenAI OAuth.'}
+                : 'Optional on first launch. OpenCode owns provider/model auth — Tinker hands off to it instead of running its own.'}
             </p>
             {modelAuthMessage ? <p className="tinker-muted">{modelAuthMessage}</p> : null}
             <div className="tinker-inline-actions">
-              <Button variant="primary" onClick={() => void onConnectModel()} disabled={modelAuthBusy}>
-                {modelConnected ? 'Reconnect GPT-5.4' : modelAuthBusy ? 'Connecting…' : 'Connect GPT-5.4'}
+              <Button
+                variant="primary"
+                onClick={() => void onConnectModel()}
+                disabled={!nativeRuntimeAvailable || modelAuthBusy}
+              >
+                {modelConnected ? 'Reconnect model' : modelAuthBusy ? 'Connecting…' : 'Connect model'}
               </Button>
             </div>
           </article>
@@ -73,10 +82,18 @@ export const FirstRun = ({
               Google unlocks Gmail, Calendar, Drive. GitHub unlocks repos, issues, and PRs. Both stay optional.
             </p>
             <div className="tinker-inline-actions">
-              <Button variant="secondary" onClick={() => void onConnectGoogle()} disabled={googleAuthBusy}>
+              <Button
+                variant="secondary"
+                onClick={() => void onConnectGoogle()}
+                disabled={!nativeRuntimeAvailable || googleAuthBusy}
+              >
                 {googleAuthBusy ? 'Signing in…' : sessions.google ? 'Reconnect Google' : 'Sign in with Google'}
               </Button>
-              <Button variant="secondary" onClick={() => void onConnectGithub()} disabled={githubAuthBusy}>
+              <Button
+                variant="secondary"
+                onClick={() => void onConnectGithub()}
+                disabled={!nativeRuntimeAvailable || githubAuthBusy}
+              >
                 {githubAuthBusy ? 'Signing in…' : sessions.github ? 'Reconnect GitHub' : 'Sign in with GitHub'}
               </Button>
             </div>
@@ -88,10 +105,10 @@ export const FirstRun = ({
             <h3>3. Pick a vault</h3>
             <p className="tinker-muted">{vaultPath ?? 'Choose existing vault or create new local knowledge base.'}</p>
             <div className="tinker-inline-actions">
-              <Button variant="secondary" onClick={() => void onSelectVault()}>
+              <Button variant="secondary" onClick={() => void onSelectVault()} disabled={!nativeRuntimeAvailable}>
                 Select existing vault
               </Button>
-              <Button variant="ghost" onClick={() => void onCreateVault()}>
+              <Button variant="ghost" onClick={() => void onCreateVault()} disabled={!nativeRuntimeAvailable}>
                 Create default vault
               </Button>
             </div>
@@ -101,7 +118,7 @@ export const FirstRun = ({
         <IntegrationsStrip mcpStatus={mcpStatus} sessions={sessions} />
 
         <div className="tinker-actions" style={{ marginTop: 'var(--space-6)' }}>
-          <Button variant="primary" onClick={onContinue}>
+          <Button variant="primary" onClick={onContinue} disabled={!nativeRuntimeAvailable}>
             Open workspace
           </Button>
         </div>

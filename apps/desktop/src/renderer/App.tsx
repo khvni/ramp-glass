@@ -20,6 +20,7 @@ import type { MCPStatus } from './components/IntegrationsStrip.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import { FirstRun } from './panes/FirstRun.js';
 import { createWorkspaceClient, getOpencodeDirectory, OPENCODE_OPENAI_PROVIDER_ID } from './opencode.js';
+import { isTauriRuntime, WEB_PREVIEW_NOTICE } from './runtime.js';
 import { Workspace } from './workspace/Workspace.js';
 
 type ReadyAppState = {
@@ -53,6 +54,11 @@ const VAULT_REINDEX_DEBOUNCE_MS = 300;
 const OPENCODE_AUTH_HOST = 'auth.openai.com';
 const EMPTY_PROVIDER_BUSY: ProviderBusyState = { google: false, github: false };
 const EMPTY_PROVIDER_MESSAGES: ProviderMessageState = { google: null, github: null };
+const WEB_PREVIEW_CONNECTION: OpencodeConnection = {
+  baseUrl: 'http://127.0.0.1:0',
+  username: 'preview',
+  password: 'preview',
+};
 
 const withDefaultSessions = (status: Partial<SSOStatus> | null | undefined): SSOStatus => {
   return {
@@ -158,7 +164,7 @@ const probeModelConnection = async (connection: OpencodeConnection, vaultPath: s
   try {
     return await isModelConnected(connection, vaultPath);
   } catch (error) {
-    console.warn('Could not determine whether GPT-5.4 is connected. Continuing disconnected.', error);
+    console.warn('Could not determine whether an AI model is connected via OpenCode. Continuing disconnected.', error);
     return false;
   }
 };
@@ -211,7 +217,7 @@ const connectModelProvider = async (connection: OpencodeConnection, vaultPath: s
   await openExternal(authorizationUrl.toString());
 
   if (!(await waitForModelConnection(connection, vaultPath))) {
-    throw new Error('OpenCode did not finish connecting GPT-5.4 before authorization timed out.');
+    throw new Error('OpenCode did not finish connecting the AI model before authorization timed out.');
   }
 };
 
@@ -221,6 +227,7 @@ const disconnectModelProvider = async (connection: OpencodeConnection, vaultPath
 };
 
 export const App = (): JSX.Element => {
+  const nativeRuntime = useMemo(() => isTauriRuntime(), []);
   const memoryStore = useMemo(() => createMemoryStore(), []);
   const layoutStore = useMemo(() => createLayoutStore(), []);
   const schedulerStore = useMemo(() => createScheduledJobStore(), []);
@@ -234,6 +241,12 @@ export const App = (): JSX.Element => {
   const [memorySweepState, setMemorySweepState] = useState<MemoryRunState | null>(null);
   const [memorySweepBusy, setMemorySweepBusy] = useState(false);
   const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
+
+  const requireNativeRuntime = (action: string): void => {
+    if (!nativeRuntime) {
+      throw new Error(`${action} is unavailable in browser preview. Use pnpm dev:desktop for native app flows.`);
+    }
+  };
 
   const bumpSchedulerRevision = (): void => {
     setState((current) =>
@@ -259,6 +272,30 @@ export const App = (): JSX.Element => {
 
     void (async () => {
       try {
+        if (!nativeRuntime) {
+          if (!active) {
+            return;
+          }
+
+          setState({
+            status: 'ready',
+            layoutStore,
+            memoryStore,
+            skillStore,
+            schedulerStore,
+            opencode: WEB_PREVIEW_CONNECTION,
+            sessions: withDefaultSessions(null),
+            mcpStatus: {},
+            vaultPath: null,
+            onboarded: false,
+            modelConnected: false,
+            vaultRevision: 0,
+            activeSkillsRevision: 0,
+            schedulerRevision: 0,
+          });
+          return;
+        }
+
         const [opencode, sessions] = await Promise.all([invoke<OpencodeConnection>('get_opencode_connection'), readAuthStatus()]);
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
 
@@ -315,10 +352,10 @@ export const App = (): JSX.Element => {
     return () => {
       active = false;
     };
-  }, [layoutStore, memoryStore, schedulerStore, skillStore, vaultService]);
+  }, [layoutStore, memoryStore, nativeRuntime, schedulerStore, skillStore, vaultService]);
 
   useEffect(() => {
-    if (state.status !== 'ready' || !state.vaultPath) {
+    if (!nativeRuntime || state.status !== 'ready' || !state.vaultPath) {
       return;
     }
 
@@ -390,10 +427,10 @@ export const App = (): JSX.Element => {
       }
       unsubscribe();
     };
-  }, [state.status, state.status === 'ready' ? state.vaultPath : null, vaultService, skillStore]);
+  }, [nativeRuntime, state.status, state.status === 'ready' ? state.vaultPath : null, vaultService, skillStore]);
 
   useEffect(() => {
-    if (state.status !== 'ready') {
+    if (!nativeRuntime || state.status !== 'ready') {
       schedulerEngineRef.current = null;
       return;
     }
@@ -428,10 +465,17 @@ export const App = (): JSX.Element => {
         schedulerEngineRef.current = null;
       }
     };
-  }, [state.status, state.status === 'ready' ? state.opencode : null, state.status === 'ready' ? state.schedulerStore : null, state.status === 'ready' ? state.vaultPath : null, vaultService]);
+  }, [
+    nativeRuntime,
+    state.status,
+    state.status === 'ready' ? state.opencode : null,
+    state.status === 'ready' ? state.schedulerStore : null,
+    state.status === 'ready' ? state.vaultPath : null,
+    vaultService,
+  ]);
 
   useEffect(() => {
-    if (state.status !== 'ready') {
+    if (!nativeRuntime || state.status !== 'ready') {
       return;
     }
 
@@ -500,6 +544,7 @@ export const App = (): JSX.Element => {
       }
     };
   }, [
+    nativeRuntime,
     state.status,
     state.status === 'ready' ? state.modelConnected : false,
     state.status === 'ready' ? state.opencode.baseUrl : null,
@@ -547,6 +592,7 @@ export const App = (): JSX.Element => {
   };
 
   const refreshWorkspaceConnection = async (): Promise<void> => {
+    requireNativeRuntime('Restarting OpenCode');
     const opencode = await invoke<OpencodeConnection>('restart_opencode');
     const nextState = await reloadConnectionState(opencode, state.vaultPath);
 
@@ -564,6 +610,7 @@ export const App = (): JSX.Element => {
   };
 
   const setVaultPath = async (config: VaultConfig): Promise<void> => {
+    requireNativeRuntime('Selecting a vault');
     await vaultService.init(config);
     await indexVault(config);
     await skillStore.init(config.path);
@@ -636,9 +683,10 @@ export const App = (): JSX.Element => {
 
   const handleConnectModel = async (): Promise<void> => {
     setModelAuthBusy(true);
-    setModelAuthMessage('Waiting for OpenCode to finish GPT-5.4 sign-in…');
+    setModelAuthMessage('Waiting for OpenCode to finish AI-model sign-in…');
 
     try {
+      requireNativeRuntime('Connecting AI model');
       await connectModelProvider(state.opencode, state.vaultPath);
       setState((current) =>
         current.status !== 'ready'
@@ -648,7 +696,7 @@ export const App = (): JSX.Element => {
               modelConnected: true,
             },
       );
-      setModelAuthMessage('GPT-5.4 connected through OpenCode.');
+      setModelAuthMessage('AI model connected through OpenCode.');
     } catch (error) {
       setModelAuthMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -661,6 +709,7 @@ export const App = (): JSX.Element => {
     setModelAuthMessage(null);
 
     try {
+      requireNativeRuntime('Disconnecting AI model');
       await disconnectModelProvider(state.opencode, state.vaultPath);
       setState((current) =>
         current.status !== 'ready'
@@ -670,7 +719,7 @@ export const App = (): JSX.Element => {
               modelConnected: false,
             },
       );
-      setModelAuthMessage('GPT-5.4 disconnected.');
+      setModelAuthMessage('AI model disconnected.');
     } catch (error) {
       setModelAuthMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -683,6 +732,7 @@ export const App = (): JSX.Element => {
     setProviderMessage(provider, provider === 'google' ? 'Waiting for Google sign-in…' : 'Waiting for GitHub sign-in…');
 
     try {
+      requireNativeRuntime(`Connecting ${provider === 'google' ? 'Google' : 'GitHub'}`);
       const session = await invoke<SSOSession>('auth_sign_in', { provider });
       if (provider === 'google' && session.refreshToken.length === 0) {
         throw new Error('Google sign-in did not return refresh token. Try again.');
@@ -717,6 +767,7 @@ export const App = (): JSX.Element => {
     setProviderMessage(provider, null);
 
     try {
+      requireNativeRuntime(`Disconnecting ${provider === 'google' ? 'Google' : 'GitHub'}`);
       await invoke('auth_sign_out', { provider });
 
       if (provider === 'github') {
@@ -744,6 +795,7 @@ export const App = (): JSX.Element => {
   };
 
   const handleCreateVault = async (): Promise<void> => {
+    requireNativeRuntime('Creating the default vault');
     await setVaultPath({
       path: await getDefaultVaultPath(),
       isNew: true,
@@ -751,6 +803,7 @@ export const App = (): JSX.Element => {
   };
 
   const handlePickVault = async (): Promise<void> => {
+    requireNativeRuntime('Selecting an existing vault');
     const vaultPath = await selectVault();
     if (vaultPath) {
       await setVaultPath({ path: vaultPath, isNew: false });
@@ -758,6 +811,10 @@ export const App = (): JSX.Element => {
   };
 
   const finishOnboarding = (): void => {
+    if (!nativeRuntime) {
+      return;
+    }
+
     window.localStorage.setItem(ONBOARDING_KEY, '1');
     setState((current) =>
       current.status !== 'ready'
@@ -778,10 +835,14 @@ export const App = (): JSX.Element => {
     await engine.runNow(jobId);
   };
 
+  const workspaceAvailable = nativeRuntime && state.onboarded;
+
   return (
     <div className="tinker-app">
-      {!state.onboarded ? (
+      {!workspaceAvailable ? (
         <FirstRun
+          nativeRuntimeAvailable={nativeRuntime}
+          runtimeNotice={nativeRuntime ? null : WEB_PREVIEW_NOTICE}
           modelConnected={state.modelConnected}
           modelAuthBusy={modelAuthBusy}
           modelAuthMessage={modelAuthMessage}
