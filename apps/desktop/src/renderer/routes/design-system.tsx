@@ -198,9 +198,6 @@ const ComponentsTab = (): JSX.Element => {
         </Row>
         <Row>
           <ClickableBadge variant="info">To-Dos: 2/3</ClickableBadge>
-          <ClickableBadge variant="accent">Accent</ClickableBadge>
-          <ClickableBadge variant="skill">Skill</ClickableBadge>
-          <ClickableBadge variant="ghost">Ghost</ClickableBadge>
         </Row>
       </Section>
 
