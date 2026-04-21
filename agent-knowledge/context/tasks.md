@@ -80,6 +80,12 @@ Open work + status + priorities. Agents update this file when starting, progress
 | Expose workspace metadata API over host-service | p2 | not started | host-service scaffold + workspace-sidebar | `POST /workspace.metadata` from contributors; `GET /workspace.cards` for the sidebar. |
 | Shell composition: WorkspaceSidebar + Workspace + Titlebar | p2 | not started | workspace-sidebar scaffold | Replace current `Workspace.tsx` shell layout. |
 
+### M2 — Folder-scoped session + chat history
+
+| Task | Priority | Status | Depends on | Notes |
+|------|----------|--------|------------|-------|
+| TIN-18 — Tauri command `start_opencode(folder, user_id, memory_subdir)` | p1 | review | — | PR #TBD. Folder-scoped spawn + `/health` poll + `~/.tinker/manifests/<session-id>.json` (0600 on unix) + detached drain task for D17 unref. Follow-up: TIN-108 to delete global bootstrap path. |
+
 ### Chat + boot UX ([[14-session-history-windowing]] + [[15-connection-gate]] + [[D20]])
 
 | Task | Priority | Status | Depends on | Notes |

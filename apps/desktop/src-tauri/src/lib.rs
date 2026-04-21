@@ -122,7 +122,7 @@ fn ensure_main_window(app: &tauri::AppHandle) -> Result<(), String> {
 #[tauri::command]
 async fn restart_opencode(app: tauri::AppHandle) -> Result<OpencodeConnection, String> {
   stop_opencode(&app);
-  start_opencode(&app).await?;
+  bootstrap_opencode(&app).await?;
   let state = app.state::<OpencodeState>();
   clone_opencode_connection(&state)
 }
@@ -202,7 +202,7 @@ async fn wait_for_opencode_connection(
   }
 }
 
-async fn start_opencode(app: &tauri::AppHandle) -> Result<(), String> {
+async fn bootstrap_opencode(app: &tauri::AppHandle) -> Result<(), String> {
   let state = app.state::<OpencodeState>();
   if state.child.lock().map_err(|_| "OpenCode state lock was poisoned.".to_string())?.is_some() {
     return Ok(());
@@ -324,11 +324,12 @@ pub fn run() {
       restart_opencode,
       commands::auth::auth_sign_in,
       commands::auth::auth_sign_out,
-      commands::auth::auth_status
+      commands::auth::auth_status,
+      commands::opencode::start_opencode
     ])
     .setup(|app| {
       tauri::async_runtime::block_on(async {
-        start_opencode(&app.handle()).await?;
+        bootstrap_opencode(&app.handle()).await?;
         ensure_main_window(&app.handle())?;
         Ok::<(), String>(())
       })
