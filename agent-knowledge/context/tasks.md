@@ -116,6 +116,16 @@ Open work + status + priorities. Agents update this file when starting, progress
 | Latent Briefing / KV cache compaction | rejected | See [[decisions]] — requires self-hosted model; wrong for nontechnical UX |
 | Cloud sync | rejected | Local-first principle |
 
+## MVP (D25) — atomic tasks tracked here until D25 docs merge to main
+
+> Canonical MVP matrix lives on the `claude/bold-panini` branch (commits `817581a` + `a648742`). Feature branches are landing against main ahead of that merge; track status here until the D25 refocus lands.
+
+### M2 — Folder-scoped session
+
+| Task | Linear | Priority | Status | PR | Notes |
+|------|--------|----------|--------|----|-------|
+| M2.3 Tauri command `open_folder_picker` | TIN-17 | p1 | review | (pending) | `apps/desktop/src-tauri/src/commands/dialog.rs`, typed wrapper in `apps/desktop/src/bindings.ts` |
+
 ## How to Update This File
 
 - **Starting a feature** → change status to `in progress`, add your session ID in Notes if helpful
