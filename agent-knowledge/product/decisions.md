@@ -145,7 +145,7 @@ Log of what's explicitly OUT of scope or deferred, with reasoning. Coding agents
 - **How to apply**:
   - New panes register with `PaneRegistry` keyed by `pane.kind`.
   - Layout state serializes via `selectWorkspaceSnapshot()`; persistence uses the `WorkspaceState<TData>` type, not Dockview's JSON.
-  - Migration order (parallel agents): Chat → Today → Scheduler → Settings → Dojo → VaultBrowser → file renderers. Each migration is its own PR with the matching pane moving to a `kind` in the registry.
+  - Migration order (parallel agents): Chat → Today → Scheduler → Settings → Playbook → VaultBrowser → file renderers. Each migration is its own PR with the matching pane moving to a `kind` in the registry.
   - Don't add new `dockview-react` imports. Don't extend `packages/shared-types/LayoutState.dockviewModel`.
   - Remove the `dockview-react` dependency in the PR that ships the last migrated pane.
 - **Reference**: See `agent-knowledge/reference/panes-heritage.md` for the architectural synthesis (cmux + OpenCode + Superset) behind this choice.
@@ -216,10 +216,43 @@ Log of what's explicitly OUT of scope or deferred, with reasoning. Coding agents
   - Don't introduce light-mode branches in component CSS — tokens are theme-aware, components stay theme-neutral.
   - If `prefers-color-scheme` respect becomes desired later, route it through the same `[data-theme]` attribute (set once at app boot), not per-component media queries.
 
+### `[2026-04-20]` D24 — Rename Dojo → Playbook, Sensei → Coach
+- **Decision**: Drop the martial-arts loan. Tinker's skill marketplace is the **Playbook**; the role-based skill discovery layer is **Coach**. Ramp Glass keeps "Dojo" / "Sensei" in its own product; Tinker has its own names.
+- **Why**: Two pressures.
+  1. The martial-arts frame is a direct lift from Ramp — we are consumer-OSS and should not be read as a Glass clone (per [[D1]]). Distinct names reinforce that.
+  2. Dojo/Sensei require cultural-loan vocabulary that doesn't carry equally across audiences. Playbook/Coach is idiomatic English (sports + business) and preserves the same "curated collection + a guide who picks the right one" mental model without the loan.
+- **How to apply**:
+  - Feature files: `02-playbook-skill-marketplace.md` + `05-coach-skill-discovery.md` (old filenames kept as `aliases:` frontmatter for searchability).
+  - Pane + component names: `Playbook.tsx` / `Playbook` component; pane `kind: 'playbook'`.
+  - Future package: `packages/coach` (not scaffolded yet — see [[05-coach-skill-discovery]]).
+  - CSS class prefix: `.tinker-playbook-*` (replaced `.tinker-dojo-*`).
+  - UI copy: eyebrow / heading "Playbook"; prompt-injection header uses "The following Playbook skills are active…".
+  - Reference material about Ramp (`ramp-glass.md`, `ramp-ai-adoption.md`, `claude-cowork.md`) keeps the original "Dojo" / "Sensei" terms when describing Ramp — Tinker's rename does not rewrite history of another product.
+  - Don't reintroduce "Dojo" or "Sensei" for Tinker-context surfaces (UI, features, code, decisions). Old session summaries stay as-is (historical record).
+- **Persistence note**: persisted Dockview layouts predating the rename carry `component: 'dojo'` IDs that will fail to render against the new `'playbook'` registry key. We accept this pre-v1 breakage because the full Dockview schema is being retired under [[D16]] — users re-open the pane (via Chat "Save as skill" or future LeftRail nav) and the new snapshot saves with the correct key. Do not add a backwards-compat alias to the component registry (TypeScript forbids unknown `TabKind` keys anyway).
+
+### `[2026-04-21]` D25 — MVP refocus: ship one chat interface perfectly, defer everything else
+
+- **[2026-04-21] Amended same-day**: Better Auth (identity) is IN scope for MVP. Chat histories are per-user and must persist to the session folder so the app knows what was said where. See pillar M8 + [[28-mvp-identity]]. The rest of the deferral list stands.
+
+- **Decision**: Tinker v0.1 ships exactly eight pillars — panes+tabs workspace, folder-scoped sessions, in-line doc renderer, markdown-rendered chat + model picker, context-usage badge, desktop-native memory filesystem, three preloaded auth-free MCP servers (qmd, smart-connections, exa), and a **Better Auth identity layer with per-user chat-history persistence** (Google + GitHub + Microsoft providers only). Every other feature in the existing backlog (Playbook, Coach, Scheduler, Attention, Workspace Sidebar, Host-service split, full Connection gate, Sub-agents, Session history windowing, full entity-memory pipeline, enterprise SSO / SAML / SCIM, additional MCP integrations beyond the three preloaded, automations, custom agents) is **deferred to post-MVP** and marked as such in the feature files.
+- **Why**:
+  1. **Breadth was drowning depth.** 15 features in-flight, each 30-70% done, zero perfect. A foundation nobody is shipping on top of is not a foundation — it's overhead.
+  2. **MVP must demonstrate one loop perfectly.** Open a folder → chat with OpenCode in it → see markdown-rendered replies → open any file referenced → search memory via built-in MCP. If that loop is tight, every deferred feature slots in cleanly. If it isn't, deferred features inherit brokenness.
+  3. **Atomic tasks enable async agent parallelism.** Thin slices (≤1 PR each, explicit acceptance criteria) let delegated agents open PRs without coordinating, which is the unlock the user is targeting.
+- **How to apply**:
+  - Backlog enumerated in `agent-knowledge/context/tasks.md` under **M0 — MVP** section. Post-MVP table stays below as historical scope.
+  - New MVP feature specs live in `agent-knowledge/features/20–27-mvp-*.md`. Old feature files (01–15) keep their content but gain `deferred: post-mvp` in frontmatter + a header note pointing to D25.
+  - Any PR outside the M0 table without an explicit "unblocks MVP task X" rationale gets rejected — even if code is good.
+  - Re-entry bar for a deferred feature: MVP must ship + user must ask for it. No pre-emptive "while we're here" adds.
+  - Deletion vs deferral: feature *files* stay (reasoning > LOC). Runtime *code* for deferred features (scheduler, playbook, attention, auth-sidecar) may stay in-tree but MUST NOT be wired into `Workspace.tsx` / `App.tsx` routing. Dead code is acceptable short-term; dead code on the critical-path UI is not.
+- **Non-goals reaffirmed** (from existing PRD §6, relisted so MVP agents don't drift): multi-provider model support, cloud sync, mobile dispatch, enterprise SSO (SAML / SCIM / dedicated-tenant federation — stays per D1 / D8), legacy desktop-shell compatibility, prompt marketplace. Plus D25 adds: no entity extraction / FTS indexing (memory = flat markdown files read top-N-recent), no vault-wide indexing (folder scope = session scope), no sub-agent orchestration, no scheduled jobs, no additional MCP integrations beyond qmd / smart-connections / exa (built-in integrations like GitHub / Linear / Gmail wait until post-MVP), no Playbook / Coach skill marketplace.
+- **In scope for MVP identity**: Google + GitHub + Microsoft consumer OAuth via Better Auth (per D2 / D4). Per-user chat-history persistence to `<session-folder>/.tinker/chats/<user-id>/<session-id>.jsonl`. Per-user memory scoping. Tokens in OS keychain (D5).
+
 ## Open Questions (not yet decided)
 
 - **Scheduler implementation**: in-process TypeScript cron vs. OS-level (launchd/Task Scheduler/systemd). Leaning in-process for cross-platform simplicity; revisit when app sleep/wake behavior is tested.
-- **Dojo skill storage**: vault filesystem (human-readable, Git-friendly) vs. SQLite (faster queries). Leaning vault for human readability; Sensei can build an SQLite index on top.
+- **Playbook skill storage**: vault filesystem (human-readable, Git-friendly) vs. SQLite (faster queries). Leaning vault for human readability; Coach can build an SQLite index on top.
 - **Memory pipeline trigger**: time-based (every 24hr) vs. event-based (on tool use) vs. hybrid. Glass uses time-based; Tinker likely hybrid — daily sweep + incremental on tool use.
 
 ## Connections

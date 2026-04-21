@@ -3,7 +3,10 @@ type: concept
 tags: [tinker, feature, workspace, dockview, ui, persistence]
 status: review
 priority: p1
+deferred: post-mvp-partial
 ---
+
+> **[2026-04-21] MVP scope folded into [[20-mvp-panes-workspace]] (M1) per [[decisions]] D25.** MVP ships a single-Chat-pane default; multi-pane split defaults + tab-group persistence nuance deferred. Persistence still via `WorkspaceState<TData>`.
 
 # Feature 07 — Workspace Persistence + Split-Pane UI
 
@@ -34,7 +37,7 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 
 ### v2 / later
 - Workspace profiles (different layouts for different work modes — "research mode" vs "email drafting mode")
-- Saved layout presets (users publish to Dojo-adjacent repo)
+- Saved layout presets (users publish to a Playbook-adjacent repo)
 - Multi-window support (not v1 per Tauri simplicity)
 
 ## Architecture
@@ -63,7 +66,7 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 | `code` | Lazy syntax-highlighted code renderer (`highlight.js`) | Agent creates/edits code file |
 | `image` | Image viewer | Agent outputs image, user opens image file |
 | `text` | Plain text fallback | Any other file type |
-| `skill` | Skill markdown editor (special mode) | User edits a skill via Dojo |
+| `skill` | Skill markdown editor (special mode) | User edits a skill via the Playbook |
 
 ### Auto-open behavior
 
@@ -137,4 +140,4 @@ User opens Tinker. Their workspace is exactly how they left it — panes in the 
 ## Connections
 - [[ramp-glass]] — workspace reference
 - [[vision]] — "not a chat window" principle
-- [[02-dojo-skill-marketplace]] — uses this pane system for skill browser
+- [[02-playbook-skill-marketplace]] — uses this pane system for skill browser
