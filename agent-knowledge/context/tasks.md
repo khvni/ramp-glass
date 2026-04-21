@@ -84,7 +84,7 @@ Open work + status + priorities. Agents update this file when starting, progress
 
 | Task | Priority | Status | Depends on | Notes |
 |------|----------|--------|------------|-------|
-| TIN-18 — Tauri command `start_opencode(folder, user_id, memory_subdir)` | p1 | review | — | PR #TBD. Folder-scoped spawn + `/health` poll + `~/.tinker/manifests/<session-id>.json` (0600 on unix) + detached drain task for D17 unref. Follow-up: TIN-108 to delete global bootstrap path. |
+| TIN-18 — Tauri command `start_opencode(folder, user_id, memory_subdir)` | p1 | review | — | PR #20. Folder-scoped spawn + `/health` poll + `~/.tinker/manifests/<session-id>.json` (0600 on unix) + detached drain task for D17 unref. Follow-up: TIN-108 to delete global bootstrap path. |
 
 ### Chat + boot UX ([[14-session-history-windowing]] + [[15-connection-gate]] + [[D20]])
 
