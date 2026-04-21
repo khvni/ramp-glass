@@ -49,6 +49,9 @@ logs/
 # Local-only reference material (personal notes, copyrighted articles, third-party references)
 .local-reference/
 
+# Accidental literal "YOUR PATH" dir from unset MCP env var
+YOUR PATH/
+
 # Local agent instructions (per-machine overrides, not shared)
 CLAUDE.local.md
 AGENTS.local.md

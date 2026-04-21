@@ -95,7 +95,7 @@ Open work + status + priorities. Agents update this file when starting, progress
 |------|----------|--------|-------|
 | Design `<Textarea>` primitive + migrate raw textarea surfaces | p2 | done | Follow-up to [[09-design-system]] so Chat composer, Scheduler prompt, Dojo skill body, and MarkdownEditor stop shipping raw `<textarea>` elements. `[2026-04-20]` `@tinker/design` exports `<Textarea>` + playground coverage; all four call sites migrated; merged to main. |
 | Tauri sidecar lifecycle (start/health-check/stop OpenCode) | p1 | in progress | PRD §2.1, §2.2; adopt two-phase readiness + proxy-safe loopback health checks from [[opencode-desktop-review]] |
-| FirstRun UX (sign-in → vault choice → workspace) | p1 | not started | PRD runtime flow "First launch" |
+| FirstRun UX (sign-in → vault choice → workspace) | p1 | not started | PRD runtime flow "First launch"; `[2026-04-20]` `pnpm dev:web` now detects missing Tauri runtime and shows a browser-preview notice with native actions disabled instead of crashing on `invoke` |
 | Memory injection in bridge package | p1 | in progress | PRD §2.4 — `packages/bridge` |
 | Vault indexing to SQLite (entities + FTS) | p1 | not started | PRD §2.4 |
 | Today pane (recent entities view) | p2 | not started | PRD §2.5 default layout |
