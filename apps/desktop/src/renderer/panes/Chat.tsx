@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
 import { Badge, Button, ModelPicker, Textarea } from '@tinker/design';
 import { injectActiveSkills, injectMemoryContext, streamSessionEvents } from '@tinker/bridge';
-import { resolveRelevantEntities, slugify } from '@tinker/memory';
-import type { SkillDraft, SkillStore } from '@tinker/shared-types';
+import { resolveRelevantEntities } from '@tinker/memory';
+import type { SkillStore } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../bindings.js';
 import { captureConversationMemory } from '../memory.js';
 import {
@@ -14,7 +14,6 @@ import {
   pickDefaultModelOptionId,
   type WorkspaceModelOption,
 } from '../opencode.js';
-import { useDockviewApi } from '../workspace/DockviewContext.js';
 import { useSessionHistoryWindow } from './useSessionHistoryWindow.js';
 
 type ChatMessage = {
@@ -32,18 +31,6 @@ type ChatProps = {
   onFileWritten?: (path: string) => void;
   onOpenNewChat?: () => void;
   onMemoryCommitted?: () => void;
-};
-
-const deriveSkillSlug = (text: string): string => {
-  const firstLine = text.split('\n').find((line) => line.trim().length > 0) ?? 'new-skill';
-  const trimmed = firstLine.replace(/^#+\s*/u, '').slice(0, 80);
-  const slug = slugify(trimmed);
-  return slug.length > 0 ? slug : 'new-skill';
-};
-
-const deriveSkillDescription = (text: string): string => {
-  const cleaned = text.replace(/[#*`]/gu, '').trim().replace(/\s+/gu, ' ');
-  return cleaned.length > 160 ? `${cleaned.slice(0, 157)}…` : cleaned;
 };
 
 const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): ChatMessage[] => {
@@ -89,7 +76,6 @@ export const Chat = ({
     () => createWorkspaceClient(opencode, getOpencodeDirectory(vaultPath)),
     [opencode.baseUrl, opencode.password, opencode.username, vaultPath],
   );
-  const dockviewApi = useDockviewApi();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -259,54 +245,6 @@ export const Chat = ({
     return session.id;
   };
 
-  const openPlaybookWithDraft = (seedDraft: SkillDraft): void => {
-    if (!dockviewApi) {
-      return;
-    }
-
-    const existing = dockviewApi.panels.find((panel) => panel.id === 'playbook');
-    if (existing) {
-      existing.api.updateParameters({
-        skillStore,
-        vaultPath,
-        initialDraft: seedDraft,
-        focus: 'author',
-      });
-      existing.api.setActive();
-      return;
-    }
-
-    const referencePanelId = dockviewApi.activePanel?.id ?? dockviewApi.panels[0]?.id ?? null;
-    dockviewApi.addPanel({
-      id: 'playbook',
-      component: 'playbook',
-      title: 'Playbook',
-      params: {
-        skillStore,
-        vaultPath,
-        initialDraft: seedDraft,
-        focus: 'author',
-      },
-      ...(referencePanelId
-        ? {
-            position: {
-              referencePanel: referencePanelId,
-              direction: 'within' as const,
-            },
-          }
-        : {}),
-    });
-  };
-
-  const handleSaveAsSkill = (message: ChatMessage): void => {
-    const seed: SkillDraft = {
-      slug: deriveSkillSlug(message.text),
-      description: deriveSkillDescription(message.text),
-      body: message.text,
-    };
-    openPlaybookWithDraft(seed);
-  };
-
   const sendMessage = async (): Promise<void> => {
     const text = input.trim();
     if (!text || busy || !modelConnected) {
@@ -441,13 +379,6 @@ export const Chat = ({
         {historyWindow.renderedMessages.map((message) => (
           <div key={message.id} className={`tinker-message tinker-message--${message.role}`}>
             <p className="tinker-message-text">{message.text}</p>
-            {message.role === 'assistant' && message.text.trim().length > 0 ? (
-              <div className="tinker-message-actions">
-                <Button variant="ghost" size="s" onClick={() => handleSaveAsSkill(message)}>
-                  Save as skill
-                </Button>
-              </div>
-            ) : null}
           </div>
         ))}
 
