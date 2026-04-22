@@ -454,6 +454,8 @@ export const Workspace = ({
             isActive={isActive}
             paneData={requirePaneData('chat', pane.data)}
             onAttentionSignal={(reason) => signalPaneAttention(pane.id, reason)}
+            onDuplicatePane={() => workspaceStore.getState().actions.duplicatePane(tabId, pane.id)}
+            onClosePane={() => workspaceStore.getState().actions.closePane(tabId, pane.id)}
           />
         ),
       },

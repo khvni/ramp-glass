@@ -121,6 +121,7 @@ Spec: [[23-mvp-chat-markdown]] + [[24-mvp-model-picker]] · Depends on: M1.3
 | 4.15 | Clear existing tool-call / thinking UI from `Chat.tsx` that doesn't match 4.5/4.6 semantics. | S | 4.5, 4.6 | review | TIN-52 · PR #67 (bundled — see 4.5). |
 | 4.16 | Build vs Plan mode picker in Chat pane header. Persist per session and pass to OpenCode prompt agent. | M | 2.2, 4.7, 4.8, 5.2 | review | TIN-173 · PR #80. Header ships ModelPicker + ModeToggle + plan badge + ContextBadge wiring. |
 | 4.17 | Reasoning level picker for reasoning-capable models. Persist per session; new session inherits last-used value for that model family. | M | 2.2, 4.7, 4.8, 5.1 | review | TIN-174 · PR #80. Hidden for non-reasoning models; maps UI low/medium/high to OpenCode variants. |
+| 4.18 | Composer/StatusDock pixel parity vs Paper 9I-0: ContextPill, kebab menu, pane actions, ModelPicker dock variant, PromptComposer slot refactor, FolderPill. | L | 4.7, 4.16, 5.3 | review | TIN-199 · PR #119 · `khvni/tin-199`. |
 
 ### M5 — Context usage badge
 Spec: [[25-mvp-context-badge]] · Depends on: M4.2
