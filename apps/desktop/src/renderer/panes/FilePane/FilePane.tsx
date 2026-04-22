@@ -5,6 +5,7 @@ import type { TinkerPaneData } from '@tinker/shared-types';
 import type { IDockviewPanelProps } from 'dockview-react';
 import { CodeRenderer } from '../../renderers/CodeRenderer.js';
 import { CsvRenderer } from '../../renderers/CsvRenderer.js';
+import { DocxRenderer } from '../../renderers/DocxRenderer/index.js';
 import { HtmlRenderer } from '../../renderers/HtmlRenderer.js';
 import { ImageRenderer } from '../../renderers/ImageRenderer.js';
 import { MarkdownEditor } from '../../renderers/MarkdownEditor.js';
@@ -42,6 +43,10 @@ const CsvFileRenderer: FileRenderer = ({ path, mime }) => {
 
 const HtmlFileRenderer: FileRenderer = ({ path, mime }) => {
   return <HtmlRenderer {...createDockviewProps(path, mime)} />;
+};
+
+const DocxFileRenderer: FileRenderer = ({ path, mime }) => {
+  return <DocxRenderer {...createDockviewProps(path, mime)} />;
 };
 
 const ImageFileRenderer: FileRenderer = ({ path, mime }) => {
@@ -109,6 +114,7 @@ export const MARKDOWN_EDITOR_MIME = 'text/markdown; mode=edit';
 export const mimeToRenderer: Readonly<Record<string, FileRenderer>> = Object.freeze({
   ...createMimeMap(CODE_MIME_TYPES, CodeFileRenderer),
   ...createMimeMap(IMAGE_MIME_TYPES, ImageFileRenderer),
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': DocxFileRenderer,
   'application/xhtml+xml': HtmlFileRenderer,
   'text/csv': CsvFileRenderer,
   'text/html': HtmlFileRenderer,
