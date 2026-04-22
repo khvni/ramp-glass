@@ -199,15 +199,10 @@ pub async fn start_opencode(
     .shell()
     .sidecar("opencode")
     .map_err(|e| e.to_string())?
-    .args([
-      "serve",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      "0",
-      "--cwd",
-      &folder_path,
-    ])
+    // `opencode serve` no longer accepts `--cwd` (removed upstream). The
+    // working directory is set via `.current_dir(&folder_path)` below, which
+    // is the supported path.
+    .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
     .envs([
       ("OPENCODE_SERVER_USERNAME", username.clone()),
       ("OPENCODE_SERVER_PASSWORD", secret.clone()),
