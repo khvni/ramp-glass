@@ -1,7 +1,7 @@
 .tinker-memory-pane {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
+  gap: var(--space-3);
   height: 100%;
   min-height: 0;
   padding: var(--space-4);
@@ -12,40 +12,17 @@
 
 .tinker-memory-pane__header {
   display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
-}
-
-.tinker-memory-pane__heading {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-1);
-}
-
-.tinker-memory-pane__eyebrow {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-xs);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--letter-spacing-label);
-  text-transform: uppercase;
 }
 
 .tinker-memory-pane__title {
   margin: 0;
   color: var(--color-text-primary);
-  font-size: var(--font-size-xl);
+  font-size: var(--font-size-lg);
   font-weight: var(--font-weight-semibold);
   line-height: var(--line-height-tight);
-}
-
-.tinker-memory-pane__description {
-  margin: 0;
-  color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
-  line-height: var(--line-height-normal);
 }
 
 .tinker-memory-pane__content {
@@ -58,7 +35,7 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
   min-height: 0;
   margin: 0;
   padding: 0;
@@ -68,11 +45,10 @@
 
 .tinker-memory-pane__file-button {
   width: 100%;
-  min-height: 64px;
   height: auto;
   justify-content: flex-start;
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-lg);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
 }
 
 .tinker-memory-pane__file-button .tk-button__label {
@@ -80,35 +56,25 @@
   flex: 1 1 auto;
   flex-direction: column;
   align-items: flex-start;
-  gap: var(--space-1);
+  gap: 2px;
   min-width: 0;
 }
 
 .tinker-memory-pane__file-title {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--color-text-primary);
   font-size: var(--font-size-md);
-  font-weight: var(--font-weight-semibold);
+  font-weight: var(--font-weight-medium);
   line-height: var(--line-height-tight);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tinker-memory-pane__file-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  width: 100%;
   color: var(--color-text-secondary);
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-xs);
   line-height: var(--line-height-normal);
-}
-
-.tinker-memory-pane__file-path {
-  min-width: 0;
-  font-family: var(--font-mono);
-  color: var(--color-text-secondary);
-}
-
-.tinker-memory-pane__file-time {
-  color: var(--color-text-muted);
 }
 
 .tinker-memory-pane__state {
@@ -119,5 +85,5 @@
   display: flex;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: var(--space-1);
 }

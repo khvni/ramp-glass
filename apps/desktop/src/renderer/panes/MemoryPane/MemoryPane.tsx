@@ -32,9 +32,31 @@ const toErrorMessage = (error: unknown): string => {
     : 'Memory files are unavailable right now.';
 };
 
-const formatModifiedAt = (value: string, formatter: Intl.DateTimeFormat): string => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Unknown update time' : formatter.format(date);
+const RELATIVE_THRESHOLDS: ReadonlyArray<{ seconds: number; unit: Intl.RelativeTimeFormatUnit }> = [
+  { seconds: 60, unit: 'second' },
+  { seconds: 3600, unit: 'minute' },
+  { seconds: 86400, unit: 'hour' },
+  { seconds: 2592000, unit: 'day' },
+  { seconds: 31536000, unit: 'month' },
+  { seconds: Number.POSITIVE_INFINITY, unit: 'year' },
+];
+
+const formatRelative = (value: string, formatter: Intl.RelativeTimeFormat, now: number): string => {
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) {
+    return 'Updated · unknown';
+  }
+
+  const deltaSeconds = Math.round((timestamp - now) / 1000);
+  const absoluteSeconds = Math.abs(deltaSeconds);
+  const index = RELATIVE_THRESHOLDS.findIndex(({ seconds }) => absoluteSeconds < seconds);
+  if (index === -1) {
+    return 'Updated · unknown';
+  }
+
+  const threshold = RELATIVE_THRESHOLDS[index]!;
+  const divisor = index === 0 ? 1 : RELATIVE_THRESHOLDS[index - 1]!.seconds;
+  return `Updated · ${formatter.format(Math.round(deltaSeconds / divisor), threshold.unit)}`;
 };
 
 export const MemoryPane = (): JSX.Element => {
@@ -46,12 +68,10 @@ export const MemoryPane = (): JSX.Element => {
     files: [],
     errorMessage: null,
   });
-  const modifiedAtFormatter = useMemo(() => {
-    return new Intl.DateTimeFormat(undefined, {
-      dateStyle: 'medium',
-      timeStyle: 'short',
-    });
+  const relativeFormatter = useMemo(() => {
+    return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
   }, []);
+  const nowMs = useMemo(() => Date.now(), [reloadToken]);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,11 +131,7 @@ export const MemoryPane = (): JSX.Element => {
   return (
     <section className="tinker-memory-pane">
       <header className="tinker-memory-pane__header">
-        <div className="tinker-memory-pane__heading">
-          <p className="tinker-memory-pane__eyebrow">Memory</p>
-          <h2 className="tinker-memory-pane__title">Memory files</h2>
-          <p className="tinker-memory-pane__description">Current user&apos;s markdown memory. Newest files first.</p>
-        </div>
+        <h2 className="tinker-memory-pane__title">Memory files</h2>
         <Badge variant="default" size="small">
           {fileCountLabel}
         </Badge>
@@ -128,7 +144,7 @@ export const MemoryPane = (): JSX.Element => {
               <Skeleton
                 key={`memory-loading-${index}`}
                 variant="rect"
-                height={72}
+                height={48}
                 className="tinker-memory-pane__state"
               />
             ))}
@@ -165,16 +181,14 @@ export const MemoryPane = (): JSX.Element => {
                 <Button
                   variant="ghost"
                   className="tinker-memory-pane__file-button"
+                  title={file.relativePath}
                   onClick={() => {
                     openFile(file);
                   }}
                 >
                   <span className="tinker-memory-pane__file-title">{file.name}</span>
                   <span className="tinker-memory-pane__file-meta">
-                    <span className="tinker-memory-pane__file-path">{file.relativePath}</span>
-                    <span className="tinker-memory-pane__file-time">
-                      {formatModifiedAt(file.modifiedAt, modifiedAtFormatter)}
-                    </span>
+                    {formatRelative(file.modifiedAt, relativeFormatter, nowMs)}
                   </span>
                 </Button>
               </li>
