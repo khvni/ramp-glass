@@ -1,49 +1,53 @@
 import { describe, expect, it, vi } from 'vitest';
-import { getTabKindForPath, getPanelIdForPath } from '../renderers/file-utils.js';
+import { createWorkspaceStore } from '@tinker/panes';
+import type { TinkerPaneData } from '@tinker/shared-types';
+import { getPanelIdForPath } from '../renderers/file-utils.js';
 import { openWorkspaceFile } from './file-open.js';
 
-const createPanelApi = () => {
-  return {
-    updateParameters: vi.fn(),
-    setActive: vi.fn(),
-  };
-};
-
 describe('openWorkspaceFile', () => {
-  it('reuses an existing panel for the same path', () => {
-    const panelApi = createPanelApi();
-    const api = {
-      activePanel: { id: 'something-else' },
-      panels: [{ id: getPanelIdForPath(getTabKindForPath('/vault/note.ts'), '/vault/note.ts'), api: panelApi }],
-      addPanel: vi.fn(),
-    };
+  it('reuses an existing workspace tab for the same path', () => {
+    const store = createWorkspaceStore<TinkerPaneData>();
+    const activateTab = vi.spyOn(store.getState().actions, 'activateTab');
+    store.getState().actions.openTab({
+      id: getPanelIdForPath('/vault/note.ts'),
+      title: 'note.ts',
+      pane: {
+        id: getPanelIdForPath('/vault/note.ts'),
+        kind: 'file',
+        data: {
+          kind: 'file',
+          path: '/vault/note.ts',
+          mime: 'text/plain',
+        },
+      },
+    });
 
-    openWorkspaceFile(api, '/vault/note.ts');
+    openWorkspaceFile(store, '/vault/note.ts');
 
-    expect(panelApi.updateParameters).toHaveBeenCalledOnce();
-    expect(panelApi.updateParameters).toHaveBeenCalledWith({ path: '/vault/note.ts' });
-    expect(panelApi.setActive).toHaveBeenCalledOnce();
-    expect(api.addPanel).not.toHaveBeenCalled();
+    expect(activateTab).toHaveBeenCalledOnce();
+    expect(activateTab).toHaveBeenCalledWith(getPanelIdForPath('/vault/note.ts'));
+    expect(store.getState().tabs).toHaveLength(1);
   });
 
-  it('creates a new panel next to the active panel when no matching panel exists', () => {
-    const api = {
-      activePanel: { id: 'chat' },
-      panels: [],
-      addPanel: vi.fn(),
-    };
+  it('creates a new workspace tab when no matching tab exists', () => {
+    const store = createWorkspaceStore<TinkerPaneData>();
 
-    openWorkspaceFile(api, '/vault/note.ts');
+    openWorkspaceFile(store, '/vault/note.ts');
 
-    expect(api.addPanel).toHaveBeenCalledOnce();
-    expect(api.addPanel).toHaveBeenCalledWith({
-      id: getPanelIdForPath('code', '/vault/note.ts'),
-      component: 'code',
+    expect(store.getState().tabs).toHaveLength(1);
+    expect(store.getState().tabs[0]).toMatchObject({
+      id: getPanelIdForPath('/vault/note.ts'),
       title: 'note.ts',
-      params: { path: '/vault/note.ts' },
-      position: {
-        referencePanel: 'chat',
-        direction: 'right',
+      panes: {
+        [getPanelIdForPath('/vault/note.ts')]: {
+          id: getPanelIdForPath('/vault/note.ts'),
+          kind: 'file',
+          data: {
+            kind: 'file',
+            path: '/vault/note.ts',
+            mime: 'text/plain',
+          },
+        },
       },
     });
   });

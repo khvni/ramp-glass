@@ -1,15 +1,15 @@
-import { useState, type ComponentProps, type JSX } from 'react';
+import { useState, type JSX } from 'react';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 import { Button } from '@tinker/design';
 import type { TinkerPaneData } from '@tinker/shared-types';
-import type { IDockviewPanelProps } from 'dockview-react';
 import { CodeRenderer } from '../../renderers/CodeRenderer.js';
 import { CsvRenderer } from '../../renderers/CsvRenderer.js';
 import { HtmlRenderer } from '../../renderers/HtmlRenderer.js';
 import { ImageRenderer } from '../../renderers/ImageRenderer.js';
 import { MarkdownEditor } from '../../renderers/MarkdownEditor.js';
 import { MarkdownRenderer } from '../../renderers/MarkdownRenderer.js';
-import { getPanelIdForPath, getPanelTitleForPath, type FilePaneParams } from '../../renderers/file-utils.js';
+import { getPanelTitleForPath } from '../../renderers/file-utils.js';
+import { useFilePaneRuntime } from './file-pane-runtime.js';
 
 type FilePaneData = Extract<TinkerPaneData, { readonly kind: 'file' }>;
 
@@ -21,49 +21,39 @@ export type FilePaneProps = {
 type FileRendererProps = {
   path: string;
   vaultRevision: number;
+  onEdit?: () => void;
 };
 
 type FileRenderer = (props: FileRendererProps) => JSX.Element;
 
-const createDockviewProps = (path: string): IDockviewPanelProps<FilePaneParams> => {
-  // Legacy file renderers still consume Dockview props. Keep the adapter
-  // contained here until M1.7/M3 retire that contract.
-  return { params: { path } } as unknown as IDockviewPanelProps<FilePaneParams>;
-};
-
 const CodeFileRenderer: FileRenderer = ({ path }) => {
-  return <CodeRenderer {...createDockviewProps(path)} />;
+  return <CodeRenderer path={path} />;
 };
 
 const CsvFileRenderer: FileRenderer = ({ path }) => {
-  return <CsvRenderer {...createDockviewProps(path)} />;
+  return <CsvRenderer path={path} />;
 };
 
 const HtmlFileRenderer: FileRenderer = ({ path }) => {
-  return <HtmlRenderer {...createDockviewProps(path)} />;
+  return <HtmlRenderer path={path} />;
 };
 
 const ImageFileRenderer: FileRenderer = ({ path }) => {
-  return <ImageRenderer {...createDockviewProps(path)} />;
+  return <ImageRenderer path={path} />;
 };
 
-const MarkdownFileRenderer: FileRenderer = ({ path, vaultRevision }) => {
-  const props = {
-    ...createDockviewProps(path),
-    api: { id: getPanelIdForPath('file', path) } as ComponentProps<typeof MarkdownRenderer>['api'],
-    vaultRevision,
-  } as ComponentProps<typeof MarkdownRenderer>;
-
-  return <MarkdownRenderer {...props} />;
+const MarkdownFileRenderer: FileRenderer = ({ path, vaultRevision, onEdit }) => {
+  return (
+    <MarkdownRenderer
+      path={path}
+      vaultRevision={vaultRevision}
+      {...(onEdit ? { onEdit } : {})}
+    />
+  );
 };
 
 const MarkdownEditorFileRenderer: FileRenderer = ({ path, vaultRevision }) => {
-  const props = {
-    ...createDockviewProps(path),
-    vaultRevision,
-  } as ComponentProps<typeof MarkdownEditor>;
-
-  return <MarkdownEditor {...props} />;
+  return <MarkdownEditor path={path} vaultRevision={vaultRevision} />;
 };
 
 const createMimeMap = (
@@ -165,11 +155,23 @@ const UnsupportedFilePane = ({ path, mime }: UnsupportedFilePaneProps): JSX.Elem
 };
 
 export const FilePane = ({ data, vaultRevision = 0 }: FilePaneProps): JSX.Element => {
+  const runtime = useFilePaneRuntime();
   const Renderer = mimeToRenderer[data.mime];
+  const resolvedVaultRevision = runtime?.vaultRevision ?? vaultRevision;
+  const onEdit =
+    runtime && data.mime === 'text/markdown'
+      ? () => runtime.openFile(data.path, { mime: MARKDOWN_EDITOR_MIME })
+      : undefined;
 
   if (!Renderer) {
     return <UnsupportedFilePane path={data.path} mime={data.mime} />;
   }
 
-  return <Renderer path={data.path} vaultRevision={vaultRevision} />;
+  return (
+    <Renderer
+      path={data.path}
+      vaultRevision={resolvedVaultRevision}
+      {...(onEdit ? { onEdit } : {})}
+    />
+  );
 };

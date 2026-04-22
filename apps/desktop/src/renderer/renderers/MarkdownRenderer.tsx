@@ -2,10 +2,8 @@ import { useEffect, useState, type JSX } from 'react';
 import { Button } from '@tinker/design';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import type { IDockviewPanelProps } from 'dockview-react';
 import { parseFrontmatter } from '@tinker/memory';
-import { getPanelIdForPath, getPanelTitleForPath, type FilePaneParams } from './file-utils.js';
-import { useDockviewApi } from '../workspace/DockviewContext.js';
+import { getPanelTitleForPath } from './file-utils.js';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 
 const renderMarkdown = async (text: string): Promise<string> => {
@@ -14,23 +12,17 @@ const renderMarkdown = async (text: string): Promise<string> => {
   return DOMPurify.sanitize(html);
 };
 
-type MarkdownRendererProps = IDockviewPanelProps<FilePaneParams> & {
+export type MarkdownRendererProps = {
+  path: string;
   vaultRevision: number;
+  onEdit?: () => void;
 };
 
-export const MarkdownRenderer = ({ api, params, vaultRevision }: MarkdownRendererProps): JSX.Element => {
-  const path = params?.path;
-  const dockviewApi = useDockviewApi();
+export const MarkdownRenderer = ({ path, vaultRevision, onEdit }: MarkdownRendererProps): JSX.Element => {
   const [html, setHtml] = useState('');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!path) {
-      setError('Missing markdown file path.');
-      setHtml('');
-      return;
-    }
-
     let active = true;
 
     void (async () => {
@@ -54,40 +46,15 @@ export const MarkdownRenderer = ({ api, params, vaultRevision }: MarkdownRendere
     };
   }, [path, vaultRevision]);
 
-  const openEditor = (): void => {
-    if (!dockviewApi || !path) {
-      return;
-    }
-
-    const panelId = getPanelIdForPath('markdown-editor', path);
-    const existingPanel = dockviewApi.panels.find((panel) => panel.id === panelId);
-    if (existingPanel) {
-      existingPanel.api.setActive();
-      existingPanel.api.updateParameters({ path });
-      return;
-    }
-
-    dockviewApi.addPanel({
-      id: panelId,
-      component: 'markdown-editor',
-      title: `${getPanelTitleForPath(path)} (Edit)`,
-      params: { path },
-      position: {
-        referencePanel: api.id,
-        direction: 'right',
-      },
-    });
-  };
-
   return (
     <section className="tinker-pane tinker-renderer-pane">
       <header className="tinker-pane-header">
         <div>
           <p className="tinker-eyebrow">Markdown</p>
-          <h2>{path ? getPanelTitleForPath(path) : 'Untitled note'}</h2>
+          <h2>{getPanelTitleForPath(path)}</h2>
         </div>
-        {path ? (
-          <Button variant="secondary" size="s" onClick={openEditor}>
+        {onEdit ? (
+          <Button variant="secondary" size="s" onClick={onEdit}>
             Edit note
           </Button>
         ) : null}

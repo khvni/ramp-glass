@@ -10,7 +10,7 @@ describe('FilePane', () => {
   });
 
   it('registers file pane kind with the dispatch component', () => {
-    registerFilePane({ vaultRevision: 7 });
+    registerFilePane();
 
     const element = getRenderer('file')({
       kind: 'file',
@@ -30,29 +30,23 @@ describe('FilePane', () => {
         path: '/tmp/note.md',
         mime: 'text/markdown',
       },
-      vaultRevision: 7,
     });
   });
 
   it('dispatches known MIME types through mimeToRenderer', () => {
-    const element = FilePane({
-      data: {
-        kind: 'file',
-        path: '/tmp/table.csv',
-        mime: 'text/csv',
-      },
-    });
+    const markup = renderToStaticMarkup(
+      <FilePane
+        data={{
+          kind: 'file',
+          path: '/tmp/table.csv',
+          mime: 'text/csv',
+        }}
+      />,
+    );
 
-    expect(isValidElement(element)).toBe(true);
-    if (!isValidElement(element)) {
-      throw new Error('FilePane did not return a React element.');
-    }
-
-    expect(element.type).toBe(mimeToRenderer['text/csv']);
-    expect(element.props).toEqual({
-      path: '/tmp/table.csv',
-      vaultRevision: 0,
-    });
+    expect(mimeToRenderer['text/csv']).toBeDefined();
+    expect(markup).toContain('CSV');
+    expect(markup).toContain('table.csv');
   });
 
   it('supports the temporary markdown editor MIME until the editor flow is replaced', () => {

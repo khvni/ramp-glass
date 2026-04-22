@@ -1,17 +1,5 @@
-export type TabKind =
-  | 'vault-browser'
-  | 'chat'
-  | 'today'
-  | 'scheduler'
-  | 'settings'
-  | 'playbook'
-  | 'markdown-editor'
-  | 'file'
-  | 'markdown'
-  | 'html'
-  | 'csv'
-  | 'image'
-  | 'code';
+import type { WorkspaceState } from '@tinker/panes';
+import type { TinkerPaneData } from './pane.js';
 
 export type WorkspacePreferences = {
   autoOpenAgentWrittenFiles: boolean;
@@ -24,8 +12,8 @@ export const createDefaultWorkspacePreferences = (): WorkspacePreferences => {
 };
 
 export type LayoutState = {
-  version: 1;
-  dockviewModel: unknown;
+  version: 2;
+  workspace: WorkspaceState<TinkerPaneData>;
   updatedAt: string;
   preferences: WorkspacePreferences;
 };

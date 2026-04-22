@@ -19,7 +19,7 @@ describe('hydrateLayoutRow', () => {
   it('returns null and warns when the stored version is incompatible', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION + 1,
-      dockview_model_json: '{"grid":{}}',
+      workspace_state_json: '{"workspace":{"version":2,"tabs":[],"activeTabId":null}}',
       updated_at: '2026-04-15T00:00:00.000Z',
     };
 
@@ -30,7 +30,7 @@ describe('hydrateLayoutRow', () => {
   it('returns null and warns when the payload is not valid JSON', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION,
-      dockview_model_json: '{ not json',
+      workspace_state_json: '{ not json',
       updated_at: '2026-04-15T00:00:00.000Z',
     };
 
@@ -41,7 +41,7 @@ describe('hydrateLayoutRow', () => {
   it('returns null when the payload is valid JSON but not an object', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION,
-      dockview_model_json: 'null',
+      workspace_state_json: 'null',
       updated_at: '2026-04-15T00:00:00.000Z',
     };
 
@@ -51,9 +51,9 @@ describe('hydrateLayoutRow', () => {
   it('round-trips a persisted layout including workspace preferences', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION,
-      dockview_model_json: serializeLayoutState({
+      workspace_state_json: serializeLayoutState({
         version: CURRENT_LAYOUT_VERSION,
-        dockviewModel: { grid: { height: 1, width: 1 } },
+        workspace: { version: 2, tabs: [], activeTabId: null },
         updatedAt: '2026-04-15T00:00:00.000Z',
         preferences: { autoOpenAgentWrittenFiles: false },
       }),
@@ -62,22 +62,22 @@ describe('hydrateLayoutRow', () => {
 
     expect(hydrateLayoutRow(row, 'user')).toEqual({
       version: CURRENT_LAYOUT_VERSION,
-      dockviewModel: { grid: { height: 1, width: 1 } },
+      workspace: { version: 2, tabs: [], activeTabId: null },
       updatedAt: '2026-04-15T00:00:00.000Z',
       preferences: { autoOpenAgentWrittenFiles: false },
     });
   });
 
-  it('defaults auto-open on when loading a legacy dockview payload', () => {
+  it('defaults auto-open on when loading an unwrapped workspace payload', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION,
-      dockview_model_json: '{"grid":{"height":1,"width":1}}',
+      workspace_state_json: '{"version":2,"tabs":[],"activeTabId":null}',
       updated_at: '2026-04-15T00:00:00.000Z',
     };
 
     expect(hydrateLayoutRow(row, 'user')).toEqual({
       version: CURRENT_LAYOUT_VERSION,
-      dockviewModel: { grid: { height: 1, width: 1 } },
+      workspace: { version: 2, tabs: [], activeTabId: null },
       updatedAt: '2026-04-15T00:00:00.000Z',
       preferences: { autoOpenAgentWrittenFiles: true },
     });

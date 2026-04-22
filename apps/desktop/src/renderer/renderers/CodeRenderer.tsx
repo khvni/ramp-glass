@@ -1,25 +1,20 @@
 import { useEffect, useState, type JSX } from 'react';
 import { Badge } from '@tinker/design';
 import { readTextFile } from '@tauri-apps/plugin-fs';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { getCodeLanguage, getPanelTitleForPath, type FilePaneParams } from './file-utils.js';
+import { getCodeLanguage, getPanelTitleForPath } from './file-utils.js';
 import { highlightCode, MAX_HIGHLIGHTABLE_CODE_LENGTH } from './code-highlighter.js';
 
-export const CodeRenderer = ({ params }: IDockviewPanelProps<FilePaneParams>): JSX.Element => {
-  const path = params?.path;
+export type CodeRendererProps = {
+  path: string;
+};
+
+export const CodeRenderer = ({ path }: CodeRendererProps): JSX.Element => {
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
-  const language = path ? getCodeLanguage(path) : 'plaintext';
+  const language = getCodeLanguage(path);
 
   useEffect(() => {
-    if (!path) {
-      setError('Missing file path.');
-      setContent('');
-      setHighlightedHtml(null);
-      return;
-    }
-
     let active = true;
 
     void (async () => {
@@ -56,9 +51,9 @@ export const CodeRenderer = ({ params }: IDockviewPanelProps<FilePaneParams>): J
       <header className="tinker-pane-header">
         <div>
           <p className="tinker-eyebrow">Code</p>
-          <h2>{path ? getPanelTitleForPath(path) : 'Untitled file'}</h2>
+          <h2>{getPanelTitleForPath(path)}</h2>
         </div>
-        {path ? <Badge variant="default" size="small">{language}</Badge> : null}
+        <Badge variant="default" size="small">{language}</Badge>
       </header>
 
       {error ? <p className="tinker-muted">{error}</p> : null}

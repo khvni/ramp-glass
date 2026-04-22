@@ -1,44 +1,35 @@
-import type { MemoryStore, SkillStore } from '@tinker/shared-types';
-import type { DockviewApi } from 'dockview-react';
+import type { WorkspaceState } from '@tinker/panes';
+import type { TinkerPaneData } from '@tinker/shared-types';
 
-type DefaultLayoutOptions = {
-  memoryStore: MemoryStore;
-  skillStore: SkillStore;
-  vaultPath: string | null;
-};
+const DEFAULT_CHAT_TAB_ID = 'chat';
+const DEFAULT_CHAT_PANE_ID = 'chat';
+const DEFAULT_CHAT_STACK_ID = 'stack-chat';
 
-// Clean default boot: Chat is always present. If a vault is connected we also
-// surface the vault browser on the left. Scheduler, Settings, Playbook, and Today
-// are reachable on-demand via the workspace header — they would only clutter
-// the first-boot view.
-export const applyDefaultLayout = (api: DockviewApi, options: DefaultLayoutOptions): void => {
-  if (options.vaultPath) {
-    api.addPanel({
-      id: 'vault-browser',
-      component: 'vault-browser',
-      title: 'Vault',
-      params: {
-        memoryStore: options.memoryStore,
-        vaultPath: options.vaultPath,
-      },
-      initialWidth: 280,
-      position: {
-        direction: 'left',
-      },
-    });
-  }
-
-  api.addPanel({
-    id: 'chat',
-    component: 'chat',
-    title: 'Chat',
-    ...(options.vaultPath
-      ? {
-          position: {
-            referencePanel: 'vault-browser',
-            direction: 'right' as const,
+export const createDefaultLayout = (): WorkspaceState<TinkerPaneData> => {
+  return {
+    version: 2,
+    activeTabId: DEFAULT_CHAT_TAB_ID,
+    tabs: [
+      {
+        id: DEFAULT_CHAT_TAB_ID,
+        title: 'Chat',
+        createdAt: Date.now(),
+        layout: {
+          kind: 'stack',
+          id: DEFAULT_CHAT_STACK_ID,
+          paneIds: [DEFAULT_CHAT_PANE_ID],
+          activePaneId: DEFAULT_CHAT_PANE_ID,
+        },
+        panes: {
+          [DEFAULT_CHAT_PANE_ID]: {
+            id: DEFAULT_CHAT_PANE_ID,
+            kind: 'chat',
+            data: { kind: 'chat' },
           },
-        }
-      : {}),
-  });
+        },
+        activePaneId: DEFAULT_CHAT_PANE_ID,
+        activeStackId: DEFAULT_CHAT_STACK_ID,
+      },
+    ],
+  };
 };

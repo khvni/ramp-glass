@@ -1,6 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import {
+  Workspace as PaneWorkspace,
+  createWorkspaceStore,
+  selectWorkspaceSnapshot,
+  type PaneRegistry,
+  type PaneRendererProps,
+  type WorkspaceStore,
+} from '@tinker/panes';
 import { Badge, Button } from '@tinker/design';
-import { DockviewReact, type DockviewApi, type DockviewReadyEvent } from 'dockview-react';
 import { resolveVaultPath, type MemoryRunState } from '@tinker/memory';
 import {
   createDefaultWorkspacePreferences,
@@ -10,33 +17,25 @@ import {
   type ScheduledJobStore,
   type SkillStore,
   type SSOStatus,
+  type TinkerPaneData,
   type WorkspacePreferences,
 } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 import type { MCPStatus } from '../integrations.js';
-import { Chat } from '../panes/Chat.js';
-import { Playbook } from '../panes/Playbook.js';
-import { SchedulerPane } from '../panes/SchedulerPane.js';
 import { Settings } from '../panes/Settings.js';
-import { Today } from '../panes/Today.js';
-import { VaultBrowser } from '../panes/VaultBrowser.js';
-import { CodeRenderer } from '../renderers/CodeRenderer.js';
-import { CsvRenderer } from '../renderers/CsvRenderer.js';
-import { HtmlRenderer } from '../renderers/HtmlRenderer.js';
-import { ImageRenderer } from '../renderers/ImageRenderer.js';
-import { MarkdownEditor } from '../renderers/MarkdownEditor.js';
-import { MarkdownRenderer } from '../renderers/MarkdownRenderer.js';
 import { isAbsolutePath } from '../renderers/file-utils.js';
+import { FilePaneRuntimeContext } from '../panes/FilePane/file-pane-runtime.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
-import { DockviewApiContext } from './DockviewContext.js';
-import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
-import { applyDefaultLayout } from './layout.default.js';
-import { createPaneRegistry } from './pane-registry.js';
+import { createDefaultLayout } from './layout.default.js';
+import { getRenderer } from './pane-registry.js';
+import { registerWorkspacePaneRenderers } from './register-pane-renderers.js';
+import { registerWorkspacePanes } from './register-panes.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
-const LAYOUT_VERSION = 1 as const;
+const LAYOUT_VERSION = 2 as const;
+const CHAT_TAB_PATTERN = /^chat(?:-(\d+))?$/u;
 
 type WorkspaceProps = {
   layoutStore: LayoutStore;
@@ -74,6 +73,88 @@ type WorkspaceProps = {
   onMemoryCommitted(): void;
 };
 
+const getChatTabIndex = (tabId: string): number | null => {
+  const match = tabId.match(CHAT_TAB_PATTERN);
+  if (!match) {
+    return null;
+  }
+
+  return match[1] ? Number(match[1]) : 1;
+};
+
+const getNextChatTabId = (tabIds: readonly string[]): string => {
+  const nextIndex = tabIds.reduce((highest, tabId) => {
+    const index = getChatTabIndex(tabId);
+    return index && index > highest ? index : highest;
+  }, 0);
+
+  return nextIndex === 0 ? 'chat' : `chat-${nextIndex + 1}`;
+};
+
+const getChatTabTitle = (tabId: string): string => {
+  const index = getChatTabIndex(tabId);
+  return index && index > 1 ? `Chat ${index}` : 'Chat';
+};
+
+const openNewChatTab = (store: WorkspaceStore<TinkerPaneData>): void => {
+  const tabId = getNextChatTabId(store.getState().tabs.map((tab) => tab.id));
+  store.getState().actions.openTab({
+    id: tabId,
+    title: getChatTabTitle(tabId),
+    pane: {
+      id: tabId,
+      kind: 'chat',
+      data: { kind: 'chat' },
+    },
+  });
+};
+
+const openSingletonTab = (
+  store: WorkspaceStore<TinkerPaneData>,
+  kind: 'settings' | 'memory',
+  title: string,
+): void => {
+  const state = store.getState();
+  if (state.tabs.some((tab) => tab.id === kind)) {
+    state.actions.activateTab(kind);
+    return;
+  }
+
+  state.actions.openTab({
+    id: kind,
+    title,
+    pane: {
+      id: kind,
+      kind,
+      data: { kind },
+    },
+  });
+};
+
+const RegisteredChatPane = ({ pane }: PaneRendererProps<TinkerPaneData>): JSX.Element => {
+  if (pane.data.kind !== 'chat') {
+    throw new Error(`Expected chat pane data, received "${pane.data.kind}".`);
+  }
+
+  return <>{getRenderer('chat')(pane.data)}</>;
+};
+
+const RegisteredFilePane = ({ pane }: PaneRendererProps<TinkerPaneData>): JSX.Element => {
+  if (pane.data.kind !== 'file') {
+    throw new Error(`Expected file pane data, received "${pane.data.kind}".`);
+  }
+
+  return <>{getRenderer('file')(pane.data)}</>;
+};
+
+const RegisteredMemoryPane = ({ pane }: PaneRendererProps<TinkerPaneData>): JSX.Element => {
+  if (pane.data.kind !== 'memory') {
+    throw new Error(`Expected memory pane data, received "${pane.data.kind}".`);
+  }
+
+  return <>{getRenderer('memory')(pane.data)}</>;
+};
+
 export const Workspace = ({
   layoutStore,
   memoryStore,
@@ -109,11 +190,15 @@ export const Workspace = ({
   memorySweepState,
   memorySweepBusy,
 }: WorkspaceProps): JSX.Element => {
-  const dockviewApiRef = useRef<DockviewApi | null>(null);
+  registerWorkspacePaneRenderers();
+  registerWorkspacePanes();
+
+  const workspaceStore = useMemo(() => createWorkspaceStore<TinkerPaneData>(), []);
   const saveTimerRef = useRef<number | null>(null);
+  const hydratedRef = useRef(false);
   const vaultPathRef = useRef<string | null>(vaultPath);
   const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
-  const [dockviewApi, setDockviewApi] = useState<DockviewApi | null>(null);
+  const [workspaceReady, setWorkspaceReady] = useState(false);
   const [workspacePreferences, setWorkspacePreferences] = useState<WorkspacePreferences>(createDefaultWorkspacePreferences);
 
   useEffect(() => {
@@ -124,9 +209,97 @@ export const Workspace = ({
     workspacePreferencesRef.current = workspacePreferences;
   }, [workspacePreferences]);
 
-  const getReferencePanelId = (api: DockviewApi): string | null => {
-    return api.activePanel?.id ?? api.panels[0]?.id ?? null;
-  };
+  const saveLayoutNow = useCallback((): void => {
+    if (!hydratedRef.current) {
+      return;
+    }
+
+    const snapshot: LayoutState = {
+      version: LAYOUT_VERSION,
+      workspace: selectWorkspaceSnapshot(workspaceStore.getState()),
+      updatedAt: new Date().toISOString(),
+      preferences: workspacePreferencesRef.current,
+    };
+
+    void layoutStore.save(DEFAULT_USER_ID, snapshot).catch((error) => {
+      console.warn('Failed to persist workspace layout.', error);
+    });
+  }, [layoutStore, workspaceStore]);
+
+  const scheduleLayoutSave = useCallback((): void => {
+    if (!hydratedRef.current) {
+      return;
+    }
+
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      saveLayoutNow();
+    }, LAYOUT_SAVE_DEBOUNCE_MS);
+  }, [saveLayoutNow]);
+
+  useEffect(() => {
+    const unsubscribe = workspaceStore.subscribe(() => {
+      scheduleLayoutSave();
+    });
+
+    return () => {
+      unsubscribe();
+    };
+  }, [scheduleLayoutSave, workspaceStore]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+
+      saveLayoutNow();
+    };
+  }, [saveLayoutNow]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      let savedLayout: LayoutState | null = null;
+      try {
+        savedLayout = await layoutStore.load(DEFAULT_USER_ID);
+      } catch (error) {
+        console.warn('Failed to load saved workspace layout. Falling back to default.', error);
+      }
+
+      if (cancelled) {
+        return;
+      }
+
+      const nextPreferences = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+      workspacePreferencesRef.current = nextPreferences;
+      setWorkspacePreferences(nextPreferences);
+      workspaceStore.getState().actions.hydrate(savedLayout?.workspace ?? createDefaultLayout());
+      hydratedRef.current = true;
+      setWorkspaceReady(true);
+      scheduleLayoutSave();
+    })();
+
+    return () => {
+      cancelled = true;
+      hydratedRef.current = false;
+    };
+  }, [layoutStore, scheduleLayoutSave, workspaceStore]);
+
+  const handleWorkspacePreferencesChange = useCallback(
+    (nextPreferences: WorkspacePreferences): void => {
+      workspacePreferencesRef.current = nextPreferences;
+      setWorkspacePreferences(nextPreferences);
+      saveLayoutNow();
+    },
+    [saveLayoutNow],
+  );
 
   const resolveAgentPath = useCallback((reportedPath: string): string | null => {
     if (isAbsolutePath(reportedPath)) {
@@ -148,29 +321,15 @@ export const Workspace = ({
 
   const openFileInWorkspace = useCallback(
     (reportedPath: string): void => {
-      const api = dockviewApiRef.current;
-      if (!api) {
-        return;
-      }
-
       const absolutePath = resolveAgentPath(reportedPath);
       if (!absolutePath) {
         return;
       }
 
-      openWorkspaceFile(api, absolutePath);
+      openWorkspaceFile(workspaceStore, absolutePath);
     },
-    [resolveAgentPath],
+    [resolveAgentPath, workspaceStore],
   );
-
-  const openNewChatPane = useCallback((): void => {
-    const api = dockviewApiRef.current;
-    if (!api) {
-      return;
-    }
-
-    openNewChatPanel(api);
-  }, []);
 
   const handleAgentFileWritten = useCallback(
     (reportedPath: string): void => {
@@ -183,136 +342,61 @@ export const Workspace = ({
     [openFileInWorkspace],
   );
 
-  const saveLayoutNow = useCallback(
-    (api: DockviewApi): void => {
-      const snapshot: LayoutState = {
-        version: LAYOUT_VERSION,
-        dockviewModel: api.toJSON(),
-        updatedAt: new Date().toISOString(),
-        preferences: workspacePreferencesRef.current,
-      };
+  const openNewChatPane = useCallback((): void => {
+    openNewChatTab(workspaceStore);
+  }, [workspaceStore]);
 
-      void layoutStore.save(DEFAULT_USER_ID, snapshot).catch((error) => {
-        console.warn('Failed to persist workspace layout.', error);
-      });
-    },
-    [layoutStore],
+  const openSettingsPane = useCallback((): void => {
+    openSingletonTab(workspaceStore, 'settings', 'Settings');
+  }, [workspaceStore]);
+
+  const openMemoryPane = useCallback((): void => {
+    openSingletonTab(workspaceStore, 'memory', 'Memory');
+  }, [workspaceStore]);
+
+  const chatPaneRuntime = useMemo(
+    () => ({
+      modelConnected,
+      opencode,
+      vaultPath,
+      onFileWritten: handleAgentFileWritten,
+      onOpenNewChat: openNewChatPane,
+      onMemoryCommitted,
+    }),
+    [
+      handleAgentFileWritten,
+      modelConnected,
+      onMemoryCommitted,
+      openNewChatPane,
+      opencode,
+      vaultPath,
+    ],
   );
 
-  const scheduleLayoutSave = useCallback(
-    (api: DockviewApi): void => {
-      if (saveTimerRef.current !== null) {
-        window.clearTimeout(saveTimerRef.current);
-      }
-
-      saveTimerRef.current = window.setTimeout(() => {
-        saveTimerRef.current = null;
-        saveLayoutNow(api);
-      }, LAYOUT_SAVE_DEBOUNCE_MS);
-    },
-    [saveLayoutNow],
+  const filePaneRuntime = useMemo(
+    () => ({
+      vaultRevision,
+      openFile: (path: string, options?: { mime?: string }) => openWorkspaceFile(workspaceStore, path, options),
+    }),
+    [vaultRevision, workspaceStore],
   );
 
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current !== null) {
-        window.clearTimeout(saveTimerRef.current);
-        saveTimerRef.current = null;
-
-        const api = dockviewApiRef.current;
-        if (api) {
-          saveLayoutNow(api);
-        }
-      }
-    };
-  }, [saveLayoutNow]);
-
-  const handleWorkspacePreferencesChange = useCallback(
-    (nextPreferences: WorkspacePreferences): void => {
-      workspacePreferencesRef.current = nextPreferences;
-      setWorkspacePreferences(nextPreferences);
-
-      const api = dockviewApiRef.current;
-      if (api) {
-        saveLayoutNow(api);
-      }
-    },
-    [saveLayoutNow],
-  );
-
-  const openOrFocusPane = (
-    id: 'scheduler' | 'settings' | 'today',
-    title: string,
-  ): void => {
-    const api = dockviewApiRef.current;
-    if (!api) {
-      return;
-    }
-
-    const existingPanel = api.panels.find((panel) => panel.id === id);
-    if (existingPanel) {
-      existingPanel.api.setActive();
-      return;
-    }
-
-    const referencePanelId = getReferencePanelId(api);
-    api.addPanel({
-      id,
-      component: id,
-      title,
-      ...(referencePanelId
-        ? {
-            position: {
-              referencePanel: referencePanelId,
-              direction: 'within' as const,
-            },
-          }
-        : {}),
-    });
-  };
-
-  const openSchedulerPane = (): void => openOrFocusPane('scheduler', 'Scheduler');
-  const openSettingsPane = (): void => openOrFocusPane('settings', 'Settings');
-  const openTodayPane = (): void => openOrFocusPane('today', 'Today');
-
-  const components = useMemo(
-    () =>
-      createPaneRegistry({
-        'vault-browser': (props) => <VaultBrowser {...props} vaultRevision={vaultRevision} />,
-        chat: () => (
-          <Chat
-            skillStore={skillStore}
-            modelConnected={modelConnected}
-            opencode={opencode}
-            vaultPath={vaultPath}
-            activeSkillsRevision={activeSkillsRevision}
-            onFileWritten={handleAgentFileWritten}
-            onOpenNewChat={openNewChatPane}
-            onMemoryCommitted={onMemoryCommitted}
-          />
-        ),
-        today: () => (
-          <Today
-            memoryStore={memoryStore}
-            schedulerStore={schedulerStore}
-            vaultPath={vaultPath}
-            vaultRevision={vaultRevision}
-            schedulerRevision={schedulerRevision}
-            memorySweepState={memorySweepState}
-            memorySweepBusy={memorySweepBusy}
-            onRunMemorySweep={onRunMemorySweep}
-          />
-        ),
-        scheduler: () => (
-          <SchedulerPane
-            schedulerStore={schedulerStore}
-            schedulerRevision={schedulerRevision}
-            vaultPath={vaultPath}
-            onRunJobNow={onRunScheduledJobNow}
-            onSchedulerChanged={onSchedulerChanged}
-          />
-        ),
-        settings: () => (
+  const registry = useMemo<PaneRegistry<TinkerPaneData>>(
+    () => ({
+      chat: {
+        kind: 'chat',
+        defaultTitle: 'Chat',
+        render: RegisteredChatPane,
+      },
+      file: {
+        kind: 'file',
+        defaultTitle: 'File',
+        render: RegisteredFilePane,
+      },
+      settings: {
+        kind: 'settings',
+        defaultTitle: 'Settings',
+        render: () => (
           <Settings
             modelConnected={modelConnected}
             modelAuthBusy={modelAuthBusy}
@@ -336,180 +420,48 @@ export const Workspace = ({
             onWorkspacePreferencesChange={handleWorkspacePreferencesChange}
           />
         ),
-        playbook: (props) => <Playbook {...props} />,
-        file: (props) => <CodeRenderer {...props} />,
-        markdown: (props) => <MarkdownRenderer {...props} vaultRevision={vaultRevision} />,
-        html: (props) => <HtmlRenderer {...props} />,
-        csv: (props) => <CsvRenderer {...props} />,
-        image: (props) => <ImageRenderer {...props} />,
-        code: (props) => <CodeRenderer {...props} />,
-        'markdown-editor': (props) => <MarkdownEditor {...props} vaultRevision={vaultRevision} />,
-      }),
+      },
+      memory: {
+        kind: 'memory',
+        defaultTitle: 'Memory',
+        render: RegisteredMemoryPane,
+      },
+    }),
     [
-      activeSkillsRevision,
-      memoryStore,
-      skillStore,
+      githubAuthBusy,
+      githubAuthMessage,
+      googleAuthBusy,
+      googleAuthMessage,
+      handleWorkspacePreferencesChange,
+      mcpStatus,
       modelAuthBusy,
       modelAuthMessage,
       modelConnected,
-      memorySweepBusy,
-      memorySweepState,
-      googleAuthBusy,
-      googleAuthMessage,
-      githubAuthBusy,
-      githubAuthMessage,
-      onConnectGoogle,
       onConnectGithub,
+      onConnectGoogle,
       onConnectModel,
       onCreateVault,
-      onDisconnectGoogle,
       onDisconnectGithub,
+      onDisconnectGoogle,
       onDisconnectModel,
-      onMemoryCommitted,
-      onRunMemorySweep,
-      onRunScheduledJobNow,
-      onSchedulerChanged,
       onSelectVault,
-      opencode,
       sessions,
-      mcpStatus,
       vaultPath,
-      vaultRevision,
-      schedulerStore,
-      schedulerRevision,
-      handleAgentFileWritten,
-      openNewChatPane,
-      handleWorkspacePreferencesChange,
       workspacePreferences,
     ],
   );
 
-  const chatPaneRuntime = useMemo(
-    () => ({
-      skillStore,
-      modelConnected,
-      opencode,
-      vaultPath,
-      activeSkillsRevision,
-      onFileWritten: handleAgentFileWritten,
-      onOpenNewChat: openNewChatPane,
-      onMemoryCommitted,
-    }),
-    [
-      activeSkillsRevision,
-      handleAgentFileWritten,
-      modelConnected,
-      onMemoryCommitted,
-      openNewChatPane,
-      opencode,
-      skillStore,
-      vaultPath,
-    ],
-  );
-
-  const onReady = (event: DockviewReadyEvent): void => {
-    dockviewApiRef.current = event.api;
-
-    void (async () => {
-      let savedLayout: LayoutState | null = null;
-      try {
-        savedLayout = await layoutStore.load(DEFAULT_USER_ID);
-      } catch (error) {
-        console.warn('Failed to load saved workspace layout. Falling back to default.', error);
-      }
-
-      let hydrated = false;
-      const nextPreferences = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
-      workspacePreferencesRef.current = nextPreferences;
-      setWorkspacePreferences(nextPreferences);
-
-      if (savedLayout?.dockviewModel) {
-        try {
-          event.api.fromJSON(savedLayout.dockviewModel as ReturnType<typeof event.api.toJSON>);
-          hydrated = event.api.panels.length > 0;
-        } catch (error) {
-          console.warn('Stored workspace layout could not be hydrated. Falling back to default.', error);
-          hydrated = false;
-        }
-      }
-
-      if (!hydrated) {
-        event.api.clear();
-        applyDefaultLayout(event.api, {
-          memoryStore,
-          skillStore,
-          vaultPath,
-        });
-      }
-
-      event.api.panels
-        .filter((panel) => panel.id === 'vault-browser')
-        .forEach((panel) => {
-          panel.api.updateParameters({
-            memoryStore,
-            vaultPath,
-          });
-        });
-
-      event.api.panels
-        .filter((panel) => panel.id === 'playbook')
-        .forEach((panel) => {
-          panel.api.updateParameters({
-            skillStore,
-            vaultPath,
-            onActiveSkillsChanged,
-          });
-        });
-
-      event.api.onDidLayoutChange(() => {
-        scheduleLayoutSave(event.api);
-      });
-
-      setDockviewApi(event.api);
-      scheduleLayoutSave(event.api);
-    })();
-  };
-
-  useEffect(() => {
-    const api = dockviewApi;
-    if (!api) {
-      return;
-    }
-
-    // Push fresh params into open panels that depend on vault / stores.
-    api.panels
-      .filter((panel) => panel.id === 'vault-browser')
-      .forEach((panel) => {
-        panel.api.updateParameters({ memoryStore, vaultPath });
-      });
-
-    api.panels
-      .filter((panel) => panel.id === 'playbook')
-      .forEach((panel) => {
-        panel.api.updateParameters({ skillStore, vaultPath, onActiveSkillsChanged });
-      });
-
-    // When a vault gets connected after boot, surface the vault browser.
-    if (vaultPath && !api.panels.some((panel) => panel.id === 'vault-browser')) {
-      const referencePanelId = getReferencePanelId(api);
-      api.addPanel({
-        id: 'vault-browser',
-        component: 'vault-browser',
-        title: 'Vault',
-        params: { memoryStore, vaultPath },
-        initialWidth: 280,
-        inactive: true,
-        ...(referencePanelId
-          ? {
-              position: {
-                referencePanel: referencePanelId,
-                direction: 'left' as const,
-              },
-            }
-          : {}),
-      });
-    }
-  }, [dockviewApi, memoryStore, onActiveSkillsChanged, skillStore, vaultPath]);
+  void memoryStore;
+  void schedulerStore;
+  void schedulerRevision;
+  void skillStore;
+  void activeSkillsRevision;
+  void onActiveSkillsChanged;
+  void onRunScheduledJobNow;
+  void onSchedulerChanged;
+  void onRunMemorySweep;
+  void memorySweepState;
+  void memorySweepBusy;
 
   return (
     <main className="tinker-workspace-shell">
@@ -519,17 +471,14 @@ export const Workspace = ({
           <h1>Tinker</h1>
         </div>
         <div className="tinker-inline-actions">
-          <Button variant="secondary" size="s" onClick={openNewChatPane} disabled={!dockviewApi}>
+          <Button variant="secondary" size="s" onClick={openNewChatPane} disabled={!workspaceReady}>
             New chat
           </Button>
-          <Button variant="secondary" size="s" onClick={openTodayPane} disabled={!dockviewApi}>
-            Today
-          </Button>
-          <Button variant="secondary" size="s" onClick={openSchedulerPane} disabled={!dockviewApi}>
-            Scheduler
-          </Button>
-          <Button variant="secondary" size="s" onClick={openSettingsPane} disabled={!dockviewApi}>
+          <Button variant="secondary" size="s" onClick={openSettingsPane} disabled={!workspaceReady}>
             Settings
+          </Button>
+          <Button variant="secondary" size="s" onClick={openMemoryPane} disabled={!workspaceReady}>
+            Memory
           </Button>
         </div>
         <div className="tinker-header-meta">
@@ -550,13 +499,14 @@ export const Workspace = ({
       </div>
 
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
-        <DockviewApiContext.Provider value={dockviewApi}>
-          <DockviewReact
-            className="dockview-theme-abyss tinker-dockview"
-            components={components}
-            onReady={onReady}
+        <FilePaneRuntimeContext.Provider value={filePaneRuntime}>
+          <PaneWorkspace
+            store={workspaceStore}
+            registry={registry}
+            ariaLabel="Tinker workspace"
+            emptyState={<p>{workspaceReady ? 'No panes open.' : 'Loading workspace…'}</p>}
           />
-        </DockviewApiContext.Provider>
+        </FilePaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
     </main>
   );

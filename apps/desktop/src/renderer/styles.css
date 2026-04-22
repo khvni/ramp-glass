@@ -120,21 +120,12 @@ textarea {
   flex-wrap: wrap;
 }
 
-.tinker-dockview {
+.tinker-workspace-shell > .tinker-panes-workspace {
   min-height: 0;
 }
 
 .tinker-workspace-integrations {
   padding: var(--space-3) var(--space-5) 0;
-}
-
-.dockview-theme-abyss {
-  --dv-background-color: var(--color-bg-primary);
-  --dv-activegroup-visiblepanel-tab-background-color: var(--color-bg-elevated);
-  --dv-activegroup-visiblepanel-tab-color: var(--color-text-primary);
-  --dv-group-view-background-color: var(--color-bg-primary);
-  --dv-inactivegroup-visiblepanel-tab-background-color: var(--color-bg-panel);
-  --dv-panel-tab-border-color: var(--color-border-subtle);
 }
 
 .tinker-pane {
