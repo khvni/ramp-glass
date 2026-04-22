@@ -1,6 +1,6 @@
 import { copyFile, exists, mkdir, readTextFile, remove, stat, writeTextFile } from '@tauri-apps/plugin-fs';
-import type { Skill, SkillDraft, SkillGitConfig, SkillSearchResult, SkillStore } from '@tinker/shared-types';
-import { SKILLS_VAULT_DIRECTORY } from '@tinker/shared-types';
+import type { RoleProfile, Skill, SkillDraft, SkillGitConfig, SkillSearchResult, SkillStore } from '@tinker/shared-types';
+import { DEFAULT_SKILL_VERSION, SKILLS_VAULT_DIRECTORY } from '@tinker/shared-types';
 import { getDatabase } from './database.js';
 import {
   draftToSkillContent,
@@ -10,6 +10,7 @@ import {
   skillRelativePath,
   slugFromRelativePath,
 } from './skill-parser.js';
+import { inferRoleProfile } from './role-profile.js';
 import { resolveVaultPath, walkMarkdownFiles } from './vault-utils.js';
 
 type SkillRow = {
@@ -27,15 +28,28 @@ type SkillRow = {
 };
 
 const hydrateSkill = (row: SkillRow): Skill => {
+  const frontmatter = JSON.parse(row.frontmatter_json) as Skill['frontmatter'];
+  const role = typeof frontmatter.role === 'string' && frontmatter.role.trim().length > 0 ? frontmatter.role.trim() : null;
+  const version =
+    typeof frontmatter.version === 'string' && frontmatter.version.trim().length > 0
+      ? frontmatter.version.trim()
+      : DEFAULT_SKILL_VERSION;
+  const author =
+    typeof frontmatter.author === 'string' && frontmatter.author.trim().length > 0 ? frontmatter.author.trim() : null;
+
   return {
+    id: typeof frontmatter.id === 'string' && frontmatter.id.trim().length > 0 ? frontmatter.id.trim() : row.slug,
     slug: row.slug,
     title: row.title,
+    role,
     description: row.description,
     tools: JSON.parse(row.tools_json) as string[],
     tags: JSON.parse(row.tags_json) as string[],
+    version,
+    author,
     body: row.body,
     relativePath: row.relative_path,
-    frontmatter: JSON.parse(row.frontmatter_json) as Skill['frontmatter'],
+    frontmatter,
     lastModified: row.last_modified,
     active: row.active === 1,
     installedAt: row.installed_at,
@@ -153,11 +167,15 @@ export const createSkillStore = (): SkillStore => {
     const previous = await readSkillRow(parsed.slug);
 
     return {
+      id: parsed.id,
       slug: parsed.slug,
       title: parsed.title,
+      role: parsed.role,
       description: parsed.description,
       tools: parsed.tools,
       tags: parsed.tags,
+      version: parsed.version,
+      author: parsed.author,
       body: parsed.body,
       relativePath,
       frontmatter: parsed.frontmatter,
@@ -220,6 +238,11 @@ export const createSkillStore = (): SkillStore => {
       return rows.map(hydrateSkill);
     },
 
+    async getRoleProfile(connectedTools): Promise<RoleProfile> {
+      const skills = await readAllRows();
+      return inferRoleProfile({ connectedTools, skills });
+    },
+
     async setActive(slug: string, active: boolean): Promise<void> {
       const database = await getDatabase();
       await database.execute('UPDATE skills SET active = $1 WHERE slug = $2', [active ? 1 : 0, slug]);
@@ -243,11 +266,15 @@ export const createSkillStore = (): SkillStore => {
 
       const info = await stat(destinationAbsolutePath);
       const skill: Skill = {
+        id: parsed.id,
         slug: parsed.slug,
         title: parsed.title,
+        role: parsed.role,
         description: parsed.description,
         tools: parsed.tools,
         tags: parsed.tags,
+        version: parsed.version,
+        author: parsed.author,
         body: parsed.body,
         relativePath,
         frontmatter: parsed.frontmatter,
@@ -271,11 +298,15 @@ export const createSkillStore = (): SkillStore => {
       const parsed = parseSkillFile(serializeSkill(frontmatter, body), slug);
       const previous = await readSkillRow(slug);
       const skill: Skill = {
+        id: parsed.id,
         slug: parsed.slug,
         title: parsed.title,
+        role: parsed.role,
         description: parsed.description,
         tools: parsed.tools,
         tags: parsed.tags,
+        version: parsed.version,
+        author: parsed.author,
         body: parsed.body,
         relativePath,
         frontmatter: parsed.frontmatter,

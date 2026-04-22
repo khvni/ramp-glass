@@ -7,6 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./coach": "./src/coach.ts",
     "./layout": "./src/layout.ts",
     "./memory": "./src/memory.ts",
     "./pane": "./src/pane.ts",
@@ -20,6 +21,9 @@
     "build": "tsc --noEmit",
     "lint": "eslint src",
     "test": "echo 'no tests'"
+  },
+  "dependencies": {
+    "@tinker/panes": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.6.3"
