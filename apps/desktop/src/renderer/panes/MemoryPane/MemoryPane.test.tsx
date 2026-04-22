@@ -386,7 +386,7 @@ describe('<MemoryPane>', () => {
     await render();
 
     const row = Array.from(container.querySelectorAll('button')).find((button) =>
-      button.textContent?.includes('alice.md'),
+      button.textContent?.includes('Alice'),
     );
     if (!(row instanceof HTMLButtonElement)) {
       throw new Error('Expected pending row.');
@@ -425,7 +425,9 @@ describe('<MemoryPane>', () => {
 
     expect(mockWriteTextFile).toHaveBeenCalledWith('/memory/u/pending/alice.md', '# Updated note');
     expect(memoryPaneTestMocks.listCategorisedMemoryFiles).toHaveBeenCalledTimes(2);
-    expect(container.querySelector('.tinker-memory-sidebar__row--selected')?.textContent).toContain('alice.md');
+    const selectedRow = container.querySelector('.tinker-memory-sidebar__row--selected');
+    expect(selectedRow?.textContent).toContain('Alice');
+    expect(selectedRow).toHaveAttribute('title', 'pending/alice.md');
     expect(container.textContent).toContain('Read mode');
     expect(container.textContent).toContain('Updated note');
   });
