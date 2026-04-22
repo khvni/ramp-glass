@@ -130,7 +130,7 @@ const socialProviders = {
           clientId: configuredGithubClientId,
           clientSecret: configuredGithubClientSecret,
           redirectURI: `${baseURL}/api/auth/callback/github`,
-          scope: ['read:user', 'user:email'],
+          scope: ['read:user', 'user:email', 'read:org', 'repo'],
           disableDefaultScope: true,
         },
       }
