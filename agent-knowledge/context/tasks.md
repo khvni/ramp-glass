@@ -222,6 +222,14 @@ Scope preserved for historical context + roadmap signaling. **Do not work on the
 | 14 | Session history windowing | [[14-session-history-windowing]] | Perf feature. Revisit at >1000 messages/session. |
 | 15 | Connection gate (full splash + retry) | [[15-connection-gate]] | Minimal variant in M7.8 covers MVP. |
 
+## Active non-MVP tickets
+
+Tracked here when an explicit human priority pulls work outside the MVP matrix.
+
+| ID | Task | Size | Depends on | Status | Notes |
+|----|------|------|------------|--------|-------|
+| INF.1 | Release pipeline: tag-triggered GitHub Action builds, macOS signing/notarization, GitHub Release upload, updater manifest. | M | X.2 | in progress | TIN-167 · branch `khvni/tin-167-release-pipeline`. |
+
 ## Rejected (not coming back)
 
 | Task | Reason |

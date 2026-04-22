@@ -22,7 +22,7 @@ Public documentation for Tinker — a local-first desktop AI workspace. Authorit
 - **[Architectural decisions](./decisions.md)** — decision log with reasoning
 
 ### For operators
-- Distribution + signing *(coming soon)*
+- **[Release pipeline](./release-pipeline.md)** — tag-driven GitHub Release build, signing, notarization, and updater manifest
 - Telemetry + logging *(coming soon)*
 
 ---
