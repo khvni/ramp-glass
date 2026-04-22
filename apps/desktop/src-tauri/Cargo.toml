@@ -35,4 +35,5 @@ url = "2"
 webbrowser = "1"
 
 [dev-dependencies]
+keyring = "3.6.3"
 tempfile = "3"
