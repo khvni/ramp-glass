@@ -2,12 +2,14 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { readTextFile } from '@tauri-apps/plugin-fs';
 import { EmptyState, Button } from '@tinker/design';
 import {
-  bucketForFrontmatter,
+  isMemoryCategoryId,
   listCategorisedMemoryFiles,
-  MEMORY_CATEGORY_DIRECTORIES,
+  MEMORY_CATEGORY_ORDER,
+  PENDING_MEMORY_CATEGORY,
   parseFrontmatter,
   subscribeMemoryPathChanged,
   type CategorisedMemoryFiles,
+  type MemoryCategoryId,
   type MemoryEntryBucket,
   type MemoryMarkdownFile,
 } from '@tinker/memory';
@@ -35,12 +37,12 @@ type LoadState =
   | { status: 'error'; message: string };
 
 const emptyBuckets = (): Record<MemoryEntryBucket, MemoryMarkdownFile[]> => ({
-  pending: [],
-  people: [],
-  'active-work': [],
-  capabilities: [],
-  preferences: [],
-  organization: [],
+  Pending: [],
+  People: [],
+  'Active Work': [],
+  Capabilities: [],
+  Preferences: [],
+  Organization: [],
 });
 
 const toErrorMessage = (error: unknown): string => {
@@ -53,6 +55,17 @@ const toErrorMessage = (error: unknown): string => {
 type Selection = {
   file: MemoryMarkdownFile;
   bucket: MemoryEntryBucket;
+};
+
+const readPendingDestination = (text: string): MemoryCategoryId | null => {
+  const { frontmatter } = parseFrontmatter(text);
+  const rawKind = frontmatter.kind;
+  if (typeof rawKind !== 'string') {
+    return null;
+  }
+
+  const exactFolderName = rawKind.trim();
+  return isMemoryCategoryId(exactFolderName) ? exactFolderName : null;
 };
 
 const findSelectionByPath = (
@@ -195,7 +208,7 @@ export const MemoryPane = (): JSX.Element => {
   );
 
   const handleApprove = useCallback(async (): Promise<void> => {
-    if (!selection || selection.bucket !== 'pending' || isBusy) {
+    if (!selection || selection.bucket !== PENDING_MEMORY_CATEGORY || isBusy) {
       return;
     }
     if (browserPreview) {
@@ -206,14 +219,13 @@ export const MemoryPane = (): JSX.Element => {
     setActionError(null);
     try {
       const text = await readTextFile(selection.file.absolutePath);
-      const { frontmatter } = parseFrontmatter(text);
-      const categoryId = bucketForFrontmatter(frontmatter);
+      const categoryId = readPendingDestination(text);
       if (!categoryId) {
         throw new Error(
-          'Memory entry is missing a recognised "kind:" frontmatter (people, active-work, capabilities, preferences, organization).',
+          `Memory entry is missing a "kind:" frontmatter that exactly matches one of: ${MEMORY_CATEGORY_ORDER.join(', ')}.`,
         );
       }
-      await approveMemoryEntry(selection.file.absolutePath, MEMORY_CATEGORY_DIRECTORIES[categoryId]);
+      await approveMemoryEntry(selection.file.absolutePath, categoryId);
       setSelection(null);
       reloadFiles();
     } catch (error) {
@@ -224,7 +236,7 @@ export const MemoryPane = (): JSX.Element => {
   }, [browserPreview, isBusy, reloadFiles, selection]);
 
   const handleDismiss = useCallback(async (): Promise<void> => {
-    if (!selection || selection.bucket !== 'pending' || isBusy) {
+    if (!selection || selection.bucket !== PENDING_MEMORY_CATEGORY || isBusy) {
       return;
     }
     if (browserPreview) {

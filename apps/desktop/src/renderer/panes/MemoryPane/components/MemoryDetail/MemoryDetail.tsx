@@ -3,8 +3,7 @@ import DOMPurify from 'dompurify';
 import { readTextFile, writeTextFile } from '@tauri-apps/plugin-fs';
 import { Badge, Button, EmptyState, IconButton, Textarea } from '@tinker/design';
 import {
-  MEMORY_CATEGORY_LABELS,
-  type MemoryCategoryId,
+  PENDING_MEMORY_CATEGORY,
   type MemoryEntryBucket,
   type MemoryMarkdownFile,
 } from '@tinker/memory';
@@ -61,11 +60,10 @@ const PencilIcon = (): JSX.Element => (
 );
 
 const CategoryBadge = ({ bucket }: { bucket: MemoryEntryBucket }): JSX.Element | null => {
-  if (bucket === 'pending') {
+  if (bucket === PENDING_MEMORY_CATEGORY) {
     return null;
   }
-  const label = MEMORY_CATEGORY_LABELS[bucket as MemoryCategoryId];
-  return <Badge variant="default" size="medium">{label}</Badge>;
+  return <Badge variant="default" size="medium">{bucket}</Badge>;
 };
 
 type StatusLineProps = {
@@ -75,7 +73,7 @@ type StatusLineProps = {
 };
 
 const StatusLine = ({ bucket, modifiedAt, formatter }: StatusLineProps): JSX.Element => {
-  if (bucket === 'pending') {
+  if (bucket === PENDING_MEMORY_CATEGORY) {
     return (
       <span className="tinker-memory-detail__status">
         <span className="tinker-memory-detail__status-dot" aria-hidden="true" />
@@ -236,7 +234,7 @@ export const MemoryDetail = ({
     );
   }
 
-  const showActions = bucket === 'pending';
+  const showActions = bucket === PENDING_MEMORY_CATEGORY;
   const controlsBusy = isBusy || isSaving;
   const isEditing = mode === 'edit';
   const isDirty = draft !== savedDraft;
@@ -284,7 +282,7 @@ export const MemoryDetail = ({
         <div className="tinker-memory-detail__header-main">
           <div className="tinker-memory-detail__title-row">
             <h2 className="tinker-memory-detail__title">{file.name}</h2>
-            {bucket !== 'pending' ? <CategoryBadge bucket={bucket} /> : null}
+            {bucket !== PENDING_MEMORY_CATEGORY ? <CategoryBadge bucket={bucket} /> : null}
           </div>
           <StatusLine bucket={bucket} modifiedAt={file.modifiedAt} formatter={relativeFormatter} />
         </div>

@@ -60,12 +60,12 @@ export const listMemoryMarkdownFiles = async (
 
 const emptyBuckets = (): Record<MemoryEntryBucket, IndexedMemoryMarkdownFile[]> => {
   const buckets: Record<MemoryEntryBucket, IndexedMemoryMarkdownFile[]> = {
-    pending: [],
-    people: [],
-    'active-work': [],
-    capabilities: [],
-    preferences: [],
-    organization: [],
+    Pending: [],
+    People: [],
+    'Active Work': [],
+    Capabilities: [],
+    Preferences: [],
+    Organization: [],
   };
   return buckets;
 };

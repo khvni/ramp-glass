@@ -6,7 +6,12 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { CategorisedMemoryFiles, MemoryEntryBucket, MemoryMarkdownFile } from '@tinker/memory';
+import type {
+  CategorisedMemoryFiles,
+  MemoryCategoryId,
+  MemoryEntryBucket,
+  MemoryMarkdownFile,
+} from '@tinker/memory';
 import { MemoryPaneRuntimeContext } from '../../workspace/memory-pane-runtime.js';
 
 const memoryPaneTestMocks = vi.hoisted(() => {
@@ -45,30 +50,12 @@ vi.mock('@tinker/memory', () => ({
   listCategorisedMemoryFiles: memoryPaneTestMocks.listCategorisedMemoryFiles,
   subscribeMemoryPathChanged: memoryPaneTestMocks.subscribeMemoryPathChanged,
   parseFrontmatter: memoryPaneTestMocks.parseFrontmatter,
-  bucketForFrontmatter: (frontmatter: Record<string, unknown>) => {
-    const raw = frontmatter.kind;
-    if (typeof raw !== 'string') {
-      return null;
-    }
-    const normalized = raw.trim().toLowerCase().replace(/[_\s]+/gu, '-');
-    const valid = ['people', 'active-work', 'capabilities', 'preferences', 'organization'];
-    return valid.includes(normalized) ? normalized : null;
+  isMemoryCategoryId: (value: string): value is MemoryCategoryId => {
+    const valid = ['People', 'Active Work', 'Capabilities', 'Preferences', 'Organization'];
+    return valid.includes(value);
   },
-  MEMORY_CATEGORY_DIRECTORIES: {
-    people: 'people',
-    'active-work': 'active-work',
-    capabilities: 'capabilities',
-    preferences: 'preferences',
-    organization: 'organization',
-  },
-  MEMORY_CATEGORY_ORDER: ['people', 'active-work', 'capabilities', 'preferences', 'organization'],
-  MEMORY_CATEGORY_LABELS: {
-    people: 'People',
-    'active-work': 'Active Work',
-    capabilities: 'Capabilities',
-    preferences: 'Preferences',
-    organization: 'Organization',
-  },
+  MEMORY_CATEGORY_ORDER: ['People', 'Active Work', 'Capabilities', 'Preferences', 'Organization'],
+  PENDING_MEMORY_CATEGORY: 'Pending',
 }));
 
 const { mockReadTextFile, mockWriteTextFile, mockRenderMarkdown, mockApprove, mockDismiss, mockDiff } =
@@ -99,12 +86,12 @@ vi.mock('./memory-commands.js', () => ({
 import { MemoryPane } from './MemoryPane.js';
 
 const emptyBuckets = (): Record<MemoryEntryBucket, MemoryMarkdownFile[]> => ({
-  pending: [],
-  people: [],
-  'active-work': [],
-  capabilities: [],
-  preferences: [],
-  organization: [],
+  Pending: [],
+  People: [],
+  'Active Work': [],
+  Capabilities: [],
+  Preferences: [],
+  Organization: [],
 });
 
 const flushEffects = async (): Promise<void> => {
@@ -132,8 +119,8 @@ const updateTextareaValue = async (
 };
 
 const makeFile = (overrides: Partial<MemoryMarkdownFile> = {}): MemoryMarkdownFile => ({
-  absolutePath: '/memory/u/pending/alice.md',
-  relativePath: 'pending/alice.md',
+  absolutePath: '/memory/u/Pending/alice.md',
+  relativePath: 'Pending/alice.md',
   name: 'alice.md',
   modifiedAt: '2026-04-22T14:00:00.000Z',
   ...overrides,
@@ -192,8 +179,8 @@ describe('<MemoryPane>', () => {
       rootPath: '/memory/u',
       buckets: {
         ...emptyBuckets(),
-        pending: [makeFile()],
-        people: [makeFile({ absolutePath: '/memory/u/people/khani.md', relativePath: 'people/khani.md', name: 'khani.md' })],
+        Pending: [makeFile()],
+        People: [makeFile({ absolutePath: '/memory/u/People/khani.md', relativePath: 'People/khani.md', name: 'khani.md' })],
       },
     });
 
@@ -209,14 +196,14 @@ describe('<MemoryPane>', () => {
     memoryPaneTestMocks.listCategorisedMemoryFiles
       .mockResolvedValueOnce({
         rootPath: '/memory/u',
-        buckets: { ...emptyBuckets(), pending: [makeFile()] },
+        buckets: { ...emptyBuckets(), Pending: [makeFile()] },
       })
       .mockResolvedValueOnce({
         rootPath: '/memory/u',
-        buckets: { ...emptyBuckets(), people: [makeFile({ relativePath: 'people/alice.md', absolutePath: '/memory/u/people/alice.md' })] },
+        buckets: { ...emptyBuckets(), People: [makeFile({ relativePath: 'People/alice.md', absolutePath: '/memory/u/People/alice.md' })] },
       });
     mockReadTextFile.mockResolvedValue('---\nkind: People\n---\n# Alice');
-    mockApprove.mockResolvedValue('/memory/u/people/alice.md');
+    mockApprove.mockResolvedValue('/memory/u/People/alice.md');
 
     await render();
 
@@ -244,13 +231,13 @@ describe('<MemoryPane>', () => {
     });
     await flushEffects();
 
-    expect(mockApprove).toHaveBeenCalledWith('/memory/u/pending/alice.md', 'people');
+    expect(mockApprove).toHaveBeenCalledWith('/memory/u/Pending/alice.md', 'People');
     expect(memoryPaneTestMocks.listCategorisedMemoryFiles).toHaveBeenCalledTimes(2);
   });
 
   it('calls dismiss and refreshes when the user dismisses a pending entry', async () => {
     memoryPaneTestMocks.listCategorisedMemoryFiles
-      .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: { ...emptyBuckets(), pending: [makeFile()] } })
+      .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: { ...emptyBuckets(), Pending: [makeFile()] } })
       .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: emptyBuckets() });
     mockDismiss.mockResolvedValue(undefined);
 
@@ -278,16 +265,16 @@ describe('<MemoryPane>', () => {
     });
     await flushEffects();
 
-    expect(mockDismiss).toHaveBeenCalledWith('/memory/u/pending/alice.md');
+    expect(mockDismiss).toHaveBeenCalledWith('/memory/u/Pending/alice.md');
     expect(memoryPaneTestMocks.listCategorisedMemoryFiles).toHaveBeenCalledTimes(2);
   });
 
   it('refreshes the list when the memory path changes', async () => {
     memoryPaneTestMocks.listCategorisedMemoryFiles
-      .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: { ...emptyBuckets(), pending: [makeFile()] } })
+      .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: { ...emptyBuckets(), Pending: [makeFile()] } })
       .mockResolvedValueOnce({
         rootPath: '/memory/u',
-        buckets: { ...emptyBuckets(), pending: [makeFile({ name: 'bob.md', absolutePath: '/memory/u/pending/bob.md', relativePath: 'pending/bob.md' })] },
+        buckets: { ...emptyBuckets(), Pending: [makeFile({ name: 'bob.md', absolutePath: '/memory/u/Pending/bob.md', relativePath: 'Pending/bob.md' })] },
       });
 
     await render();
@@ -303,12 +290,12 @@ describe('<MemoryPane>', () => {
 
   it('reloads memory after save and keeps the same file selected', async () => {
     memoryPaneTestMocks.listCategorisedMemoryFiles
-      .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: { ...emptyBuckets(), pending: [makeFile()] } })
+      .mockResolvedValueOnce({ rootPath: '/memory/u', buckets: { ...emptyBuckets(), Pending: [makeFile()] } })
       .mockResolvedValueOnce({
         rootPath: '/memory/u',
         buckets: {
           ...emptyBuckets(),
-          pending: [makeFile({ modifiedAt: '2026-04-22T15:00:00.000Z' })],
+          Pending: [makeFile({ modifiedAt: '2026-04-22T15:00:00.000Z' })],
         },
       });
 
@@ -352,7 +339,7 @@ describe('<MemoryPane>', () => {
     });
     await flushEffects();
 
-    expect(mockWriteTextFile).toHaveBeenCalledWith('/memory/u/pending/alice.md', '# Updated note');
+    expect(mockWriteTextFile).toHaveBeenCalledWith('/memory/u/Pending/alice.md', '# Updated note');
     expect(memoryPaneTestMocks.listCategorisedMemoryFiles).toHaveBeenCalledTimes(2);
     expect(container.querySelector('.tinker-memory-sidebar__row--selected')?.textContent).toContain('alice.md');
     expect(container.textContent).toContain('Read mode');
