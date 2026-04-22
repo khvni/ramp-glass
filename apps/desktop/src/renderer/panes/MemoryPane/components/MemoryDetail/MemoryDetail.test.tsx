@@ -24,8 +24,8 @@ vi.mock('../../../../renderers/MarkdownRenderer.js', () => ({
 import { MemoryDetail } from './MemoryDetail.js';
 
 const makeFile = (overrides: Partial<MemoryMarkdownFile> = {}): MemoryMarkdownFile => ({
-  absolutePath: '/memory/u/pending/alice.md',
-  relativePath: 'pending/alice.md',
+  absolutePath: '/memory/u/Pending/alice.md',
+  relativePath: 'Pending/alice.md',
   name: 'alice.md',
   modifiedAt: '2026-04-22T14:00:00.000Z',
   ...overrides,
@@ -86,7 +86,7 @@ describe('<MemoryDetail>', () => {
       root.render(
         <MemoryDetail
           file={makeFile()}
-          bucket="pending"
+          bucket="Pending"
           diffText=""
           diffLoading={false}
           onApprove={onApprove}
@@ -123,8 +123,8 @@ describe('<MemoryDetail>', () => {
     await act(async () => {
       root.render(
         <MemoryDetail
-          file={makeFile({ absolutePath: '/memory/u/active-work/ship.md', relativePath: 'active-work/ship.md', name: 'ship.md' })}
-          bucket="active-work"
+          file={makeFile({ absolutePath: '/memory/u/Active Work/ship.md', relativePath: 'Active Work/ship.md', name: 'ship.md' })}
+          bucket="Active Work"
           diffText=""
           diffLoading={false}
           onApprove={() => undefined}
@@ -147,7 +147,7 @@ describe('<MemoryDetail>', () => {
       root.render(
         <MemoryDetail
           file={makeFile()}
-          bucket="pending"
+          bucket="Pending"
           diffText="+ new line\n- old line"
           diffLoading={false}
           onApprove={() => undefined}
@@ -164,7 +164,7 @@ describe('<MemoryDetail>', () => {
       root.render(
         <MemoryDetail
           file={makeFile()}
-          bucket="pending"
+          bucket="Pending"
           diffText=""
           diffLoading={false}
           onApprove={() => undefined}

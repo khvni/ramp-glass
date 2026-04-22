@@ -121,23 +121,23 @@ describe('listCategorisedMemoryFiles', () => {
     mockReadDir.mockImplementation(async (path: string) => {
       if (path === '/memory/google:42') {
         return [
-          createDirEntry('pending', 'directory'),
-          createDirEntry('people', 'directory'),
-          createDirEntry('active-work', 'directory'),
+          createDirEntry('Pending', 'directory'),
+          createDirEntry('People', 'directory'),
+          createDirEntry('Active Work', 'directory'),
           createDirEntry('sessions', 'directory'),
           createDirEntry('profile.md', 'file'),
         ];
       }
-      if (path === '/memory/google:42/pending') {
+      if (path === '/memory/google:42/Pending') {
         return [
           createDirEntry('new-person.md', 'file'),
           createDirEntry('loose-note.md', 'file'),
         ];
       }
-      if (path === '/memory/google:42/people') {
+      if (path === '/memory/google:42/People') {
         return [createDirEntry('khani.md', 'file')];
       }
-      if (path === '/memory/google:42/active-work') {
+      if (path === '/memory/google:42/Active Work') {
         return [createDirEntry('ship-tin-196.md', 'file')];
       }
       if (path === '/memory/google:42/sessions') {
@@ -172,39 +172,39 @@ describe('listCategorisedMemoryFiles', () => {
     const result = await listCategorisedMemoryFiles('google:42', 'darwin');
 
     expect(result.rootPath).toBe('/memory/google:42');
-    expect(result.buckets.pending).toEqual([
+    expect(result.buckets.Pending).toEqual([
       {
-        absolutePath: '/memory/google:42/pending/new-person.md',
-        relativePath: 'pending/new-person.md',
+        absolutePath: '/memory/google:42/Pending/new-person.md',
+        relativePath: 'Pending/new-person.md',
         name: 'new-person.md',
         modifiedAt: '2026-04-22T14:00:00.000Z',
       },
       {
-        absolutePath: '/memory/google:42/pending/loose-note.md',
-        relativePath: 'pending/loose-note.md',
+        absolutePath: '/memory/google:42/Pending/loose-note.md',
+        relativePath: 'Pending/loose-note.md',
         name: 'loose-note.md',
         modifiedAt: '2026-04-22T12:00:00.000Z',
       },
     ]);
-    expect(result.buckets.people).toEqual([
+    expect(result.buckets.People).toEqual([
       {
-        absolutePath: '/memory/google:42/people/khani.md',
-        relativePath: 'people/khani.md',
+        absolutePath: '/memory/google:42/People/khani.md',
+        relativePath: 'People/khani.md',
         name: 'khani.md',
         modifiedAt: '2026-04-21T08:00:00.000Z',
       },
     ]);
-    expect(result.buckets['active-work']).toEqual([
+    expect(result.buckets['Active Work']).toEqual([
       {
-        absolutePath: '/memory/google:42/active-work/ship-tin-196.md',
-        relativePath: 'active-work/ship-tin-196.md',
+        absolutePath: '/memory/google:42/Active Work/ship-tin-196.md',
+        relativePath: 'Active Work/ship-tin-196.md',
         name: 'ship-tin-196.md',
         modifiedAt: '2026-04-22T09:00:00.000Z',
       },
     ]);
-    expect(result.buckets.capabilities).toEqual([]);
-    expect(result.buckets.preferences).toEqual([]);
-    expect(result.buckets.organization).toEqual([]);
+    expect(result.buckets.Capabilities).toEqual([]);
+    expect(result.buckets.Preferences).toEqual([]);
+    expect(result.buckets.Organization).toEqual([]);
   });
 
   it('returns empty buckets when the memory root has no matching directories', async () => {
@@ -221,11 +221,11 @@ describe('listCategorisedMemoryFiles', () => {
 
     const result = await listCategorisedMemoryFiles('google:42');
 
-    expect(result.buckets.pending).toEqual([]);
-    expect(result.buckets.people).toEqual([]);
-    expect(result.buckets['active-work']).toEqual([]);
-    expect(result.buckets.capabilities).toEqual([]);
-    expect(result.buckets.preferences).toEqual([]);
-    expect(result.buckets.organization).toEqual([]);
+    expect(result.buckets.Pending).toEqual([]);
+    expect(result.buckets.People).toEqual([]);
+    expect(result.buckets['Active Work']).toEqual([]);
+    expect(result.buckets.Capabilities).toEqual([]);
+    expect(result.buckets.Preferences).toEqual([]);
+    expect(result.buckets.Organization).toEqual([]);
   });
 });

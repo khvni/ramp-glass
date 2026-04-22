@@ -215,6 +215,19 @@ describe('default memory root resolution', () => {
     expect(mockJoin).toHaveBeenCalledWith('/tmp/memory-b', 'user-1');
   });
 
+  it('creates the canonical category folders inside each active user directory', async () => {
+    mockSettingsGet.mockResolvedValue(makeSetting('/tmp/memory-root'));
+
+    await expect(getActiveMemoryPath('user-1', 'linux')).resolves.toBe('/tmp/memory-root/user-1');
+
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/memory-root/user-1/Pending', { recursive: true });
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/memory-root/user-1/People', { recursive: true });
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/memory-root/user-1/Active Work', { recursive: true });
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/memory-root/user-1/Capabilities', { recursive: true });
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/memory-root/user-1/Preferences', { recursive: true });
+    expect(mockMkdir).toHaveBeenCalledWith('/tmp/memory-root/user-1/Organization', { recursive: true });
+  });
+
   it('validates that a candidate memory root is writable', async () => {
     mockJoin.mockResolvedValueOnce('/tmp/new-memory/.tinker-memory-root-probe-test.tmp');
     mockExists.mockResolvedValue(true);

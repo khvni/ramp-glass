@@ -1735,7 +1735,7 @@ const TitlebarTab = (): JSX.Element => (
 
 const MemorySidebarPlayground = (): JSX.Element => {
   const [selected, setSelected] = useState<string | null>(
-    '/memory/demo/pending/writing-articles.md',
+    '/memory/demo/Pending/writing-articles.md',
   );
   const [search, setSearch] = useState('');
 
@@ -1747,7 +1747,7 @@ const MemorySidebarPlayground = (): JSX.Element => {
         onSearchChange={setSearch}
         selectedPath={selected}
         onSelect={(file) => setSelected(file.absolutePath)}
-        seenPaths={new Set(['/memory/demo/pending/writing-articles.md'])}
+        seenPaths={new Set(['/memory/demo/Pending/writing-articles.md'])}
         referenceTimeMs={PREVIEW_MEMORY_REFERENCE_TIME_MS}
       />
     </div>

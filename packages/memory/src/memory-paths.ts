@@ -1,5 +1,6 @@
 import { dataDir, join } from '@tauri-apps/api/path';
 import { copyFile, exists, mkdir, readDir, remove, writeTextFile } from '@tauri-apps/plugin-fs';
+import { MEMORY_FOLDER_ORDER } from './memory-categories.js';
 import { createSettingsStore, type SettingsStore } from './settings-store.js';
 import { emitMemoryPathChanged } from './events.js';
 export { subscribeMemoryPathChanged } from './events.js';
@@ -37,6 +38,14 @@ const normalizeDirectoryForDetection = (directory: string): string => {
 const MEMORY_ROOT_SETTING_KEY = 'memory_root';
 const MEMORY_ROOT_PROBE_FILE_PREFIX = '.tinker-memory-root-probe';
 let activeMemoryPathState: ActiveMemoryPathState | null = null;
+
+const ensureMemoryCategoryFolders = async (activeMemoryPath: string): Promise<void> => {
+  await Promise.all(
+    MEMORY_FOLDER_ORDER.map(async (folderName) => {
+      await mkdir(await join(activeMemoryPath, folderName), { recursive: true });
+    }),
+  );
+};
 
 const createMemorySettingsStore = (): SettingsStore => {
   return createSettingsStore();
@@ -200,6 +209,7 @@ export const getActiveMemoryPath = async (
   const memoryRoot = await getMemoryRoot(runtimePlatform);
   const activeMemoryPath = await join(memoryRoot, normalizedUserId);
   await mkdir(activeMemoryPath, { recursive: true });
+  await ensureMemoryCategoryFolders(activeMemoryPath);
   return activeMemoryPath;
 };
 
@@ -218,6 +228,7 @@ export const syncActiveMemoryPath = async (
   const memoryRoot = await getMemoryRoot(options?.runtimePlatform);
   const activeMemoryPath = await join(memoryRoot, normalizedUserId);
   await mkdir(activeMemoryPath, { recursive: true });
+  await ensureMemoryCategoryFolders(activeMemoryPath);
 
   const previousState = activeMemoryPathState;
   const changed =
