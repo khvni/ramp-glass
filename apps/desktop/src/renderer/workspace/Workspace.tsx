@@ -46,6 +46,8 @@ type WorkspaceProps = {
   googleAuthMessage: string | null;
   githubAuthBusy: boolean;
   githubAuthMessage: string | null;
+  microsoftAuthBusy: boolean;
+  microsoftAuthMessage: string | null;
   opencode: OpencodeConnection;
   sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
@@ -58,8 +60,10 @@ type WorkspaceProps = {
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
   onConnectGithub(): Promise<void>;
+  onConnectMicrosoft(): Promise<void>;
   onDisconnectGoogle(): Promise<void>;
   onDisconnectGithub(): Promise<void>;
+  onDisconnectMicrosoft(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
   onActiveSkillsChanged(): void;
@@ -336,7 +340,7 @@ export const Workspace = ({
             {modelConnected ? 'Model connected' : 'Model disconnected'}
           </Badge>
           <Badge variant="default" size="small">
-            {sessions.google?.email ?? sessions.github?.email ?? 'Offline mode'}
+            {sessions.google?.email ?? sessions.github?.email ?? sessions.microsoft?.email ?? 'Offline mode'}
           </Badge>
           <Badge variant="default" size="small">
             {vaultPath ?? 'No vault selected'}

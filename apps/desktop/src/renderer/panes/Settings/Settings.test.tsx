@@ -14,6 +14,7 @@ vi.mock('./useMemoryRootControls.js', () => ({
 const EMPTY_SESSIONS: SSOStatus = {
   google: null,
   github: null,
+  microsoft: null,
 };
 
 describe('Settings', () => {
@@ -46,15 +47,19 @@ describe('Settings', () => {
         googleAuthMessage={null}
         githubAuthBusy={false}
         githubAuthMessage={null}
+        microsoftAuthBusy={false}
+        microsoftAuthMessage={null}
         sessions={EMPTY_SESSIONS}
         mcpStatus={{}}
         vaultPath={null}
         onConnectModel={vi.fn(async () => undefined)}
         onConnectGoogle={vi.fn(async () => undefined)}
         onConnectGithub={vi.fn(async () => undefined)}
+        onConnectMicrosoft={vi.fn(async () => undefined)}
         onDisconnectModel={vi.fn(async () => undefined)}
         onDisconnectGoogle={vi.fn(async () => undefined)}
         onDisconnectGithub={vi.fn(async () => undefined)}
+        onDisconnectMicrosoft={vi.fn(async () => undefined)}
         onCreateVault={vi.fn(async () => undefined)}
         onSelectVault={vi.fn(async () => undefined)}
         workspacePreferences={createDefaultWorkspacePreferences()}
@@ -86,15 +91,19 @@ describe('Settings', () => {
         googleAuthMessage={null}
         githubAuthBusy={false}
         githubAuthMessage={null}
+        microsoftAuthBusy={false}
+        microsoftAuthMessage={null}
         sessions={EMPTY_SESSIONS}
         mcpStatus={{}}
         vaultPath={null}
         onConnectModel={vi.fn(async () => undefined)}
         onConnectGoogle={vi.fn(async () => undefined)}
         onConnectGithub={vi.fn(async () => undefined)}
+        onConnectMicrosoft={vi.fn(async () => undefined)}
         onDisconnectModel={vi.fn(async () => undefined)}
         onDisconnectGoogle={vi.fn(async () => undefined)}
         onDisconnectGithub={vi.fn(async () => undefined)}
+        onDisconnectMicrosoft={vi.fn(async () => undefined)}
         onCreateVault={vi.fn(async () => undefined)}
         onSelectVault={vi.fn(async () => undefined)}
         workspacePreferences={createDefaultWorkspacePreferences()}
