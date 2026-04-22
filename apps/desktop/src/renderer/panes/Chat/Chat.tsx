@@ -8,10 +8,20 @@ import {
   useState,
   type JSX,
   type KeyboardEvent,
+  type ReactNode,
   type UIEventHandler,
 } from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
-import { Badge, Button, ClickableBadge, ContextBadge, EmptyState, ModelPicker, Textarea } from '@tinker/design';
+import {
+  Badge,
+  Button,
+  ClickableBadge,
+  ContextBadge,
+  EmptyState,
+  IconButton,
+  ModelPicker,
+  Textarea,
+} from '@tinker/design';
 import {
   createChatHistoryWriter,
   findLatestChatHistorySessionId,
@@ -33,6 +43,7 @@ import {
   pickDefaultModelOptionId,
   type WorkspaceModelOption,
 } from '../../opencode.js';
+import { AttachmentIcon } from './AttachmentIcon.js';
 import { ChatMessage } from '../ChatMessage/index.js';
 import {
   calculateComposerHeight,
@@ -65,6 +76,8 @@ type ChatProps = {
   onOpenFileLink?: (path: string) => void;
   onOpenNewChat?: () => void;
   onMemoryCommitted?: () => void;
+  modeToggleSlot?: ReactNode;
+  reasoningPickerSlot?: ReactNode;
 };
 
 const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): ChatMessageRecord[] => {
@@ -206,6 +219,8 @@ export const Chat = ({
   onOpenFileLink,
   onOpenNewChat,
   onMemoryCommitted,
+  modeToggleSlot,
+  reasoningPickerSlot,
 }: ChatProps): JSX.Element => {
   const readyStatus = modelConnected ? 'OpenCode is ready.' : 'Connect an AI model in Settings to start chatting.';
   const client = useMemo(
@@ -938,25 +953,35 @@ export const Chat = ({
   };
 
   return (
-    <section className="tinker-pane">
-      <header className="tinker-pane-header">
-        <div>
-          <p className="tinker-eyebrow">Chat</p>
-          <h2>Talk to OpenCode directly</h2>
-        </div>
-        <div className="tinker-inline-actions">
-          {onOpenNewChat ? (
-            <Button variant="secondary" size="s" onClick={onOpenNewChat}>
-              New chat tab
-            </Button>
-          ) : null}
+    <section className="tinker-pane tinker-pane--chat">
+      <header className="tinker-chat-header">
+        <div className="tinker-chat-header__left">
+          <ModelPicker
+            items={modelOptions}
+            value={selectedModelId}
+            onSelect={setSelectedModelId}
+            loading={modelOptionsLoading}
+            disabled={busy || hydratingHistory}
+            emptyLabel="No models available in OpenCode."
+          />
           <span className="tinker-chat-legend" title="Toggle thinking + tool disclosures (Alt+T)">
             ⌥T thinking
           </span>
+        </div>
+        <div className="tinker-chat-header__right">
           {contextUsage ? <ContextBadge {...contextUsage} /> : null}
+          <div className="tinker-chat-header__slot">
+            {modeToggleSlot}
+            {reasoningPickerSlot}
+          </div>
           <Badge variant="default" size="small">
             {status}
           </Badge>
+          {onOpenNewChat ? (
+            <Button variant="ghost" size="s" onClick={onOpenNewChat}>
+              New chat tab
+            </Button>
+          ) : null}
         </div>
       </header>
 
@@ -1055,39 +1080,49 @@ export const Chat = ({
         ) : null}
       </div>
 
-      <div className={`tinker-composer${busy ? ' tinker-composer--busy' : ''}`}>
-        <Textarea
-          ref={composerRef}
-          value={input}
-          rows={4}
-          resize="none"
-          placeholder="Ask about the vault, your project, or the next change to make."
-          onChange={(event) => setInput(event.currentTarget.value)}
-          onKeyDown={handleComposerKeyDown}
-          disabled={busy || hydratingHistory || !modelConnected}
-        />
-        <div className="tinker-inline-actions tinker-composer-actions">
-          <ModelPicker
-            items={modelOptions}
-            value={selectedModelId}
-            onSelect={setSelectedModelId}
-            loading={modelOptionsLoading}
-            disabled={busy || hydratingHistory}
-            emptyLabel="No models available in OpenCode."
-          />
-          {busy ? (
-            <Button variant="danger" onClick={() => void abortActiveStream()}>
-              Stop
-            </Button>
-          ) : (
-            <Button
-              variant="primary"
-              onClick={sendMessage}
-              disabled={hydratingHistory || !modelConnected || input.trim().length === 0}
-            >
-              Send message
-            </Button>
-          )}
+      <div className="tinker-composer-card__wrap">
+        <div
+          className={`tinker-composer-card${busy ? ' tinker-composer-card--busy' : ''}`}
+        >
+          <div className="tinker-composer-card__body">
+            <Textarea
+              ref={composerRef}
+              value={input}
+              rows={4}
+              resize="none"
+              placeholder="Ask about the vault, your project, or the next change to make."
+              onChange={(event) => setInput(event.currentTarget.value)}
+              onKeyDown={handleComposerKeyDown}
+              disabled={busy || hydratingHistory || !modelConnected}
+            />
+          </div>
+          <div className="tinker-composer-card__footer">
+            <div className="tinker-composer-card__footer-left">
+              <IconButton
+                variant="ghost"
+                size="s"
+                icon={<AttachmentIcon />}
+                label="Attachments coming soon"
+                aria-disabled
+                disabled
+              />
+            </div>
+            <div className="tinker-composer-card__footer-right">
+              {busy ? (
+                <Button variant="danger" onClick={() => void abortActiveStream()}>
+                  Stop
+                </Button>
+              ) : (
+                <Button
+                  variant="primary"
+                  onClick={sendMessage}
+                  disabled={hydratingHistory || !modelConnected || input.trim().length === 0}
+                >
+                  Send message
+                </Button>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </section>
