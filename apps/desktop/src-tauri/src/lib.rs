@@ -30,29 +30,6 @@ struct OpencodeState {
     connection: Mutex<Option<OpencodeConnection>>,
 }
 
-#[derive(Clone, Debug)]
-struct BootstrapOpencodeConfig {
-    user_id: String,
-    memory_subdir: String,
-}
-
-impl BootstrapOpencodeConfig {
-    fn new(user_id: impl Into<String>, memory_subdir: impl Into<String>) -> Self {
-        Self {
-            user_id: user_id.into(),
-            memory_subdir: memory_subdir.into(),
-        }
-    }
-
-    fn validate(&self) -> Result<(), String> {
-        if self.user_id.trim().is_empty() {
-            return Err("user_id must not be empty".to_string());
-        }
-
-        Ok(())
-    }
-}
-
 fn clone_opencode_connection(state: &OpencodeState) -> Result<OpencodeConnection, String> {
     state
         .connection
@@ -127,7 +104,7 @@ fn bootstrap_opencode_env(
     config_path: &PathBuf,
     username: &str,
     password: &str,
-    memory_subdir: &str,
+    memory_subdir: Option<&str>,
 ) -> Vec<(String, String)> {
     let mut envs = vec![
         (
@@ -138,7 +115,10 @@ fn bootstrap_opencode_env(
         ("OPENCODE_SERVER_PASSWORD".to_string(), password.to_string()),
     ];
 
-    if !memory_subdir.trim().is_empty() {
+    if let Some(memory_subdir) = memory_subdir
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
         envs.push(("SMART_VAULT_PATH".to_string(), memory_subdir.to_string()));
     }
 
@@ -172,19 +152,20 @@ fn ensure_main_window(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Deserialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct RestartOpencodeOptions {
+    pub folder_path: Option<String>,
+    pub memory_subdir: Option<String>,
+}
+
 #[tauri::command]
 async fn restart_opencode(
     app: tauri::AppHandle,
-    user_id: String,
-    memory_subdir: String,
+    options: Option<RestartOpencodeOptions>,
 ) -> Result<OpencodeConnection, String> {
-    if memory_subdir.trim().is_empty() {
-        return Err("memory_subdir must not be empty".to_string());
-    }
-
     terminate_legacy_opencode(&app);
-    let config = BootstrapOpencodeConfig::new(user_id, memory_subdir);
-    bootstrap_opencode(&app, &config).await?;
+    bootstrap_opencode(&app, options.unwrap_or_default()).await?;
     let state = app.state::<OpencodeState>();
     clone_opencode_connection(&state)
 }
@@ -270,10 +251,8 @@ async fn wait_for_opencode_connection(
 
 async fn bootstrap_opencode(
     app: &tauri::AppHandle,
-    config: &BootstrapOpencodeConfig,
+    options: RestartOpencodeOptions,
 ) -> Result<(), String> {
-    config.validate()?;
-
     let state = app.state::<OpencodeState>();
     if state
         .child
@@ -285,26 +264,39 @@ async fn bootstrap_opencode(
     }
 
     let config_path = opencode_config_path(app)?;
-    let working_dir = config_path
-        .parent()
-        .ok_or_else(|| "OpenCode config path did not have a parent directory.".to_string())?
-        .to_path_buf();
+    let folder_arg = options
+        .folder_path
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let working_dir = match folder_arg {
+        Some(folder) => PathBuf::from(folder),
+        None => config_path
+            .parent()
+            .ok_or_else(|| "OpenCode config path did not have a parent directory.".to_string())?
+            .to_path_buf(),
+    };
     let username = format!("tinker-{}", random_url_safe(8));
     let password = random_url_safe(24);
     let github_token = read_keychain_session(app, AuthProvider::Github)?
         .map(|session| session.access_token().to_string())
         .unwrap_or_default();
 
+    let mut sidecar_args = vec!["serve", "--hostname", "127.0.0.1", "--port", "0"];
+    if let Some(folder) = folder_arg {
+        sidecar_args.extend(["--cwd", folder]);
+    }
+
     let mut sidecar = app
         .shell()
         .sidecar("opencode")
         .map_err(|error| error.to_string())?
-        .args(["serve", "--hostname", "127.0.0.1", "--port", "0"])
+        .args(sidecar_args)
         .envs(bootstrap_opencode_env(
             &config_path,
             &username,
             &password,
-            &config.memory_subdir,
+            options.memory_subdir.as_deref(),
         ))
         .current_dir(working_dir);
 
@@ -422,11 +414,7 @@ pub fn run() {
                 {
                     eprintln!("[opencode] orphan manifest cleanup failed: {error}");
                 }
-                bootstrap_opencode(
-                    &app.handle(),
-                    &BootstrapOpencodeConfig::new("local-user", String::new()),
-                )
-                .await?;
+                bootstrap_opencode(&app.handle(), RestartOpencodeOptions::default()).await?;
                 ensure_main_window(&app.handle())?;
                 Ok::<(), String>(())
             })
@@ -458,7 +446,7 @@ mod tests {
             &PathBuf::from("/tmp/opencode.json"),
             "tinker-user",
             "secret",
-            "/tmp/memory/local-user",
+            Some("/tmp/memory/local-user"),
         );
 
         assert!(envs.contains(&(
@@ -482,7 +470,7 @@ mod tests {
             &PathBuf::from("/tmp/opencode.json"),
             "tinker-user",
             "secret",
-            "",
+            Some(""),
         );
 
         assert!(!envs.iter().any(|(key, _value)| key == "SMART_VAULT_PATH"));

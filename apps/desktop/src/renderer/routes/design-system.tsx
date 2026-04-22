@@ -15,6 +15,7 @@ import {
   Progress,
   SearchInput,
   SegmentedControl,
+  SelectFolderButton,
   Skeleton,
   StatusDot,
   TextInput,
@@ -487,6 +488,15 @@ const ComponentsTab = (): JSX.Element => {
               onChange={(event) => setSearchValue(event.target.value)}
             />
           </div>
+        </Row>
+      </Section>
+
+      <Section label="SelectFolderButton">
+        <Row>
+          <SelectFolderButton onClick={() => {}} />
+          <SelectFolderButton folderPath="/Users/khani/projects/tinker" onClick={() => {}} />
+          <SelectFolderButton folderPath="/Users/khani/projects/tinker" loading onClick={() => {}} />
+          <SelectFolderButton disabled onClick={() => {}} />
         </Row>
       </Section>
 

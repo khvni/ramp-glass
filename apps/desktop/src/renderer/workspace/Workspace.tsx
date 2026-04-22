@@ -66,6 +66,8 @@ type WorkspaceProps = {
   activeSkillsRevision: number;
   memorySweepState: MemoryRunState | null;
   memorySweepBusy: boolean;
+  sessionFolderBusy: boolean;
+  onSelectSessionFolder(): Promise<void>;
   onConnectModel(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
@@ -116,6 +118,8 @@ export const Workspace = ({
   sessions,
   vaultPath,
   activeSkillsRevision,
+  sessionFolderBusy,
+  onSelectSessionFolder,
   googleAuthBusy,
   googleAuthMessage,
   githubAuthBusy,
@@ -340,6 +344,8 @@ export const Workspace = ({
       sessionFolderPath: vaultPath,
       vaultPath,
       activeSkillsRevision,
+      sessionFolderBusy,
+      onSelectSessionFolder,
       onFileWritten: handleAgentFileWritten,
       onOpenFileLink: openFileInWorkspace,
       onOpenNewChat: openNewChatPane,
@@ -351,9 +357,11 @@ export const Workspace = ({
       handleAgentFileWritten,
       modelConnected,
       onMemoryCommitted,
+      onSelectSessionFolder,
       openFileInWorkspace,
       openNewChatPane,
       opencode,
+      sessionFolderBusy,
       vaultPath,
       skillStore,
     ],
