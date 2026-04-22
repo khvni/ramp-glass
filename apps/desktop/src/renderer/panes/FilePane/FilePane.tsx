@@ -70,6 +70,10 @@ const PdfFileRenderer: FileRenderer = ({ path }) => {
   );
 };
 
+const XlsxFileRenderer: FileRenderer = ({ path, mime }) => {
+  return <XlsxRenderer params={toParams(path, mime)} />;
+};
+
 const MarkdownFileRenderer: FileRenderer = ({ path, mime, vaultRevision }) => {
   return <MarkdownRenderer params={toParams(path, mime)} vaultRevision={vaultRevision} />;
 };
@@ -129,6 +133,8 @@ const PPTX_MIME_TYPES = [
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
 ] as const;
+
+const XLSX_MIME_TYPES = [XLSX_MIME] as const;
 
 // Legacy Markdown editor is still pane-based, so it needs a temporary
 // MIME-shaped selector until M3 replaces the edit flow.
