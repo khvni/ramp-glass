@@ -2,12 +2,14 @@ import { Suspense, lazy, type JSX } from 'react';
 import type { TinkerPaneData } from '@tinker/shared-types';
 import { CodeRenderer } from '../../renderers/CodeRenderer.js';
 import { CsvRenderer } from '../../renderers/CsvRenderer.js';
+import { DocxRenderer } from '../../renderers/DocxRenderer/index.js';
 import { HtmlRenderer } from '../../renderers/HtmlRenderer.js';
 import { ImageRenderer } from '../../renderers/ImageRenderer.js';
 import { MarkdownEditor } from '../../renderers/MarkdownEditor.js';
 import { MarkdownRenderer } from '../../renderers/MarkdownRenderer.js';
-import type { FilePaneParams } from '../../renderers/file-utils.js';
+import { getPanelTitleForPath, type FilePaneParams } from '../../renderers/file-utils.js';
 import { ExternalPreviewPane } from './components/ExternalPreviewPane/index.js';
+import { MISSING_FILE_MIME } from './file-mime.js';
 
 type FilePaneData = Extract<TinkerPaneData, { readonly kind: 'file' }>;
 
@@ -41,6 +43,10 @@ const CsvFileRenderer: FileRenderer = ({ path }) => {
 
 const HtmlFileRenderer: FileRenderer = ({ path, mime }) => {
   return <HtmlRenderer params={toParams(path, mime)} />;
+};
+
+const DocxFileRenderer: FileRenderer = ({ path }) => {
+  return <DocxRenderer path={path} />;
 };
 
 const ImageFileRenderer: FileRenderer = ({ path }) => {
@@ -122,6 +128,7 @@ export const mimeToRenderer: Readonly<Record<string, FileRenderer>> = Object.fre
   ...createMimeMap(CODE_MIME_TYPES, CodeFileRenderer),
   ...createMimeMap(IMAGE_MIME_TYPES, ImageFileRenderer),
   'application/pdf': PdfFileRenderer,
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': DocxFileRenderer,
   ...createMimeMap(PPTX_MIME_TYPES, PptxFileRenderer),
   'application/xhtml+xml': HtmlFileRenderer,
   'text/csv': CsvFileRenderer,
@@ -151,9 +158,33 @@ const FilePaneLoadingState = ({ label, path }: FilePaneLoadingStateProps): JSX.E
   );
 };
 
+type MissingFilePaneProps = {
+  path: string;
+};
+
+const MissingFilePane = ({ path }: MissingFilePaneProps): JSX.Element => {
+  return (
+    <section className="tinker-pane tinker-renderer-pane">
+      <header className="tinker-pane-header">
+        <div>
+          <p className="tinker-eyebrow">File unavailable</p>
+          <h2>{getPanelTitleForPath(path)}</h2>
+        </div>
+      </header>
+
+      <p className="tinker-muted">File no longer exists at this path.</p>
+      <p className="tinker-muted">{path}</p>
+    </section>
+  );
+};
+
 export { openFileExternally } from './components/ExternalPreviewPane/index.js';
 
 export const FilePane = ({ data, vaultRevision = 0 }: FilePaneProps): JSX.Element => {
+  if (data.mime === MISSING_FILE_MIME) {
+    return <MissingFilePane path={data.path} />;
+  }
+
   const Renderer = mimeToRenderer[data.mime];
 
   if (!Renderer) {
