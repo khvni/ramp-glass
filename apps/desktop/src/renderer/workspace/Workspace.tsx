@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import {
   createWorkspaceStore,
   findActiveTab,
@@ -32,6 +32,7 @@ import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
 import { getRenderer } from './pane-registry.js';
+import { SettingsPaneRuntimeContext } from './settings-pane-runtime.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 
@@ -105,11 +106,29 @@ export const Workspace = ({
   layoutStore,
   skillStore,
   modelConnected,
+  modelAuthBusy,
+  modelAuthMessage,
+  googleAuthBusy,
+  googleAuthMessage,
+  githubAuthBusy,
+  githubAuthMessage,
+  microsoftAuthBusy,
+  microsoftAuthMessage,
   opencode,
   sessions,
   mcpStatus,
   vaultPath,
   activeSkillsRevision,
+  onConnectModel,
+  onDisconnectModel,
+  onConnectGoogle,
+  onConnectGithub,
+  onConnectMicrosoft,
+  onDisconnectGoogle,
+  onDisconnectGithub,
+  onDisconnectMicrosoft,
+  onCreateVault,
+  onSelectVault,
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
@@ -122,10 +141,17 @@ export const Workspace = ({
   const saveTimerRef = useRef<number | null>(null);
   const vaultPathRef = useRef<string | null>(vaultPath);
   const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
+  const [workspacePreferences, setWorkspacePreferences] = useState<WorkspacePreferences>(
+    createDefaultWorkspacePreferences(),
+  );
 
   useEffect(() => {
     vaultPathRef.current = vaultPath;
   }, [vaultPath]);
+
+  useEffect(() => {
+    workspacePreferencesRef.current = workspacePreferences;
+  }, [workspacePreferences]);
 
   const resolveAgentPath = useCallback((reportedPath: string): string | null => {
     const resolvedPath = resolveWorkspaceFilePath(reportedPath, vaultPathRef.current);
@@ -195,6 +221,12 @@ export const Workspace = ({
     }, LAYOUT_SAVE_DEBOUNCE_MS);
   }, [saveLayoutNow]);
 
+  const handleWorkspacePreferencesChange = useCallback((nextPreferences: WorkspacePreferences): void => {
+    workspacePreferencesRef.current = nextPreferences;
+    setWorkspacePreferences(nextPreferences);
+    scheduleLayoutSave();
+  }, [scheduleLayoutSave]);
+
   useEffect(() => {
     let active = true;
     const unsubscribe = workspaceStore.subscribe(() => {
@@ -208,7 +240,9 @@ export const Workspace = ({
           return;
         }
 
-        workspacePreferencesRef.current = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+        const nextPreferences = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+        workspacePreferencesRef.current = nextPreferences;
+        setWorkspacePreferences(nextPreferences);
 
         if (savedLayout) {
           try {
@@ -329,6 +363,61 @@ export const Workspace = ({
     ],
   );
 
+  const settingsPaneRuntime = useMemo(
+    () => ({
+      modelConnected,
+      modelAuthBusy,
+      modelAuthMessage,
+      googleAuthBusy,
+      googleAuthMessage,
+      githubAuthBusy,
+      githubAuthMessage,
+      microsoftAuthBusy,
+      microsoftAuthMessage,
+      sessions,
+      mcpStatus,
+      vaultPath,
+      onConnectModel,
+      onConnectGoogle,
+      onConnectGithub,
+      onConnectMicrosoft,
+      onDisconnectModel,
+      onDisconnectGoogle,
+      onDisconnectGithub,
+      onDisconnectMicrosoft,
+      onCreateVault,
+      onSelectVault,
+      workspacePreferences,
+      onWorkspacePreferencesChange: handleWorkspacePreferencesChange,
+    }),
+    [
+      githubAuthBusy,
+      githubAuthMessage,
+      googleAuthBusy,
+      googleAuthMessage,
+      handleWorkspacePreferencesChange,
+      mcpStatus,
+      microsoftAuthBusy,
+      microsoftAuthMessage,
+      modelAuthBusy,
+      modelAuthMessage,
+      modelConnected,
+      onConnectGithub,
+      onConnectGoogle,
+      onConnectMicrosoft,
+      onConnectModel,
+      onCreateVault,
+      onDisconnectGithub,
+      onDisconnectGoogle,
+      onDisconnectMicrosoft,
+      onDisconnectModel,
+      onSelectVault,
+      sessions,
+      vaultPath,
+      workspacePreferences,
+    ],
+  );
+
   return (
     <main className="tinker-workspace-shell">
       <header className="tinker-header">
@@ -364,9 +453,11 @@ export const Workspace = ({
         <IntegrationsStrip compact mcpStatus={mcpStatus} sessions={sessions} />
       </div>
 
-      <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
-        <PanesWorkspace store={workspaceStore} registry={registry} ariaLabel="Tinker workspace" />
-      </ChatPaneRuntimeContext.Provider>
+      <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
+        <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
+          <PanesWorkspace store={workspaceStore} registry={registry} ariaLabel="Tinker workspace" />
+        </ChatPaneRuntimeContext.Provider>
+      </SettingsPaneRuntimeContext.Provider>
     </main>
   );
 };

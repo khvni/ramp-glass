@@ -262,6 +262,7 @@ describe('default memory root resolution', () => {
       }),
     );
     expect(listener).toHaveBeenCalledWith({
+      reason: 'root-changed',
       previousRoot: '/old-memory',
       nextRoot: '/new-memory',
     });

@@ -1,14 +1,23 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { getRenderer, resetPaneRegistry } from './pane-registry.js';
-import { registerWorkspacePaneRenderers } from './register-pane-renderers.js';
+
+vi.mock('./components/SettingsPane/index.js', () => ({
+  SettingsPane: () => <div>settings-pane</div>,
+}));
+
+vi.mock('./components/MemoryPane/index.js', () => ({
+  MemoryPane: () => <div>memory-pane</div>,
+}));
+
+const { getRenderer, resetPaneRegistry } = await import('./pane-registry.js');
+const { registerWorkspacePaneRenderers } = await import('./register-pane-renderers.js');
 
 describe('registerWorkspacePaneRenderers', () => {
   afterEach(() => {
     resetPaneRegistry();
   });
 
-  it('registers friendly settings and memory placeholder panes', () => {
+  it('registers settings and memory panes once', () => {
     registerWorkspacePaneRenderers();
     expect(() => registerWorkspacePaneRenderers()).not.toThrow();
 
@@ -17,9 +26,7 @@ describe('registerWorkspacePaneRenderers', () => {
     );
     const memoryMarkup = renderToStaticMarkup(<>{getRenderer('memory')({ kind: 'memory' })}</>);
 
-    expect(settingsMarkup).toContain('Settings panel coming soon');
-    expect(settingsMarkup).toContain('workspace controls');
-    expect(memoryMarkup).toContain('Memory view coming soon');
-    expect(memoryMarkup).toContain('cross-session recall');
+    expect(settingsMarkup).toContain('settings-pane');
+    expect(memoryMarkup).toContain('memory-pane');
   });
 });

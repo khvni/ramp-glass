@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { homeDir, join } from '@tauri-apps/api/path';
 import { open as openDialog } from '@tauri-apps/plugin-dialog';
@@ -10,9 +10,11 @@ import {
   createScheduledJobStore,
   createSkillStore,
   createVaultService,
+  emitMemoryPathChanged,
   getActiveMemoryPath,
   getMemoryRoot,
   indexVault,
+  subscribeMemoryPathChanged,
   upsertUser,
   type MemoryRunState,
 } from '@tinker/memory';
@@ -322,6 +324,72 @@ export const App = (): JSX.Element => {
   const setProviderMessage = (provider: AuthProvider, message: string | null): void => {
     setProviderMessages((current) => ({ ...current, [provider]: message }));
   };
+
+  const reloadConnectionState = useCallback(async (connection: OpencodeConnection, vaultPath: string | null) => {
+    const sessions = await readAuthStatus();
+    await syncConnectorState(connection, vaultPath, sessions);
+    const modelConnected = await probeModelConnection(connection, vaultPath);
+
+    return { sessions, modelConnected };
+  }, []);
+
+  const refreshWorkspaceConnection = useCallback(async (): Promise<void> => {
+    if (!nativeRuntime || state.status !== 'ready') {
+      return;
+    }
+
+    const vaultPath = state.vaultPath;
+    const opencode = await invoke<OpencodeConnection>('restart_opencode');
+    const nextState = await reloadConnectionState(opencode, vaultPath);
+
+    setState((current) =>
+      current.status !== 'ready'
+        ? current
+        : {
+            ...current,
+            opencode,
+            sessions: nextState.sessions,
+            mcpStatus: {
+              ...current.mcpStatus,
+              [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
+            },
+            modelConnected: nextState.modelConnected,
+          },
+    );
+  }, [nativeRuntime, reloadConnectionState, state.status, state.status === 'ready' ? state.vaultPath : null]);
+
+  const announceUserMemoryPathChange = useCallback(async (
+    previousSessions: SSOStatus,
+    nextSessions: SSOStatus,
+  ): Promise<boolean> => {
+    const previousUserId = pickCurrentUserId(previousSessions);
+    const nextUserId = pickCurrentUserId(nextSessions);
+
+    if (previousUserId === nextUserId) {
+      return false;
+    }
+
+    await getActiveMemoryPath(nextUserId);
+    emitMemoryPathChanged({
+      reason: 'user-changed',
+      previousUserId,
+      nextUserId,
+    });
+
+    return true;
+  }, []);
+
+  useEffect(() => {
+    if (!nativeRuntime || state.status !== 'ready') {
+      return;
+    }
+
+    return subscribeMemoryPathChanged(() => {
+      void refreshWorkspaceConnection().catch((error) => {
+        console.warn('Failed to refresh OpenCode after a memory path change.', error);
+      });
+    });
+  }, [nativeRuntime, refreshWorkspaceConnection, state.status]);
 
   useEffect(() => {
     let active = true;
@@ -691,35 +759,6 @@ export const App = (): JSX.Element => {
     );
   }
 
-  const reloadConnectionState = async (connection: OpencodeConnection, vaultPath: string | null) => {
-    const sessions = await readAuthStatus();
-    await syncConnectorState(connection, vaultPath, sessions);
-    const modelConnected = await probeModelConnection(connection, vaultPath);
-
-    return { sessions, modelConnected };
-  };
-
-  const refreshWorkspaceConnection = async (): Promise<void> => {
-    requireNativeRuntime('Restarting OpenCode');
-    const opencode = await invoke<OpencodeConnection>('restart_opencode');
-    const nextState = await reloadConnectionState(opencode, state.vaultPath);
-
-    setState((current) =>
-      current.status !== 'ready'
-        ? current
-        : {
-            ...current,
-            opencode,
-            sessions: nextState.sessions,
-            mcpStatus: {
-              ...current.mcpStatus,
-              [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
-            },
-            modelConnected: nextState.modelConnected,
-          },
-    );
-  };
-
   const setVaultPath = async (config: VaultConfig): Promise<void> => {
     requireNativeRuntime('Selecting a vault');
     await vaultService.init(config);
@@ -839,6 +878,9 @@ export const App = (): JSX.Element => {
     setProviderMessage(provider, `Waiting for ${providerDisplayName(provider)} sign-in…`);
 
     try {
+      const currentConnection = state.opencode;
+      const currentSessions = state.sessions;
+      const currentVaultPath = state.vaultPath;
       requireNativeRuntime(`Connecting ${providerDisplayName(provider)}`);
       const session = await invoke<SSOSession>('auth_sign_in', { provider });
       await upsertUser(toStoredUser(session));
@@ -847,10 +889,26 @@ export const App = (): JSX.Element => {
         throw new Error(`${providerDisplayName(provider)} sign-in did not return refresh token. Try again.`);
       }
 
+      const nextSessions = await readAuthStatus();
+      setState((current) =>
+        current.status !== 'ready'
+          ? current
+          : {
+              ...current,
+              sessions: nextSessions,
+            },
+      );
+
+      const didCurrentUserChange = await announceUserMemoryPathChange(currentSessions, nextSessions);
+      if (didCurrentUserChange) {
+        setProviderMessage(provider, `${providerDisplayName(provider)} connected as ${session.email}.`);
+        return;
+      }
+
       if (providerNeedsWorkspaceRefresh(provider)) {
         await refreshWorkspaceConnection();
       } else {
-        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
+        const nextState = await reloadConnectionState(currentConnection, currentVaultPath);
         setState((current) =>
           current.status !== 'ready'
             ? current
@@ -875,13 +933,32 @@ export const App = (): JSX.Element => {
     setProviderMessage(provider, null);
 
     try {
+      const currentConnection = state.opencode;
+      const currentSessions = state.sessions;
+      const currentVaultPath = state.vaultPath;
       requireNativeRuntime(`Disconnecting ${providerDisplayName(provider)}`);
       await invoke('auth_sign_out', { provider });
+
+      const nextSessions = await readAuthStatus();
+      setState((current) =>
+        current.status !== 'ready'
+          ? current
+          : {
+              ...current,
+              sessions: nextSessions,
+            },
+      );
+
+      const didCurrentUserChange = await announceUserMemoryPathChange(currentSessions, nextSessions);
+      if (didCurrentUserChange) {
+        setProviderMessage(provider, `${providerDisplayName(provider)} disconnected.`);
+        return;
+      }
 
       if (providerNeedsWorkspaceRefresh(provider)) {
         await refreshWorkspaceConnection();
       } else {
-        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
+        const nextState = await reloadConnectionState(currentConnection, currentVaultPath);
         setState((current) =>
           current.status !== 'ready'
             ? current

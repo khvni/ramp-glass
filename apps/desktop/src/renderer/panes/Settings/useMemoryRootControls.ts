@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import {
+  getMemoryAutoAppendEnabled,
   getMemoryRoot,
   moveMemoryRoot,
+  setMemoryAutoAppendEnabled as setStoredMemoryAutoAppendEnabled,
   subscribeMemoryPathChanged,
   type MemoryRootMoveProgress,
   validateMemoryRootWritable,
@@ -16,9 +18,12 @@ export type MemoryRootNotice = {
 export type UseMemoryRootControlsResult = {
   memoryRoot: string | null;
   memoryRootBusy: boolean;
+  memoryAutoAppendEnabled: boolean;
+  memoryAutoAppendBusy: boolean;
   moveProgress: MemoryRootMoveProgress | null;
   notice: MemoryRootNotice | null;
   changeMemoryRoot(): Promise<void>;
+  setMemoryAutoAppendEnabled(next: boolean): Promise<void>;
 };
 
 const NOTICE_TIMEOUT_MS = 4_000;
@@ -38,6 +43,8 @@ const toErrorMessage = (error: unknown, fallback: string): string => {
 export const useMemoryRootControls = (): UseMemoryRootControlsResult => {
   const [memoryRoot, setMemoryRoot] = useState<string | null>(null);
   const [memoryRootBusy, setMemoryRootBusy] = useState(false);
+  const [memoryAutoAppendEnabled, setMemoryAutoAppendEnabledState] = useState(true);
+  const [memoryAutoAppendBusy, setMemoryAutoAppendBusy] = useState(false);
   const [moveProgress, setMoveProgress] = useState<MemoryRootMoveProgress | null>(null);
   const [notice, setNotice] = useState<MemoryRootNotice | null>(null);
 
@@ -59,6 +66,21 @@ export const useMemoryRootControls = (): UseMemoryRootControlsResult => {
         }
       });
 
+    void getMemoryAutoAppendEnabled()
+      .then((enabled) => {
+        if (active) {
+          setMemoryAutoAppendEnabledState(enabled);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setNotice({
+            kind: 'error',
+            message: toErrorMessage(error, 'Could not load the memory capture setting.'),
+          });
+        }
+      });
+
     return () => {
       active = false;
     };
@@ -66,7 +88,21 @@ export const useMemoryRootControls = (): UseMemoryRootControlsResult => {
 
   useEffect(() => {
     return subscribeMemoryPathChanged(({ nextRoot }) => {
-      setMemoryRoot(nextRoot);
+      if (nextRoot) {
+        setMemoryRoot(nextRoot);
+        return;
+      }
+
+      void getMemoryRoot()
+        .then((resolvedMemoryRoot) => {
+          setMemoryRoot(resolvedMemoryRoot);
+        })
+        .catch((error) => {
+          setNotice({
+            kind: 'error',
+            message: toErrorMessage(error, 'Could not refresh the memory folder.'),
+          });
+        });
     });
   }, []);
 
@@ -137,11 +173,35 @@ export const useMemoryRootControls = (): UseMemoryRootControlsResult => {
     }
   };
 
+  const setMemoryAutoAppendEnabled = async (next: boolean): Promise<void> => {
+    if (memoryAutoAppendBusy) {
+      return;
+    }
+
+    setNotice(null);
+    setMemoryAutoAppendBusy(true);
+
+    try {
+      await setStoredMemoryAutoAppendEnabled(next);
+      setMemoryAutoAppendEnabledState(next);
+    } catch (error) {
+      setNotice({
+        kind: 'error',
+        message: toErrorMessage(error, 'Could not update automatic memory capture.'),
+      });
+    } finally {
+      setMemoryAutoAppendBusy(false);
+    }
+  };
+
   return {
     memoryRoot,
     memoryRootBusy,
+    memoryAutoAppendEnabled,
+    memoryAutoAppendBusy,
     moveProgress,
     notice,
     changeMemoryRoot,
+    setMemoryAutoAppendEnabled,
   };
 };

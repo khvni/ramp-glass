@@ -26,6 +26,8 @@ describe('Settings', () => {
     mockUseMemoryRootControls.mockReturnValueOnce({
       memoryRoot: '/Users/alice/Library/Application Support/Tinker/memory',
       memoryRootBusy: true,
+      memoryAutoAppendEnabled: true,
+      memoryAutoAppendBusy: false,
       moveProgress: {
         copiedFiles: 2,
         totalFiles: 5,
@@ -36,6 +38,7 @@ describe('Settings', () => {
         message: 'Pick an empty folder for the new memory location.',
       },
       changeMemoryRoot: vi.fn(),
+      setMemoryAutoAppendEnabled: vi.fn(),
     });
 
     const markup = renderToStaticMarkup(
@@ -77,9 +80,12 @@ describe('Settings', () => {
     mockUseMemoryRootControls.mockReturnValueOnce({
       memoryRoot: '/Users/alice/Library/Application Support/Tinker/memory',
       memoryRootBusy: false,
+      memoryAutoAppendEnabled: false,
+      memoryAutoAppendBusy: false,
       moveProgress: null,
       notice: null,
       changeMemoryRoot: vi.fn(),
+      setMemoryAutoAppendEnabled: vi.fn(),
     });
 
     const markup = renderToStaticMarkup(
@@ -115,5 +121,7 @@ describe('Settings', () => {
     expect(markup).toContain('Change location…');
     expect(markup).toContain('/Users/alice/Library/Application Support/Tinker/memory');
     expect(markup).toContain('title="/Users/alice/Library/Application Support/Tinker/memory"');
+    expect(markup).toContain('Automatic memory capture');
+    expect(markup).toContain('Automatic memory capture: Off');
   });
 });

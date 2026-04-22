@@ -31,10 +31,16 @@ import {
   streamSessionEvents,
   type ChatHistoryWriter,
 } from '@tinker/bridge';
-import { createSession, findLatestSessionForFolder, resolveRelevantEntities, updateLastActive } from '@tinker/memory';
+import {
+  appendMemoryCapture,
+  createSession,
+  findLatestSessionForFolder,
+  getActiveMemoryPath,
+  subscribeMemoryPathChanged,
+  updateLastActive,
+} from '@tinker/memory';
 import { DEFAULT_SESSION_MODE, type SkillStore } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../../bindings.js';
-import { captureConversationMemory } from '../../memory.js';
 import {
   buildModelPickerItems,
   createWorkspaceClient,
@@ -245,8 +251,9 @@ export const Chat = ({
   const [disclosureOverrides, setDisclosureOverrides] = useState<Record<string, boolean>>({});
   const mountedRef = useRef(true);
   const sessionIDRef = useRef<string | null>(null);
+  const sessionCreatedAtRef = useRef<string | null>(null);
   const historyWriterRef = useRef<ChatHistoryWriter | null>(null);
-  const memoryCommitRef = useRef<Promise<void>>(Promise.resolve());
+  const memoryPathRef = useRef<string | null>(null);
   const chatLogRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRequestedRef = useRef(false);
@@ -268,6 +275,8 @@ export const Chat = ({
       }
       const activeSessionID = sessionIDRef.current;
       sessionIDRef.current = null;
+      sessionCreatedAtRef.current = null;
+      memoryPathRef.current = null;
       if (activeSessionID) {
         void client.session.abort({ sessionID: activeSessionID });
       }
@@ -326,8 +335,9 @@ export const Chat = ({
   }, [client, modelConnected]);
 
   const activateSession = useCallback(
-    (sessionID: string): void => {
+    (sessionID: string, sessionCreatedAt: string): void => {
       sessionIDRef.current = sessionID;
+      sessionCreatedAtRef.current = sessionCreatedAt;
 
       const previousWriter = historyWriterRef.current;
       historyWriterRef.current = sessionFolderPath
@@ -346,10 +356,29 @@ export const Chat = ({
   );
 
   useEffect(() => {
+    memoryPathRef.current = null;
+  }, [currentUserId]);
+
+  useEffect(() => {
+    return subscribeMemoryPathChanged(() => {
+      memoryPathRef.current = null;
+    });
+  }, []);
+
+  const resolveMemoryPath = useCallback(async (): Promise<string> => {
+    if (!memoryPathRef.current) {
+      memoryPathRef.current = await getActiveMemoryPath(currentUserId);
+    }
+
+    return memoryPathRef.current;
+  }, [currentUserId]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const existing = sessionIDRef.current;
     sessionIDRef.current = null;
+    sessionCreatedAtRef.current = null;
     abortRequestedRef.current = false;
     shouldStickToBottomRef.current = true;
     lastTailSignatureRef.current = 'empty';
@@ -398,17 +427,17 @@ export const Chat = ({
           return;
         }
 
-        activateSession(restoredSessionID);
+        const restoredCreatedAt = existingSession?.createdAt ?? new Date().toISOString();
+        activateSession(restoredSessionID, restoredCreatedAt);
 
         if (!existingSession) {
-          const timestamp = new Date().toISOString();
           try {
             await createSession({
               id: restoredSessionID,
               userId: currentUserId,
               folderPath: sessionFolderPath,
-              createdAt: timestamp,
-              lastActiveAt: timestamp,
+              createdAt: restoredCreatedAt,
+              lastActiveAt: restoredCreatedAt,
               mode: DEFAULT_SESSION_MODE,
             });
           } catch (error) {
@@ -652,7 +681,7 @@ export const Chat = ({
   const ensureSession = async (): Promise<string> => {
     if (sessionIDRef.current) {
       if (!historyWriterRef.current && sessionFolderPath) {
-        activateSession(sessionIDRef.current);
+        activateSession(sessionIDRef.current, sessionCreatedAtRef.current ?? new Date().toISOString());
       }
 
       return sessionIDRef.current;
@@ -664,7 +693,8 @@ export const Chat = ({
       throw new Error('OpenCode did not return a session.');
     }
 
-    activateSession(session.id);
+    const timestamp = new Date().toISOString();
+    activateSession(session.id, timestamp);
 
     if (selectedModel) {
       applyContextUsageSnapshot({
@@ -679,8 +709,6 @@ export const Chat = ({
     }
 
     if (sessionFolderPath) {
-      const timestamp = new Date().toISOString();
-
       try {
         await createSession({
           id: session.id,
@@ -781,13 +809,15 @@ export const Chat = ({
         return;
       }
 
-      const relevantEntities = await resolveRelevantEntities(text, 6);
+      const memoryPath = await resolveMemoryPath();
       if (abortRequestedRef.current) {
         setStatus(readyStatus);
         return;
       }
 
-      await injectMemoryContext(client, activeSessionID, relevantEntities);
+      await injectMemoryContext(client, activeSessionID, {
+        memoryDirectory: memoryPath,
+      });
       if (abortRequestedRef.current) {
         setStatus(readyStatus);
         return;
@@ -881,28 +911,18 @@ export const Chat = ({
       const assistantMessage = assistantMessageRecord
         ? messageTextFromBlocks(assistantMessageRecord.blocks)
         : undefined;
-      const toolResults = (assistantMessageRecord?.blocks ?? []).flatMap((block) =>
-        block.kind === 'tool' && block.state === 'completed' && typeof block.output === 'string'
-          ? [{ name: block.name, output: block.output }]
-          : [],
-      );
-      if (!aborted && assistantMessage && vaultPath) {
-        memoryCommitRef.current = memoryCommitRef.current.then(async () => {
-          try {
-            const result = await captureConversationMemory(opencode, vaultPath, {
-              observedOn: new Date().toISOString().slice(0, 10),
-              userMessage: text,
-              assistantMessage,
-              toolResults,
-            });
-
-            if (result && result.appendedFacts > 0) {
-              onMemoryCommitted?.();
-            }
-          } catch (error) {
-            console.warn('Failed to append conversation memory.', error);
-          }
+      if (!aborted && assistantMessage) {
+        const wroteMemory = await appendMemoryCapture({
+          memoryDirectory: memoryPath,
+          sessionCreatedAt: sessionCreatedAtRef.current ?? new Date().toISOString(),
+          sessionId: activeSessionID,
+          userPrompt: text,
+          assistantMessage,
         });
+
+        if (wroteMemory) {
+          onMemoryCommitted?.();
+        }
       }
     } catch (error) {
       if (!mountedRef.current) {

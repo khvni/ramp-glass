@@ -1,6 +1,9 @@
 import { dataDir, join } from '@tauri-apps/api/path';
 import { copyFile, exists, mkdir, readDir, remove, writeTextFile } from '@tauri-apps/plugin-fs';
 import { createSettingsStore, type SettingsStore } from './settings-store.js';
+import { emitMemoryPathChanged } from './events.js';
+export { subscribeMemoryPathChanged } from './events.js';
+export type { MemoryPathChangedDetail } from './events.js';
 
 const WINDOWS_ROAMING_APP_DATA_SUFFIX = /\/AppData\/Roaming\/?$/iu;
 const MACOS_APPLICATION_SUPPORT_SUFFIX = /\/Library\/Application Support\/?$/u;
@@ -16,11 +19,6 @@ export type MemoryRootMoveProgress = {
   currentPath: string | null;
 };
 
-export type MemoryPathChangedDetail = {
-  previousRoot: string;
-  nextRoot: string;
-};
-
 type RelativeMemoryTree = {
   directories: string[];
   files: string[];
@@ -32,7 +30,6 @@ const normalizeDirectoryForDetection = (directory: string): string => {
 
 const MEMORY_ROOT_SETTING_KEY = 'memory_root';
 const MEMORY_ROOT_PROBE_FILE_PREFIX = '.tinker-memory-root-probe';
-const memoryPathListeners = new Set<(detail: MemoryPathChangedDetail) => void>();
 
 const createMemorySettingsStore = (): SettingsStore => {
   return createSettingsStore();
@@ -102,12 +99,6 @@ const removeDirectoryContents = async (rootPath: string): Promise<void> => {
 
   const entries = await readDir(rootPath);
   await Promise.all(entries.map(async (entry) => remove(await join(rootPath, entry.name), { recursive: true })));
-};
-
-const emitMemoryPathChanged = (detail: MemoryPathChangedDetail): void => {
-  for (const listener of memoryPathListeners) {
-    listener(detail);
-  }
 };
 
 const detectMemoryRootPlatformFromDirectory = (dataDirectory: string): MemoryRootPlatform => {
@@ -296,15 +287,10 @@ export const moveMemoryRoot = async (
 
   await remove(currentRoot, { recursive: true }).catch(() => undefined);
 
-  emitMemoryPathChanged({ previousRoot: currentRoot, nextRoot: normalizedNextRoot });
+  emitMemoryPathChanged({
+    reason: 'root-changed',
+    previousRoot: currentRoot,
+    nextRoot: normalizedNextRoot,
+  });
   return normalizedNextRoot;
-};
-
-export const subscribeMemoryPathChanged = (
-  listener: (detail: MemoryPathChangedDetail) => void,
-): (() => void) => {
-  memoryPathListeners.add(listener);
-  return () => {
-    memoryPathListeners.delete(listener);
-  };
 };

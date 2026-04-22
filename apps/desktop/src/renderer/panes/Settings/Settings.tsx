@@ -6,7 +6,7 @@ import { IntegrationsStrip } from '../../components/IntegrationsStrip.js';
 import { useMemoryRootControls } from './useMemoryRootControls.js';
 import './Settings.css';
 
-type SettingsProps = {
+export type SettingsProps = {
   modelConnected: boolean;
   modelAuthBusy: boolean;
   modelAuthMessage: string | null;
@@ -67,7 +67,16 @@ export const Settings = ({
   workspacePreferences,
   onWorkspacePreferencesChange,
 }: SettingsProps): JSX.Element => {
-  const { changeMemoryRoot, memoryRoot, memoryRootBusy, moveProgress, notice } = useMemoryRootControls();
+  const {
+    changeMemoryRoot,
+    memoryAutoAppendBusy,
+    memoryAutoAppendEnabled,
+    memoryRoot,
+    memoryRootBusy,
+    moveProgress,
+    notice,
+    setMemoryAutoAppendEnabled,
+  } = useMemoryRootControls();
   const progressPercent = moveProgress ? getProgressPercent(moveProgress.copiedFiles, moveProgress.totalFiles) : 0;
 
   return (
@@ -204,9 +213,35 @@ export const Settings = ({
         </article>
 
         <article className="tinker-list-item">
+          <div className="tinker-settings__toggle-row">
+            <div className="tinker-settings__toggle-copy">
+              <h3>Automatic memory capture</h3>
+              <p className="tinker-muted">
+                Append each finished chat exchange to this user&apos;s <code>sessions/</code> memory folder. Tinker writes
+                the raw prompt and final assistant reply verbatim.
+              </p>
+            </div>
+            <Toggle
+              checked={memoryAutoAppendEnabled}
+              onChange={(next) => {
+                void setMemoryAutoAppendEnabled(next);
+              }}
+              disabled={memoryAutoAppendBusy}
+              label="Automatic memory capture"
+            />
+          </div>
+          <p className="tinker-muted">
+            Automatic memory capture: {memoryAutoAppendEnabled ? 'On' : 'Off'}
+          </p>
+        </article>
+
+        <article className="tinker-list-item">
           <h3>Workspace</h3>
           <p className="tinker-muted">Agent-written files open automatically by default. Turn it off if you want manual review first.</p>
-          <div className="tinker-inline-actions" style={{ gap: 'var(--space-3)' }}>
+          <div className="tinker-settings__toggle-row">
+            <div className="tinker-settings__toggle-copy">
+              <p className="tinker-muted">Open agent-written files automatically after a successful tool run.</p>
+            </div>
             <Toggle
               checked={workspacePreferences.autoOpenAgentWrittenFiles}
               onChange={(next) =>
@@ -216,7 +251,7 @@ export const Settings = ({
               }
               label="Auto-open agent-written files"
             />
-            <span className="tinker-muted">
+            <span className="tinker-muted tinker-settings__toggle-state">
               Auto-open agent-written files: {workspacePreferences.autoOpenAgentWrittenFiles ? 'On' : 'Off'}
             </span>
           </div>
