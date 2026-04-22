@@ -76,6 +76,7 @@ Spec: [[21-mvp-session-folder]] · Depends on: M1.7 · Sessions are bound to cur
 | 2.10 | On app quit, stop all running OpenCode instances (best-effort; survive kill -9 via manifest). | S | 2.5 | review | TIN-24 · PR #60 · `khvni/tin-24-ask-user` |
 | 2.11 | Chat history JSONL writer: every OpenCode SSE event from the active session appends one line to `<folder>/.tinker/chats/<user-id>/<session-id>.jsonl`. Buffered + flushed per event. Create dirs on first write. | M | 2.2, 4.2 | review | TIN-25 + TIN-26 · PR #77. Bridge writer reuses Chat SSE subscription, queues per-file appends, and restores session rows from history when SQLite is missing. |
 | 2.12 | Chat history hydration: on session open, read JSONL (if exists) and seed Chat pane with prior messages before the SSE subscription resumes. | M | 2.11 | review | TIN-25 + TIN-26 · PR #77. Hydration replays stored OpenCode events through the same Chat markdown/render path before composer unlock. |
+| 2.13 | Dedupe opencode boot spawn: delete Rust `setup()` warm-start, renderer loading effect drives first `restart_opencode` with full options, auth-change effect skips redundant first fire via ref. Narrow slice of TIN-192 umbrella. | S | 2.4 | review | TIN-191 · PR #110 · `fix/m2/opencode-boot-dedupe`. Umbrella TIN-192 extends this with multi-pane sessions + `$HOME` default + no-op respawn invariant + anomalyco research doc. |
 
 ### M3 — In-line document renderer
 Spec: [[22-mvp-inline-renderer]] · Depends on: M1.4 (file pane registration)
