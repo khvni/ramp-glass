@@ -14,6 +14,12 @@ export {
 export { TextInput } from './TextInput.js';
 export { SearchInput } from './SearchInput.js';
 export { Textarea } from './Textarea.js';
+export { Skeleton, type SkeletonVariant, type SkeletonProps } from './Skeleton/index.js';
+export {
+  KeyboardHint,
+  type KeyboardHintProps,
+  type KeyboardHintOs,
+} from './KeyboardHint/index.js';
 export {
   ModelPicker,
   type ModelPickerItem,
