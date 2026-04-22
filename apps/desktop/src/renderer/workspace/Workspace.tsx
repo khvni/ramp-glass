@@ -113,6 +113,7 @@ export const Workspace = ({
   skillStore,
   modelConnected,
   opencode,
+  sessions,
   vaultPath,
   activeSkillsRevision,
   googleAuthBusy,
