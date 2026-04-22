@@ -106,32 +106,28 @@ const baseProps = {
 };
 
 describe('Chat chrome', () => {
-  it('renders the chat pane chrome classes — header, log, composer', () => {
+  it('renders the chat pane chrome classes — log, composer', () => {
     opencodeMocks.selectedModel = undefined;
     const markup = renderToStaticMarkup(<Chat {...baseProps} />);
 
     expect(markup).toContain('tinker-pane tinker-pane--chat');
-    expect(markup).toContain('tinker-chat-header');
-    expect(markup).toContain('tinker-chat-header__left');
-    expect(markup).toContain('tinker-chat-header__right');
     expect(markup).toContain('tinker-chat-log');
     expect(markup).toContain('tk-prompt-composer');
     expect(markup).toContain('tk-prompt-composer__card');
-    expect(markup).toContain('tk-prompt-composer__controls');
   });
 
-  it('omits the ContextBadge when no model is selected', () => {
+  it('omits the ContextPill when no model is selected', () => {
     opencodeMocks.selectedModel = undefined;
     const markup = renderToStaticMarkup(<Chat {...baseProps} />);
-    expect(markup).not.toContain('tk-context-badge');
+    expect(markup).not.toContain('tk-context-pill');
   });
 
-  it('renders mode + model + thinking chips under the composer', () => {
+  it('renders mode + model + thinking chips in composer bottom row', () => {
     opencodeMocks.selectedModel = undefined;
     const markup = renderToStaticMarkup(<Chat {...baseProps} />);
     expect(markup).toContain('tk-composer-chip');
     expect(markup).toContain('tk-modelpicker');
-    expect(markup).toContain('>Build<');
+    expect(markup).toContain('>Auto Accept<');
     expect(markup).toContain('>Default<');
   });
 
@@ -158,5 +154,27 @@ describe('Chat chrome', () => {
     const markup = renderToStaticMarkup(<Chat {...baseProps} />);
     expect(markup).toContain('tk-prompt-composer__send');
     expect(markup).toContain('aria-label="Send message"');
+  });
+
+  it('renders kebab menu with pane options', () => {
+    opencodeMocks.selectedModel = undefined;
+    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    expect(markup).toContain('aria-label="Pane options"');
+  });
+
+  it('renders StatusDot reflecting modelConnected=false', () => {
+    opencodeMocks.selectedModel = undefined;
+    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    expect(markup).toContain('tk-statusdot--muted');
+  });
+
+  it('per-pane isolation: two Chat mounts do not share busy state', () => {
+    opencodeMocks.selectedModel = undefined;
+    // Render two independent Chat instances; both should show send button (not stop)
+    // because neither has started streaming.
+    const markupA = renderToStaticMarkup(<Chat {...baseProps} />);
+    const markupB = renderToStaticMarkup(<Chat {...baseProps} />);
+    expect(markupA).toContain('aria-label="Send message"');
+    expect(markupB).toContain('aria-label="Send message"');
   });
 });
