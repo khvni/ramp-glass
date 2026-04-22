@@ -150,8 +150,9 @@ Spec: [[27-mvp-builtin-mcp]] · Depends on: M6.3 (memory path resolved)
 | 7.2 | Ensure `exa` works zero-config: it's remote, no env needed. Add boot-time check that calls exa's health MCP. | S | 7.1 | review | TIN-67 · PR #42 opened 2026-04-21. |
 | 7.3 | `qmd` env wiring: `SMART_VAULT_PATH` = `<memory_root>/<current-user-id>/` from M6.3. Passed to OpenCode at sidecar spawn. | S | 7.1, 6.3 | not started | Env var injection at spawn. |
 | 7.4 | `smart-connections` env wiring: `SMART_VAULT_PATH` = same per-user subdir from M6.3. Same spawn-time injection as 7.3. | S | 7.1, 6.3 | not started | Mirror of 7.3. |
-| 7.5 | Settings pane: "Integrations" section lists 3 MCPs with status (connected/error). Calls OpenCode SDK `mcp.list()` on mount. | M | 7.1, 6.5 | not started | Status only, no config. |
-| 7.6 | Per-MCP retry button in Settings: calls `mcp.reconnect(name)` SDK method (or restarts sidecar if SDK doesn't expose). | S | 7.5 | not started | Recovery. |
+| 7.5 | Settings pane: "Connections" section lists 3 MCPs with status dots + human errors. Calls OpenCode SDK `mcp.status()` on mount + polls ≤ 5s. | M | 7.1, 6.5 | review | TIN-70 · `khvni/tin-70-71-175`. Polling hook `useMcpStatusPolling` renders into `ConnectionsSection`. |
+| 7.6 | Per-MCP retry button in Settings: calls `client.mcp.connect(name)` SDK method (falls back to `restart_opencode` via `onRequestRespawn` when SDK missing/throws). | S | 7.5 | review | TIN-71 · `khvni/tin-70-71-175`. Fallback wired as a prop from App.tsx → Settings → ConnectionsSection. |
+| 7.9 | "+ Add tool" CTA + picker shell in Settings Connections. Modal lists 6 disabled post-MVP MCPs (GitHub, Linear, Gmail, Calendar, Drive, Slack) with Linear-ticket links. Config-driven via `available-mcps.ts`. | S | 7.5 | review | TIN-175 · `khvni/tin-70-71-175`. Flip `available: true` + add handlers post-MVP. |
 | 7.7 | Memory-root change OR user-switch triggers MCP refresh: stop OpenCode → respawn with new env → MCPs reconnect. Triggered by 6.9 (path change) and 8.8 (sign-out/in). | M | 7.3, 7.4, 6.6, 8.8 | not started | Invalidation path. |
 | 7.8 | First-run verification: on new session launch, wait for all 3 MCPs to report `connected` before enabling the composer. Show `<ConnectionGate>` minimal variant during wait (3-5s typical). | M | 7.5 | not started | Quality bar. |
 
@@ -237,6 +238,7 @@ Scope preserved for historical context + roadmap signaling. **Do not work on the
 | TIN-177 + TIN-178 + TIN-181 | 09 | UI trio: `<Modal>` + `<Toast>` provider + `<EmptyState>` primitives in `@tinker/design`; `EmptyState` adopted by Chat / Today / IntegrationsStrip | review | Branch `khvni/ui-design-trio`. One bundled PR. Session: [[2026-04-21-2146-ui-trio]]. Folder-per-component (D21), tokens-only (D14/D23), dual-theme verified. 31 new tests. |
 | TIN-172 | 15 / M7.8 | `<ConnectionGate>` primitive (minimal MCP variant) | review | PR #50. Ships the atom TIN-155 generalizes. |
 | TIN-155 | 15 | `<ConnectionSplash>` full-window splash (generalizes TIN-172) | review | PR stacks on #50. Composes ConnectionGate + Tinker wordmark + spinner + 4 service categories. |
+| follow-up | cleanup | Delete legacy `IntegrationsStrip` once FirstRun (`panes/FirstRun.tsx`) + Workspace (`workspace/Workspace.tsx`) stop importing it — the Settings surface has already migrated to `ConnectionsSection` (TIN-70). | not started | Kicked out of TIN-70/71/175 scope. Cascades if deleted now: kill the FirstRun mount (D25 deferral) + Workspace strip. |
 
 ## Rejected (not coming back)
 

@@ -21,9 +21,11 @@ import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus
 import { DEFAULT_USER_ID, ONBOARDING_KEY, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import {
+  BUILTIN_MCP_NAMES,
   checkExaBootHealth,
   EXA_CHECKING_STATUS,
   EXA_MCP_NAME,
+  normalizeMcpRowStatus,
   type MCPStatus,
 } from './integrations.js';
 import { FirstRun } from './panes/FirstRun.js';
@@ -617,23 +619,20 @@ export const App = (): JSX.Element => {
     const directory = getOpencodeDirectory(state.vaultPath);
     let active = true;
 
-    setState((current) =>
-      current.status !== 'ready' || current.opencode.baseUrl !== connection.baseUrl
-        ? current
-        : {
-            ...current,
-            mcpStatus: {
-              ...current.mcpStatus,
-              [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
-            },
-          },
-    );
+    setState((current) => {
+      if (current.status !== 'ready' || current.opencode.baseUrl !== connection.baseUrl) {
+        return current;
+      }
+      const nextMcpStatus = { ...current.mcpStatus };
+      for (const name of BUILTIN_MCP_NAMES) {
+        nextMcpStatus[name] = { status: 'checking' };
+      }
+      return { ...current, mcpStatus: nextMcpStatus };
+    });
 
     void (async () => {
-      const status = await checkExaBootHealth(() => {
-        const client = createWorkspaceClient(connection, directory);
-        return client.mcp.status();
-      });
+      const client = createWorkspaceClient(connection, directory);
+      const exaStatus = await checkExaBootHealth(() => client.mcp.status());
 
       if (!active) {
         return;
@@ -646,10 +645,50 @@ export const App = (): JSX.Element => {
               ...current,
               mcpStatus: {
                 ...current.mcpStatus,
-                [EXA_MCP_NAME]: status,
+                [EXA_MCP_NAME]: exaStatus,
               },
             },
       );
+
+      try {
+        const response = (await client.mcp.status()) as {
+          data?: Record<string, { status?: string; error?: string } | undefined>;
+        };
+        if (!active) {
+          return;
+        }
+        setState((current) => {
+          if (current.status !== 'ready' || current.opencode.baseUrl !== connection.baseUrl) {
+            return current;
+          }
+          const nextMcpStatus: Record<string, MCPStatus> = { ...current.mcpStatus };
+          for (const name of BUILTIN_MCP_NAMES) {
+            nextMcpStatus[name] = normalizeMcpRowStatus({
+              name,
+              raw: response.data?.[name],
+              memoryPath: current.vaultPath,
+            });
+          }
+          return { ...current, mcpStatus: nextMcpStatus };
+        });
+      } catch (error) {
+        if (!active) {
+          return;
+        }
+        const message = error instanceof Error ? error.message : 'MCP status request failed.';
+        setState((current) => {
+          if (current.status !== 'ready' || current.opencode.baseUrl !== connection.baseUrl) {
+            return current;
+          }
+          const nextMcpStatus: Record<string, MCPStatus> = { ...current.mcpStatus };
+          for (const name of BUILTIN_MCP_NAMES) {
+            if (nextMcpStatus[name]?.status !== 'connected') {
+              nextMcpStatus[name] = { status: 'failed', error: message };
+            }
+          }
+          return { ...current, mcpStatus: nextMcpStatus };
+        });
+      }
     })();
 
     return () => {
@@ -704,20 +743,22 @@ export const App = (): JSX.Element => {
     const opencode = await invoke<OpencodeConnection>('restart_opencode');
     const nextState = await reloadConnectionState(opencode, state.vaultPath);
 
-    setState((current) =>
-      current.status !== 'ready'
-        ? current
-        : {
-            ...current,
-            opencode,
-            sessions: nextState.sessions,
-            mcpStatus: {
-              ...current.mcpStatus,
-              [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
-            },
-            modelConnected: nextState.modelConnected,
-          },
-    );
+    setState((current) => {
+      if (current.status !== 'ready') {
+        return current;
+      }
+      const nextMcpStatus: Record<string, MCPStatus> = { ...current.mcpStatus };
+      for (const name of BUILTIN_MCP_NAMES) {
+        nextMcpStatus[name] = EXA_CHECKING_STATUS;
+      }
+      return {
+        ...current,
+        opencode,
+        sessions: nextState.sessions,
+        mcpStatus: nextMcpStatus,
+        modelConnected: nextState.modelConnected,
+      };
+    });
   };
 
   const setVaultPath = async (config: VaultConfig): Promise<void> => {

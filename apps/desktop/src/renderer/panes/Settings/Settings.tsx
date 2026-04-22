@@ -1,8 +1,9 @@
 import type { JSX } from 'react';
 import { Button, Toggle } from '@tinker/design';
 import type { SSOStatus, WorkspacePreferences } from '@tinker/shared-types';
+import type { OpencodeConnection } from '../../../bindings.js';
 import type { MCPStatus } from '../../integrations.js';
-import { IntegrationsStrip } from '../../components/IntegrationsStrip.js';
+import { ConnectionsSection } from './ConnectionsSection/index.js';
 import { useMemoryRootControls } from './useMemoryRootControls.js';
 import './Settings.css';
 
@@ -18,7 +19,9 @@ type SettingsProps = {
   microsoftAuthMessage: string | null;
   sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
+  opencode?: OpencodeConnection | null;
   vaultPath: string | null;
+  memoryPath?: string | null;
   onConnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
   onConnectGithub(): Promise<void>;
@@ -29,6 +32,7 @@ type SettingsProps = {
   onDisconnectMicrosoft(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
+  onRequestRespawn?(): Promise<void>;
   workspacePreferences: WorkspacePreferences;
   onWorkspacePreferencesChange(nextPreferences: WorkspacePreferences): void;
 };
@@ -39,6 +43,24 @@ const getProgressPercent = (copiedFiles: number, totalFiles: number): number => 
   }
 
   return Math.min(100, Math.round((copiedFiles / totalFiles) * 100));
+};
+
+const noopRespawn = async (): Promise<void> => undefined;
+
+const BUILTIN_MCP_KEYS = ['qmd', 'smart-connections', 'exa'] as const;
+type BuiltinMcpKey = (typeof BUILTIN_MCP_KEYS)[number];
+
+const buildSeedStatuses = (
+  mcpStatus: Record<string, MCPStatus>,
+): Partial<Record<BuiltinMcpKey, MCPStatus>> => {
+  const seed: Partial<Record<BuiltinMcpKey, MCPStatus>> = {};
+  for (const key of BUILTIN_MCP_KEYS) {
+    const value = mcpStatus[key];
+    if (value !== undefined) {
+      seed[key] = value;
+    }
+  }
+  return seed;
 };
 
 export const Settings = ({
@@ -52,6 +74,7 @@ export const Settings = ({
   microsoftAuthBusy,
   microsoftAuthMessage,
   mcpStatus,
+  opencode,
   onConnectGithub,
   onConnectGoogle,
   onConnectMicrosoft,
@@ -61,9 +84,11 @@ export const Settings = ({
   onDisconnectGoogle,
   onDisconnectMicrosoft,
   onDisconnectModel,
+  onRequestRespawn,
   onSelectVault,
   sessions,
   vaultPath,
+  memoryPath,
   workspacePreferences,
   onWorkspacePreferencesChange,
 }: SettingsProps): JSX.Element => {
@@ -223,7 +248,13 @@ export const Settings = ({
         </article>
       </div>
 
-      <IntegrationsStrip mcpStatus={mcpStatus} sessions={sessions} />
+      <ConnectionsSection
+        opencode={opencode ?? null}
+        vaultPath={vaultPath}
+        memoryPath={memoryPath ?? null}
+        seedStatuses={buildSeedStatuses(mcpStatus)}
+        onRequestRespawn={onRequestRespawn ?? noopRespawn}
+      />
 
       {moveProgress ? (
         <div className="tinker-settings__move-backdrop">
