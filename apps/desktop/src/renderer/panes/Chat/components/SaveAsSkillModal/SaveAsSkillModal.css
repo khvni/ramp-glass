@@ -1,0 +1,37 @@
+.tinker-save-skill-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  min-width: min(520px, 80vw);
+}
+
+.tinker-save-skill-modal__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tinker-save-skill-modal__label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-secondary);
+}
+
+.tinker-save-skill-modal__hint {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-muted);
+}
+
+.tinker-save-skill-modal__hint code {
+  font-family: var(--font-family-mono);
+  color: var(--color-text-secondary);
+}
+
+.tinker-save-skill-modal__toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+}

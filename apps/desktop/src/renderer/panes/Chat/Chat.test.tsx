@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { ToastProvider } from '@tinker/design';
 import type { SkillStore } from '@tinker/shared-types';
 
 const { opencodeMocks } = vi.hoisted(() => ({
@@ -63,6 +64,14 @@ vi.mock('@tinker/memory', () => ({
   createSession: () => Promise.resolve(),
   findLatestSessionForFolder: () => Promise.resolve(null),
   updateLastActive: () => Promise.resolve(),
+  isGitAvailable: () => Promise.resolve(false),
+  syncSkills: () => Promise.resolve({ pulled: [], pushed: [], conflicts: [], message: '' }),
+  slugify: (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/gu, '-')
+      .replace(/^-+|-+$/gu, '') || 'skill',
+  isValidSkillSlug: (value: string) => /^[a-z0-9][a-z0-9-]*$/u.test(value),
 }));
 
 vi.mock('../../memory.js', () => ({
@@ -104,13 +113,18 @@ const baseProps = {
   },
   sessionFolderPath: null,
   vaultPath: null,
+  skillsRootPath: null,
   activeSkillsRevision: 0,
 };
 
 describe('Chat chrome', () => {
   it('renders the chat pane chrome classes — header, log, composer card', () => {
     opencodeMocks.selectedModel = undefined;
-    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    const markup = renderToStaticMarkup(
+      <ToastProvider>
+        <Chat {...baseProps} />
+      </ToastProvider>,
+    );
 
     expect(markup).toContain('tinker-pane tinker-pane--chat');
     expect(markup).toContain('tinker-chat-header');
@@ -124,24 +138,34 @@ describe('Chat chrome', () => {
 
   it('omits the ContextBadge when no model is selected', () => {
     opencodeMocks.selectedModel = undefined;
-    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    const markup = renderToStaticMarkup(
+      <ToastProvider>
+        <Chat {...baseProps} />
+      </ToastProvider>,
+    );
     expect(markup).not.toContain('tk-context-badge');
   });
 
   it('renders the slot container (hidden via CSS `:empty` when no slot props are passed)', () => {
     opencodeMocks.selectedModel = undefined;
-    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    const markup = renderToStaticMarkup(
+      <ToastProvider>
+        <Chat {...baseProps} />
+      </ToastProvider>,
+    );
     expect(markup).toContain('tinker-chat-header__slot');
   });
 
   it('renders mode toggle + reasoning picker slots when passed', () => {
     opencodeMocks.selectedModel = undefined;
     const markup = renderToStaticMarkup(
-      <Chat
-        {...baseProps}
-        modeToggleSlot={<span data-testid="mode-toggle">mode</span>}
-        reasoningPickerSlot={<span data-testid="reasoning">reasoning</span>}
-      />,
+      <ToastProvider>
+        <Chat
+          {...baseProps}
+          modeToggleSlot={<span data-testid="mode-toggle">mode</span>}
+          reasoningPickerSlot={<span data-testid="reasoning">reasoning</span>}
+        />
+      </ToastProvider>,
     );
 
     expect(markup).toContain('data-testid="mode-toggle"');
@@ -150,7 +174,11 @@ describe('Chat chrome', () => {
 
   it('renders the EmptyState inside the chat log', () => {
     opencodeMocks.selectedModel = undefined;
-    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    const markup = renderToStaticMarkup(
+      <ToastProvider>
+        <Chat {...baseProps} />
+      </ToastProvider>,
+    );
     expect(markup).toContain('No model connected');
     // EmptyState lives inside the chat log wrapper.
     const logIdx = markup.indexOf('tinker-chat-log');
@@ -161,7 +189,11 @@ describe('Chat chrome', () => {
 
   it('renders the attachment-slot placeholder button disabled inside the composer card footer', () => {
     opencodeMocks.selectedModel = undefined;
-    const markup = renderToStaticMarkup(<Chat {...baseProps} />);
+    const markup = renderToStaticMarkup(
+      <ToastProvider>
+        <Chat {...baseProps} />
+      </ToastProvider>,
+    );
     expect(markup).toContain('Attachments coming soon');
     expect(markup).toContain('aria-label="Attachments coming soon"');
     expect(markup).toContain('disabled=""');

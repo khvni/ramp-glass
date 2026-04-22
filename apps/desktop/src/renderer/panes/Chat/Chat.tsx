@@ -44,6 +44,8 @@ import {
   type WorkspaceModelOption,
 } from '../../opencode.js';
 import { AttachmentIcon } from './AttachmentIcon.js';
+import { SaveAsSkillButton } from './components/SaveAsSkillButton/index.js';
+import { SaveAsSkillModal, buildSkillTranscript } from './components/SaveAsSkillModal/index.js';
 import { ChatMessage } from '../ChatMessage/index.js';
 import {
   calculateComposerHeight,
@@ -71,11 +73,22 @@ type ChatProps = {
   opencode: OpencodeConnection;
   sessionFolderPath: string | null;
   vaultPath: string | null;
+  /**
+   * Per-user memory root the skill store is initialized against. Used by the
+   * "Save conversation as skill" flow to drive git auto-sync after publish.
+   * `null` while the store has not booted yet.
+   */
+  skillsRootPath: string | null;
   activeSkillsRevision: number;
   onFileWritten?: (path: string) => void;
   onOpenFileLink?: (path: string) => void;
   onOpenNewChat?: () => void;
   onMemoryCommitted?: () => void;
+  /**
+   * Bumped by the parent when the active-skill set changes so sessions can
+   * re-inject. Also called after "Save as skill" publishes a new skill.
+   */
+  onActiveSkillsChanged?: () => void;
   modeToggleSlot?: ReactNode;
   reasoningPickerSlot?: ReactNode;
 };
@@ -214,11 +227,13 @@ export const Chat = ({
   opencode,
   sessionFolderPath,
   vaultPath,
+  skillsRootPath,
   activeSkillsRevision,
   onFileWritten,
   onOpenFileLink,
   onOpenNewChat,
   onMemoryCommitted,
+  onActiveSkillsChanged,
   modeToggleSlot,
   reasoningPickerSlot,
 }: ChatProps): JSX.Element => {
@@ -243,6 +258,7 @@ export const Chat = ({
   // Global default applied where no per-disclosure override exists. ⌥T flips this and clears overrides.
   const [defaultDisclosureOpen, setDefaultDisclosureOpen] = useState(false);
   const [disclosureOverrides, setDisclosureOverrides] = useState<Record<string, boolean>>({});
+  const [saveAsSkillOpen, setSaveAsSkillOpen] = useState(false);
   const mountedRef = useRef(true);
   const sessionIDRef = useRef<string | null>(null);
   const historyWriterRef = useRef<ChatHistoryWriter | null>(null);
@@ -255,6 +271,10 @@ export const Chat = ({
   const shouldStickToBottomRef = useRef(true);
   const lastTailSignatureRef = useRef('empty');
   const selectedModel = useMemo(() => findModelOptionById(modelOptions, selectedModelId), [modelOptions, selectedModelId]);
+
+  const saveAsSkillDefaultBody = useMemo(() => {
+    return saveAsSkillOpen ? buildSkillTranscript(messages) : '';
+  }, [saveAsSkillOpen, messages]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -966,6 +986,10 @@ export const Chat = ({
             disabled={busy || hydratingHistory}
             emptyLabel="No models available in OpenCode."
           />
+          <SaveAsSkillButton
+            disabled={busy || hydratingHistory || messages.length === 0}
+            onClick={() => setSaveAsSkillOpen(true)}
+          />
           <span className="tinker-chat-legend" title="Toggle thinking + tool disclosures (Alt+T)">
             ⌥T thinking
           </span>
@@ -1127,6 +1151,17 @@ export const Chat = ({
           </div>
         </div>
       </div>
+
+      <SaveAsSkillModal
+        open={saveAsSkillOpen}
+        onClose={() => setSaveAsSkillOpen(false)}
+        skillStore={skillStore}
+        skillsRootPath={skillsRootPath}
+        defaultBody={saveAsSkillDefaultBody}
+        onPublished={() => {
+          onActiveSkillsChanged?.();
+        }}
+      />
     </section>
   );
 };
