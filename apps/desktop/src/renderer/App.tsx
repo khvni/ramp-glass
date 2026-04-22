@@ -1008,7 +1008,6 @@ export const App = (): JSX.Element => {
           microsoftAuthMessage={providerMessages.microsoft}
           opencode={state.opencode}
           sessions={state.sessions}
-          mcpStatus={state.mcpStatus}
           vaultPath={state.vaultPath}
           vaultRevision={state.vaultRevision}
           activeSkillsRevision={state.activeSkillsRevision}

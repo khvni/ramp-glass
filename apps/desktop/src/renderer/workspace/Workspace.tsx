@@ -22,7 +22,6 @@ import {
 } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
-import type { MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
@@ -62,7 +61,6 @@ type WorkspaceProps = {
   microsoftAuthMessage: string | null;
   opencode: OpencodeConnection;
   sessions: SSOStatus;
-  mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
   vaultRevision: number;
   activeSkillsRevision: number;

@@ -4,10 +4,10 @@ import {
   AnalyticsIcon,
   ChatsIcon,
   ConnectionsIcon,
-  DojoIcon,
   ExplorerIcon,
   MemoryIcon,
   NewTabIcon,
+  PlaybookIcon,
   SettingsIcon,
   SkillsIcon,
   WorkspacesIcon,
@@ -16,7 +16,7 @@ import './WorkspaceSidebar.css';
 
 export type WorkspaceSidebarProps = {
   readonly userInitial: string;
-  readonly showDojoBadge?: boolean;
+  readonly showPlaybookBadge?: boolean;
   readonly onOpenChat: () => void;
   readonly onOpenMemory: () => void;
   readonly onOpenSettings: () => void;
@@ -28,27 +28,26 @@ type RailItemProps = {
   readonly icon: JSX.Element;
   readonly onClick?: () => void;
   readonly isActive?: boolean;
-  readonly disabled?: boolean;
-  readonly badge?: boolean;
+  readonly children?: JSX.Element | null;
 };
 
-const RailItem = ({ label, icon, onClick, isActive = false, disabled = false, badge = false }: RailItemProps): JSX.Element => (
+const RailItem = ({ label, icon, onClick, isActive = false, children }: RailItemProps): JSX.Element => (
   <button
     type="button"
     className="tinker-workspace-sidebar__item"
     aria-label={label}
     aria-current={isActive ? 'page' : undefined}
-    disabled={disabled || onClick === undefined}
+    disabled={onClick === undefined}
     onClick={onClick}
   >
     {icon}
-    {badge ? <span className="tinker-workspace-sidebar__item-dot" aria-hidden="true" /> : null}
+    {children}
   </button>
 );
 
 export const WorkspaceSidebar = ({
   userInitial,
-  showDojoBadge = false,
+  showPlaybookBadge = false,
   onOpenChat,
   onOpenMemory,
   onOpenSettings,
@@ -58,18 +57,20 @@ export const WorkspaceSidebar = ({
     <nav className="tinker-workspace-sidebar" aria-label="Workspace navigation">
       <div className="tinker-workspace-sidebar__top">
         <RailItem label="Workspaces" icon={<WorkspacesIcon />} isActive />
-        <RailItem label="Explorer" icon={<ExplorerIcon />} disabled />
+        <RailItem label="Explorer" icon={<ExplorerIcon />} />
         <RailItem label="Chats" icon={<ChatsIcon />} onClick={onOpenChat} />
-        <RailItem label="Skills" icon={<SkillsIcon />} disabled />
-        <RailItem label="Agents" icon={<AgentsIcon />} disabled />
-        <RailItem label="Connections" icon={<ConnectionsIcon />} disabled />
+        <RailItem label="Skills" icon={<SkillsIcon />} />
+        <RailItem label="Agents" icon={<AgentsIcon />} />
+        <RailItem label="Connections" icon={<ConnectionsIcon />} />
         <RailItem label="Memory" icon={<MemoryIcon />} onClick={onOpenMemory} />
         <div className="tinker-workspace-sidebar__divider" aria-hidden="true" />
         <RailItem label="New tab" icon={<NewTabIcon />} onClick={onOpenChat} />
       </div>
       <div className="tinker-workspace-sidebar__bottom">
-        <RailItem label="Playbook" icon={<DojoIcon />} disabled badge={showDojoBadge} />
-        <RailItem label="Analytics" icon={<AnalyticsIcon />} disabled />
+        <RailItem label="Playbook" icon={<PlaybookIcon />}>
+          {showPlaybookBadge ? <span className="tinker-workspace-sidebar__item-dot" aria-hidden="true" /> : null}
+        </RailItem>
+        <RailItem label="Analytics" icon={<AnalyticsIcon />} />
         <RailItem label="Settings" icon={<SettingsIcon />} onClick={onOpenSettings} />
         <button
           type="button"

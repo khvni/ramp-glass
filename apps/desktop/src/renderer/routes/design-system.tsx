@@ -1512,7 +1512,7 @@ const ShellTab = (): JSX.Element => {
           <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
             <WorkspaceSidebar
               userInitial="K"
-              showDojoBadge
+              showPlaybookBadge
               onOpenChat={noop}
               onOpenMemory={noop}
               onOpenSettings={noop}

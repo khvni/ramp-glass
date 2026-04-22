@@ -51,11 +51,11 @@ describe('WorkspaceSidebar', () => {
     }
   });
 
-  it('shows the playbook badge when requested', () => {
+  it('shows the playbook badge when showPlaybookBadge is true', () => {
     const withBadge = renderToStaticMarkup(
       <WorkspaceSidebar
         userInitial="K"
-        showDojoBadge
+        showPlaybookBadge
         onOpenChat={noop}
         onOpenMemory={noop}
         onOpenSettings={noop}
