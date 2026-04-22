@@ -222,6 +222,12 @@ Scope preserved for historical context + roadmap signaling. **Do not work on the
 | 14 | Session history windowing | [[14-session-history-windowing]] | Perf feature. Revisit at >1000 messages/session. |
 | 15 | Connection gate (full splash + retry) | [[15-connection-gate]] | Minimal variant in M7.8 covers MVP. |
 
+### Post-MVP tickets in flight
+
+| Task | Linear | Priority | Status | PR | Notes |
+|------|--------|----------|--------|----|-------|
+| Release — macOS signing + notarization | TIN-164 | p2 | review | #47 | Explicit post-MVP infra slice. Adds universal macOS release workflow, DMG notarization/stapling, and operator docs. |
+
 ## Rejected (not coming back)
 
 | Task | Reason |
