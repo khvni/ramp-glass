@@ -47,6 +47,7 @@ type ChatProps = {
   vaultPath: string | null;
   activeSkillsRevision: number;
   onFileWritten?: (path: string) => void;
+  onOpenFileLink?: (path: string) => void;
   onOpenNewChat?: () => void;
   onMemoryCommitted?: () => void;
 };
@@ -127,6 +128,7 @@ export const Chat = ({
   vaultPath,
   activeSkillsRevision,
   onFileWritten,
+  onOpenFileLink,
   onOpenNewChat,
   onMemoryCommitted,
 }: ChatProps): JSX.Element => {
@@ -656,6 +658,7 @@ export const Chat = ({
                   key={block.partID}
                   role={message.role}
                   text={block.text}
+                  onOpenFileLink={onOpenFileLink}
                 />
               );
             }
@@ -675,7 +678,13 @@ export const Chat = ({
           ? draftBlocks.map((block) => {
               if (block.kind === 'text') {
                 return (
-                  <ChatMessage key={block.partID} role="assistant" text={block.text} streaming />
+                  <ChatMessage
+                    key={block.partID}
+                    role="assistant"
+                    text={block.text}
+                    streaming
+                    onOpenFileLink={onOpenFileLink}
+                  />
                 );
               }
 
