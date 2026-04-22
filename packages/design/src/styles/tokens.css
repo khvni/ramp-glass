@@ -22,6 +22,7 @@
   --color-bg-panel: #ebe9e6;
   --color-bg-input: #fefcf8;
   --color-bg-hover: #ecebe9;
+  --color-bg-sidebar: #f9f5ec;
 
   /* border (ink alpha) */
   --color-border-subtle: rgba(26, 22, 18, 0.06);
@@ -124,6 +125,7 @@
   --color-bg-panel: #16120e;
   --color-bg-input: #120f0c;
   --color-bg-hover: #25201a;
+  --color-bg-sidebar: #140f08;
 
   /* border (warm-tinted white alpha) */
   --color-border-subtle: rgba(255, 240, 220, 0.06);
