@@ -9,7 +9,7 @@ import {
 } from '@tinker/panes';
 import '@tinker/panes/styles.css';
 import { Badge, Button } from '@tinker/design';
-import { resolveVaultPath, type MemoryRunState } from '@tinker/memory';
+import type { MemoryRunState } from '@tinker/memory';
 import {
   createDefaultWorkspacePreferences,
   type LayoutStore,
@@ -22,6 +22,7 @@ import {
   type WorkspacePreferences,
 } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
+import { resolveWorkspaceFilePath } from '../file-links.js';
 import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 import type { MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
@@ -77,6 +78,15 @@ const createWorkspaceTabId = (): string => {
   return `workspace-${crypto.randomUUID()}`;
 };
 
+const buildStoredUserId = (provider: 'google' | 'github' | 'microsoft', providerUserId: string): string => {
+  return `${provider}:${providerUserId}`;
+};
+
+const resolveCurrentUserId = (sessions: SSOStatus): string => {
+  const activeSession = sessions.google ?? sessions.github ?? sessions.microsoft;
+  return activeSession ? buildStoredUserId(activeSession.provider, activeSession.userId) : DEFAULT_USER_ID;
+};
+
 const createUtilityPane = (kind: 'settings' | 'memory') => {
   return {
     id: `${kind}-${crypto.randomUUID()}`,
@@ -108,6 +118,7 @@ export const Workspace = ({
   activeSkillsRevision,
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
+  const currentUserId = resolveCurrentUserId(sessions);
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
   if (!workspaceStoreRef.current) {
     workspaceStoreRef.current = createWorkspaceStore<TinkerPaneData>({
@@ -124,21 +135,18 @@ export const Workspace = ({
   }, [vaultPath]);
 
   const resolveAgentPath = useCallback((reportedPath: string): string | null => {
-    if (isAbsolutePath(reportedPath)) {
-      return reportedPath;
+    const resolvedPath = resolveWorkspaceFilePath(reportedPath, vaultPathRef.current);
+    if (resolvedPath) {
+      return resolvedPath;
     }
 
-    const activeVault = vaultPathRef.current;
-    if (!activeVault) {
+    if (!vaultPathRef.current && !isAbsolutePath(reportedPath)) {
+      console.warn(`Ignoring file link "${reportedPath}" because no active session folder is available.`);
       return null;
     }
 
-    try {
-      return resolveVaultPath(activeVault, reportedPath);
-    } catch (error) {
-      console.warn(`Ignoring agent file event with unsafe path "${reportedPath}".`, error);
-      return null;
-    }
+    console.warn(`Ignoring unsafe file link "${reportedPath}".`);
+    return null;
   }, []);
 
   const openFileInWorkspace = useCallback(
@@ -148,7 +156,7 @@ export const Workspace = ({
         return;
       }
 
-      openWorkspaceFile(workspaceStore, absolutePath);
+      void openWorkspaceFile(workspaceStore, absolutePath);
     },
     [resolveAgentPath, workspaceStore],
   );
@@ -297,23 +305,28 @@ export const Workspace = ({
   const chatPaneRuntime = useMemo(
     () => ({
       skillStore,
+      currentUserId,
       modelConnected,
       opencode,
+      sessionFolderPath: vaultPath,
       vaultPath,
       activeSkillsRevision,
       onFileWritten: handleAgentFileWritten,
+      onOpenFileLink: openFileInWorkspace,
       onOpenNewChat: openNewChatPane,
       onMemoryCommitted,
     }),
     [
       activeSkillsRevision,
+      currentUserId,
       handleAgentFileWritten,
       modelConnected,
       onMemoryCommitted,
+      openFileInWorkspace,
       openNewChatPane,
       opencode,
-      skillStore,
       vaultPath,
+      skillStore,
     ],
   );
 
