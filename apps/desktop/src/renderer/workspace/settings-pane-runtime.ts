@@ -1,5 +1,7 @@
 import { createContext, useContext } from 'react';
 import type { SSOSession, SSOStatus, WorkspacePreferences } from '@tinker/shared-types';
+import type { OpencodeConnection } from '../../bindings.js';
+import type { BuiltinMcpName, MCPStatus } from '../integrations.js';
 
 export type SettingsPaneRuntime = {
   readonly sessions: SSOStatus;
@@ -7,8 +9,12 @@ export type SettingsPaneRuntime = {
   readonly signOutBusy: boolean;
   readonly signOutMessage: string | null;
   readonly workspacePreferences: WorkspacePreferences;
+  readonly opencode: OpencodeConnection | null;
+  readonly vaultPath: string | null;
+  readonly mcpSeedStatuses: Partial<Record<BuiltinMcpName, MCPStatus>>;
   onWorkspacePreferencesChange(nextPreferences: WorkspacePreferences): void;
   onSignOut(session: SSOSession): Promise<void>;
+  onRequestRespawn(): Promise<void>;
 };
 
 export const SettingsPaneRuntimeContext = createContext<SettingsPaneRuntime | null>(null);

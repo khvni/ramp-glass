@@ -20,6 +20,10 @@ const settingsRuntime: SettingsPaneRuntime = {
   workspacePreferences: createDefaultWorkspacePreferences(),
   onWorkspacePreferencesChange: vi.fn(),
   onSignOut: vi.fn(),
+  opencode: null,
+  vaultPath: null,
+  mcpSeedStatuses: {},
+  onRequestRespawn: vi.fn().mockResolvedValue(undefined),
 };
 
 describe('registerWorkspacePaneRenderers', () => {

@@ -15,8 +15,12 @@ const renderWithRuntime = (overrides: Partial<SettingsPaneRuntime>): string => {
         signOutBusy: false,
         signOutMessage: null,
         workspacePreferences: createDefaultWorkspacePreferences(),
+        opencode: null,
+        vaultPath: null,
+        mcpSeedStatuses: {},
         onWorkspacePreferencesChange: vi.fn(),
         onSignOut: vi.fn(),
+        onRequestRespawn: vi.fn().mockResolvedValue(undefined),
         ...overrides,
       }}
     >
@@ -26,11 +30,12 @@ const renderWithRuntime = (overrides: Partial<SettingsPaneRuntime>): string => {
 };
 
 describe('SettingsPane', () => {
-  it('renders account and memory sections from runtime context', () => {
+  it('renders account, memory, and connections sections from runtime context', () => {
     const markup = renderWithRuntime({});
 
     expect(markup).toContain('Account');
     expect(markup).toContain('Memory');
+    expect(markup).toContain('Connections');
     expect(markup).toContain('Not signed in');
   });
 
