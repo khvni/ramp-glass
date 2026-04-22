@@ -11,6 +11,7 @@ import {
   createVaultService,
   getActiveMemoryPath,
   indexVault,
+  migrateLocalUserIdentity,
   syncActiveMemoryPath,
   upsertUser,
   type MemoryRunState,
@@ -399,6 +400,7 @@ export const App = (): JSX.Element => {
           invoke<OpencodeConnection>('get_opencode_connection'),
           readAuthStatus(),
         ]);
+        await migrateLocalUserIdentity('local-user', GUEST_USER_ID);
         await syncStoredUsers(sessions);
         await syncCurrentUserMemoryPath(sessions, { emit: false });
         const storedVaultPath = window.localStorage.getItem(VAULT_PATH_KEY);

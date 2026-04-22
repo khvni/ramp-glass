@@ -105,6 +105,7 @@ export const AccountSection = ({
 
       <ProviderPicker
         disabled={!nativeRuntimeAvailable}
+        providerBusy={providerBusy}
         providerMessages={providerMessages}
         onContinueAsGuest={() => {
           void onContinueAsGuest();

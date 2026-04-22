@@ -3,6 +3,7 @@ import type { SSOStatus, User } from '@tinker/shared-types';
 import type { AuthProvider } from '../../../../bindings.js';
 import { SettingsShell } from '../SettingsShell/index.js';
 import { AccountSection } from './components/AccountSection/index.js';
+import { ModelSection } from './components/ModelSection/index.js';
 
 type ProviderBusyState = Record<AuthProvider, boolean>;
 type ProviderMessageState = Partial<Record<AuthProvider, string | null>>;
@@ -15,10 +16,15 @@ export type SettingsPaneProps = {
   readonly nativeRuntimeAvailable: boolean;
   readonly guestBusy: boolean;
   readonly guestMessage: string | null;
+  readonly modelConnected: boolean;
+  readonly modelAuthBusy: boolean;
+  readonly modelAuthMessage: string | null;
   readonly providerBusy: ProviderBusyState;
   readonly providerMessages: ProviderMessageState;
   readonly sessions: SSOStatus;
   readonly onContinueAsGuest: () => Promise<void>;
+  readonly onConnectModel: () => Promise<void>;
+  readonly onDisconnectModel: () => Promise<void>;
   readonly onConnectGoogle: () => Promise<void>;
   readonly onConnectGithub: () => Promise<void>;
   readonly onConnectMicrosoft: () => Promise<void>;
@@ -32,10 +38,15 @@ export const SettingsPane = ({
   nativeRuntimeAvailable,
   guestBusy,
   guestMessage,
+  modelConnected,
+  modelAuthBusy,
+  modelAuthMessage,
   providerBusy,
   providerMessages,
   sessions,
   onContinueAsGuest,
+  onConnectModel,
+  onDisconnectModel,
   onConnectGoogle,
   onConnectGithub,
   onConnectMicrosoft,
@@ -63,6 +74,20 @@ export const SettingsPane = ({
               onConnectGoogle={onConnectGoogle}
               onConnectGithub={onConnectGithub}
               onConnectMicrosoft={onConnectMicrosoft}
+            />
+          ),
+        },
+        {
+          id: 'model',
+          label: 'Model',
+          content: (
+            <ModelSection
+              nativeRuntimeAvailable={nativeRuntimeAvailable}
+              modelConnected={modelConnected}
+              modelAuthBusy={modelAuthBusy}
+              modelAuthMessage={modelAuthMessage}
+              onConnectModel={onConnectModel}
+              onDisconnectModel={onDisconnectModel}
             />
           ),
         },

@@ -5,6 +5,7 @@ import './ProviderPicker.css';
 export type ProviderPickerProps = {
   readonly onPick: (provider: AuthProvider) => void;
   readonly disabled: boolean;
+  readonly providerBusy?: Partial<Record<AuthProvider, boolean>>;
   readonly providerMessages: Partial<Record<AuthProvider, string | null>>;
   readonly onContinueAsGuest?: () => void;
   readonly guestBusy?: boolean;
@@ -31,6 +32,7 @@ const PROVIDERS: readonly ProviderEntry[] = [
 export const ProviderPicker = ({
   onPick,
   disabled,
+  providerBusy,
   providerMessages,
   onContinueAsGuest,
   guestBusy = false,
@@ -84,6 +86,7 @@ export const ProviderPicker = ({
 
       {PROVIDERS.map((entry) => {
         const message = providerMessages[entry.provider];
+        const busy = providerBusy?.[entry.provider] ?? false;
         return (
           <li className="signin-picker__item" key={entry.provider}>
             <div className="signin-picker__row">
@@ -92,9 +95,9 @@ export const ProviderPicker = ({
                 size="m"
                 data-provider={entry.provider}
                 onClick={() => onPick(entry.provider)}
-                disabled={disabled}
+                disabled={disabled || busy}
               >
-                {entry.label}
+                {busy ? 'Connecting…' : entry.label}
               </Button>
             </div>
             {message ? (

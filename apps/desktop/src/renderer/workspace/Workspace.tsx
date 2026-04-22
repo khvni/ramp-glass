@@ -126,6 +126,8 @@ export const Workspace = ({
   layoutStore,
   skillStore,
   modelConnected,
+  modelAuthBusy,
+  modelAuthMessage,
   guestBusy,
   guestMessage,
   sessionFolderBusy,
@@ -142,6 +144,8 @@ export const Workspace = ({
   vaultRevision,
   activeSkillsRevision,
   onContinueAsGuest,
+  onConnectModel,
+  onDisconnectModel,
   onConnectGoogle,
   onConnectGithub,
   onConnectMicrosoft,
@@ -355,6 +359,9 @@ export const Workspace = ({
             nativeRuntimeAvailable={nativeRuntimeAvailable}
             guestBusy={guestBusy}
             guestMessage={guestMessage}
+            modelConnected={modelConnected}
+            modelAuthBusy={modelAuthBusy}
+            modelAuthMessage={modelAuthMessage}
             providerBusy={{
               google: googleAuthBusy,
               github: githubAuthBusy,
@@ -367,6 +374,8 @@ export const Workspace = ({
             }}
             sessions={sessions}
             onContinueAsGuest={onContinueAsGuest}
+            onConnectModel={onConnectModel}
+            onDisconnectModel={onDisconnectModel}
             onConnectGoogle={onConnectGoogle}
             onConnectGithub={onConnectGithub}
             onConnectMicrosoft={onConnectMicrosoft}
@@ -392,11 +401,16 @@ export const Workspace = ({
     googleAuthMessage,
     microsoftAuthBusy,
     microsoftAuthMessage,
+    modelAuthBusy,
+    modelAuthMessage,
+    modelConnected,
     nativeRuntimeAvailable,
     onConnectGithub,
     onConnectGoogle,
     onConnectMicrosoft,
+    onConnectModel,
     onContinueAsGuest,
+    onDisconnectModel,
     sessions,
     signalPaneAttention,
   ]);

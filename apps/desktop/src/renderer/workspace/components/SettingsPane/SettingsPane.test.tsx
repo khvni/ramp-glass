@@ -13,10 +13,15 @@ describe('SettingsPane', () => {
         nativeRuntimeAvailable
         guestBusy={false}
         guestMessage={null}
+        modelConnected={false}
+        modelAuthBusy={false}
+        modelAuthMessage={null}
         providerBusy={{ google: false, github: false, microsoft: false }}
         providerMessages={{ google: null, github: null, microsoft: null }}
         sessions={{ google: null, github: null, microsoft: null }}
         onContinueAsGuest={async () => {}}
+        onConnectModel={async () => {}}
+        onDisconnectModel={async () => {}}
         onConnectGoogle={async () => {}}
         onConnectGithub={async () => {}}
         onConnectMicrosoft={async () => {}}
@@ -25,6 +30,7 @@ describe('SettingsPane', () => {
 
     expect(markup).toContain('Settings');
     expect(markup).toContain('Account');
+    expect(markup).toContain('Model');
     expect(markup).toContain('Continue as guest');
     expect(markup).toContain('Continue with GitHub');
   });
