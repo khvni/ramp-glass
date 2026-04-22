@@ -32,6 +32,7 @@ import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
 import { getRenderer } from './pane-registry.js';
+import { PlaybookPaneRuntimeContext, type PlaybookPaneRuntime } from './playbook-pane-runtime.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 
@@ -57,6 +58,11 @@ type WorkspaceProps = {
   vaultPath: string | null;
   vaultRevision: number;
   activeSkillsRevision: number;
+  /**
+   * Absolute root directory the skill store was initialized against. Passed
+   * to the Playbook pane so the Git sync flow can target the same directory.
+   */
+  skillsRootPath: string | null;
   memorySweepState: MemoryRunState | null;
   memorySweepBusy: boolean;
   onConnectModel(): Promise<void>;
@@ -80,11 +86,24 @@ const createWorkspaceTabId = (): string => {
   return `workspace-${crypto.randomUUID()}`;
 };
 
-const createUtilityPane = (kind: 'settings' | 'memory') => {
+type UtilityPaneKind = 'settings' | 'memory' | 'playbook';
+
+const utilityPaneTitle = (kind: UtilityPaneKind): string => {
+  switch (kind) {
+    case 'settings':
+      return 'Settings';
+    case 'memory':
+      return 'Memory';
+    case 'playbook':
+      return 'Playbook';
+  }
+};
+
+const createUtilityPane = (kind: UtilityPaneKind) => {
   return {
     id: `${kind}-${crypto.randomUUID()}`,
     kind,
-    title: kind === 'settings' ? 'Settings' : 'Memory',
+    title: utilityPaneTitle(kind),
     data: { kind } as Extract<TinkerPaneData, { readonly kind: typeof kind }>,
   };
 };
@@ -110,6 +129,8 @@ export const Workspace = ({
   mcpStatus,
   vaultPath,
   activeSkillsRevision,
+  skillsRootPath,
+  onActiveSkillsChanged,
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
@@ -239,7 +260,7 @@ export const Workspace = ({
   }, [layoutStore, saveLayoutNow, scheduleLayoutSave, workspaceStore]);
 
   const openOrFocusPane = useCallback(
-    (kind: 'settings' | 'memory'): void => {
+    (kind: UtilityPaneKind): void => {
       const state = workspaceStore.getState();
       const activeTab = findActiveTab(state) ?? state.tabs[0] ?? null;
 
@@ -270,6 +291,10 @@ export const Workspace = ({
     openOrFocusPane('memory');
   }, [openOrFocusPane]);
 
+  const openPlaybookPane = useCallback((): void => {
+    openOrFocusPane('playbook');
+  }, [openOrFocusPane]);
+
   const registry = useMemo<PaneRegistry<TinkerPaneData>>(() => {
     return {
       chat: {
@@ -298,12 +323,18 @@ export const Workspace = ({
         defaultTitle: 'Memory',
         render: ({ pane }) => <>{getRenderer('memory')(requirePaneData('memory', pane.data))}</>,
       },
+      playbook: {
+        kind: 'playbook',
+        defaultTitle: 'Playbook',
+        render: ({ pane }) => <>{getRenderer('playbook')(requirePaneData('playbook', pane.data))}</>,
+      },
     };
   }, []);
 
   const chatPaneRuntime = useMemo(
     () => ({
       skillStore,
+      skillsRootPath,
       currentUserId,
       modelConnected,
       opencode,
@@ -313,6 +344,7 @@ export const Workspace = ({
       onFileWritten: handleAgentFileWritten,
       onOpenFileLink: openFileInWorkspace,
       onOpenNewChat: openNewChatPane,
+      onActiveSkillsChanged,
       onMemoryCommitted,
     }),
     [
@@ -320,13 +352,24 @@ export const Workspace = ({
       currentUserId,
       handleAgentFileWritten,
       modelConnected,
+      onActiveSkillsChanged,
       onMemoryCommitted,
       openFileInWorkspace,
       openNewChatPane,
       opencode,
       vaultPath,
       skillStore,
+      skillsRootPath,
     ],
+  );
+
+  const playbookPaneRuntime = useMemo<PlaybookPaneRuntime>(
+    () => ({
+      skillStore,
+      skillsRootPath,
+      onActiveSkillsChanged,
+    }),
+    [onActiveSkillsChanged, skillStore, skillsRootPath],
   );
 
   return (
@@ -339,6 +382,9 @@ export const Workspace = ({
         <div className="tinker-inline-actions">
           <Button variant="secondary" size="s" onClick={openNewChatPane}>
             New chat
+          </Button>
+          <Button variant="secondary" size="s" onClick={openPlaybookPane}>
+            Playbook
           </Button>
           <Button variant="secondary" size="s" onClick={openMemoryPane}>
             Memory
@@ -365,7 +411,9 @@ export const Workspace = ({
       </div>
 
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
-        <PanesWorkspace store={workspaceStore} registry={registry} ariaLabel="Tinker workspace" />
+        <PlaybookPaneRuntimeContext.Provider value={playbookPaneRuntime}>
+          <PanesWorkspace store={workspaceStore} registry={registry} ariaLabel="Tinker workspace" />
+        </PlaybookPaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
     </main>
   );

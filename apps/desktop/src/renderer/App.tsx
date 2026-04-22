@@ -42,6 +42,7 @@ type ReadyAppState = {
   sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
+  skillsRootPath: string | null;
   onboarded: boolean;
   modelConnected: boolean;
   vaultRevision: number;
@@ -343,6 +344,7 @@ export const App = (): JSX.Element => {
             sessions: withDefaultSessions(null),
             mcpStatus: {},
             vaultPath: null,
+            skillsRootPath: null,
             onboarded: false,
             modelConnected: false,
             vaultRevision: 0,
@@ -394,6 +396,7 @@ export const App = (): JSX.Element => {
           sessions,
           mcpStatus: {},
           vaultPath,
+          skillsRootPath: bootUserMemoryPath,
           onboarded: window.localStorage.getItem(ONBOARDING_KEY) === '1',
           modelConnected,
           vaultRevision,
@@ -447,6 +450,7 @@ export const App = (): JSX.Element => {
             ? current
             : {
                 ...current,
+                skillsRootPath: userMemoryPath,
                 activeSkillsRevision: current.activeSkillsRevision + 1,
               },
         );
@@ -1061,6 +1065,7 @@ export const App = (): JSX.Element => {
           vaultPath={state.vaultPath}
           vaultRevision={state.vaultRevision}
           activeSkillsRevision={state.activeSkillsRevision}
+          skillsRootPath={state.skillsRootPath}
           memorySweepState={memorySweepState}
           memorySweepBusy={memorySweepBusy}
           onConnectGoogle={() => handleProviderConnect('google')}

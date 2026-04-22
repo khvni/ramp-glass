@@ -13,17 +13,18 @@ type AssertEqual<A, B> =
 type Expect<T extends true> = T;
 
 // ────────────────────────────────────────────────────────────────────────────
-// `TinkerPaneKind` is exactly the four MVP kinds, no more no less.
+// `TinkerPaneKind` covers every shipped kind (MVP + playbook post-MVP).
 // ────────────────────────────────────────────────────────────────────────────
 
 type _KindLiterals = Expect<
-  AssertEqual<TinkerPaneKind, 'chat' | 'file' | 'settings' | 'memory'>
+  AssertEqual<TinkerPaneKind, 'chat' | 'file' | 'settings' | 'memory' | 'playbook'>
 >;
 
 const _chatKind: TinkerPaneKind = 'chat';
 const _fileKind: TinkerPaneKind = 'file';
 const _settingsKind: TinkerPaneKind = 'settings';
 const _memoryKind: TinkerPaneKind = 'memory';
+const _playbookKind: TinkerPaneKind = 'playbook';
 
 // @ts-expect-error — unknown kind literal must be rejected
 const _bogusKind: TinkerPaneKind = 'not-a-pane';
@@ -37,6 +38,7 @@ const _chatDataWithSession: TinkerPaneData = { kind: 'chat', sessionId: 'session
 const _fileData: TinkerPaneData = { kind: 'file', path: '/tmp/a.md', mime: 'text/markdown' };
 const _settingsData: TinkerPaneData = { kind: 'settings' };
 const _memoryData: TinkerPaneData = { kind: 'memory' };
+const _playbookData: TinkerPaneData = { kind: 'playbook' };
 
 // ────────────────────────────────────────────────────────────────────────────
 // `TinkerPaneData` rejects malformed variants.
@@ -69,6 +71,8 @@ const _narrowCheck = (data: TinkerPaneData): string => {
       return 'settings';
     case 'memory':
       return 'memory';
+    case 'playbook':
+      return 'playbook';
   }
 };
 
@@ -80,6 +84,7 @@ const _exhaustive = (data: TinkerPaneData): never => {
     case 'file':
     case 'settings':
     case 'memory':
+    case 'playbook':
       throw new Error('handled');
     default: {
       const _unreachable: never = data;
@@ -94,12 +99,14 @@ void _chatKind;
 void _fileKind;
 void _settingsKind;
 void _memoryKind;
+void _playbookKind;
 void _bogusKind;
 void _chatData;
 void _chatDataWithSession;
 void _fileData;
 void _settingsData;
 void _memoryData;
+void _playbookData;
 void _badFileMissingFields;
 void _badFilePathType;
 void _badKindData;
