@@ -27,7 +27,6 @@ import {
 import type { OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
 import { BUILTIN_MCP_NAMES, type BuiltinMcpName, type MCPStatus } from '../integrations.js';
-import { FilePaneRuntimeContext } from '../panes/FilePane/file-pane-runtime.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
@@ -76,7 +75,6 @@ type WorkspaceProps = {
   sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
-  vaultRevision: number;
   activeSkillsRevision: number;
   /**
    * Absolute root directory the skill store was initialized against. Passed
@@ -170,7 +168,6 @@ export const Workspace = ({
   opencode,
   sessions,
   vaultPath,
-  vaultRevision,
   activeSkillsRevision,
   skillsRootPath,
   onActiveSkillsChanged,
@@ -564,15 +561,6 @@ export const Workspace = ({
     ],
   );
 
-
-  const filePaneRuntime = useMemo(
-    () => ({
-      vaultRevision,
-      openFile: openFileInWorkspace,
-    }),
-    [openFileInWorkspace, vaultRevision],
-  );
-
   const playbookPaneRuntime = useMemo<PlaybookPaneRuntime>(
     () => ({
       skillStore,
@@ -581,7 +569,6 @@ export const Workspace = ({
     }),
     [onActiveSkillsChanged, skillStore, skillsRootPath],
   );
-
   const settingsPaneRuntime = useMemo<SettingsPaneRuntime>(() => {
     const activeSession = pickActiveSession(sessions);
 
@@ -726,19 +713,17 @@ export const Workspace = ({
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
         <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
           <MemoryPaneRuntimeContext.Provider value={{ currentUserId }}>
-            <FilePaneRuntimeContext.Provider value={filePaneRuntime}>
-              <PlaybookPaneRuntimeContext.Provider value={playbookPaneRuntime}>
-                <PanesWorkspace
-                  store={workspaceStore}
-                  registry={registry}
-                  attention={{
-                    store: attentionStore,
-                    workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
-                  }}
-                  ariaLabel="Tinker workspace"
-                />
-              </PlaybookPaneRuntimeContext.Provider>
-            </FilePaneRuntimeContext.Provider>
+            <PlaybookPaneRuntimeContext.Provider value={playbookPaneRuntime}>
+              <PanesWorkspace
+                store={workspaceStore}
+                registry={registry}
+                attention={{
+                  store: attentionStore,
+                  workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+                }}
+                ariaLabel="Tinker workspace"
+              />
+            </PlaybookPaneRuntimeContext.Provider>
           </MemoryPaneRuntimeContext.Provider>
         </SettingsPaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
