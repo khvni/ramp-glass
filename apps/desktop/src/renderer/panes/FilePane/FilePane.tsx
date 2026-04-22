@@ -1,4 +1,4 @@
-import { type JSX } from 'react';
+import { Suspense, lazy, type JSX } from 'react';
 import type { TinkerPaneData } from '@tinker/shared-types';
 import { CodeRenderer } from '../../renderers/CodeRenderer.js';
 import { CsvRenderer } from '../../renderers/CsvRenderer.js';
@@ -31,6 +31,11 @@ type FileRendererProps = {
 
 type FileRenderer = (props: FileRendererProps) => JSX.Element;
 
+const LazyPdfRenderer = lazy(async () => {
+  const module = await import('./components/PdfRenderer/index.js');
+  return { default: module.PdfRenderer };
+});
+
 const toParams = (path: string, mime: string): FilePaneParams => ({ path, mime });
 
 const CodeFileRenderer: FileRenderer = ({ path, mime }) => {
@@ -55,6 +60,14 @@ const ImageFileRenderer: FileRenderer = ({ path }) => {
 
 const XlsxFileRenderer: FileRenderer = ({ path, mime }) => {
   return <XlsxRenderer params={toParams(path, mime)} />;
+};
+
+const PdfFileRenderer: FileRenderer = ({ path }) => {
+  return (
+    <Suspense fallback={<FilePaneLoadingState label="Loading PDF preview…" path={path} />}>
+      <LazyPdfRenderer path={path} />
+    </Suspense>
+  );
 };
 
 const MarkdownFileRenderer: FileRenderer = ({ path, mime, vaultRevision }) => {
@@ -124,6 +137,7 @@ export const MARKDOWN_EDITOR_MIME = 'text/markdown; mode=edit';
 export const mimeToRenderer: Readonly<Record<string, FileRenderer>> = Object.freeze({
   ...createMimeMap(CODE_MIME_TYPES, CodeFileRenderer),
   ...createMimeMap(IMAGE_MIME_TYPES, ImageFileRenderer),
+  'application/pdf': PdfFileRenderer,
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document': DocxFileRenderer,
   ...createMimeMap(PPTX_MIME_TYPES, PptxFileRenderer),
   ...createMimeMap(XLSX_MIME_TYPES, XlsxFileRenderer),
@@ -134,6 +148,26 @@ export const mimeToRenderer: Readonly<Record<string, FileRenderer>> = Object.fre
   [MARKDOWN_EDITOR_MIME]: MarkdownEditorFileRenderer,
   'text/x-markdown': MarkdownFileRenderer,
 });
+
+type FilePaneLoadingStateProps = {
+  label: string;
+  path: string;
+};
+
+const FilePaneLoadingState = ({ label, path }: FilePaneLoadingStateProps): JSX.Element => {
+  return (
+    <section className="tinker-pane tinker-renderer-pane">
+      <header className="tinker-pane-header">
+        <div>
+          <p className="tinker-eyebrow">Loading preview</p>
+          <h2>{getPanelTitleForPath(path)}</h2>
+        </div>
+      </header>
+
+      <p className="tinker-muted">{label}</p>
+    </section>
+  );
+};
 
 type MissingFilePaneProps = {
   path: string;
@@ -154,6 +188,7 @@ const MissingFilePane = ({ path }: MissingFilePaneProps): JSX.Element => {
     </section>
   );
 };
+
 export { openFileExternally } from './components/ExternalPreviewPane/index.js';
 
 export const FilePane = ({ data, vaultRevision = 0 }: FilePaneProps): JSX.Element => {
