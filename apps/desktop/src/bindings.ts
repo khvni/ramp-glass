@@ -12,7 +12,8 @@ export const GOOGLE_SCOPES = [
 
 export const ONBOARDING_KEY = 'tinker:onboarded';
 export const VAULT_PATH_KEY = 'tinker:vault-path';
-export const DEFAULT_USER_ID = 'local-user';
+export const GUEST_USER_ID = 'guest';
+export const DEFAULT_USER_ID = GUEST_USER_ID;
 export const REFRESH_TOKEN_PROVIDERS = ['google', 'github', 'microsoft'] as const;
 
 export type AuthProvider = SSOProvider;

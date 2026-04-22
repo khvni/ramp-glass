@@ -20,15 +20,17 @@ import {
   type SSOStatus,
   type TinkerPaneData,
   type TinkerPaneKind,
+  type User,
   type WorkspacePreferences,
 } from '@tinker/shared-types';
-import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
+import type { OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
 import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 import type { MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
+import { SettingsPane } from './components/SettingsPane/index.js';
 import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
@@ -39,6 +41,11 @@ const DESKTOP_WORKSPACE_ATTENTION_ID = 'desktop-workspace';
 
 type WorkspaceProps = {
   currentUserId: string;
+  currentUserName: string;
+  currentUserProvider: User['provider'];
+  currentUserEmail: string | null;
+  currentUserAvatarUrl: string | null;
+  nativeRuntimeAvailable: boolean;
   layoutStore: LayoutStore;
   memoryStore: MemoryStore;
   schedulerStore: ScheduledJobStore;
@@ -47,6 +54,8 @@ type WorkspaceProps = {
   modelConnected: boolean;
   modelAuthBusy: boolean;
   modelAuthMessage: string | null;
+  guestBusy: boolean;
+  guestMessage: string | null;
   googleAuthBusy: boolean;
   googleAuthMessage: string | null;
   githubAuthBusy: boolean;
@@ -61,6 +70,7 @@ type WorkspaceProps = {
   activeSkillsRevision: number;
   memorySweepState: MemoryRunState | null;
   memorySweepBusy: boolean;
+  onContinueAsGuest(): Promise<void>;
   onConnectModel(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
@@ -104,14 +114,31 @@ const requirePaneData = <K extends TinkerPaneKind>(
 
 export const Workspace = ({
   currentUserId,
+  currentUserName,
+  currentUserProvider,
+  currentUserEmail,
+  currentUserAvatarUrl,
+  nativeRuntimeAvailable,
   layoutStore,
   skillStore,
   modelConnected,
+  guestBusy,
+  guestMessage,
+  googleAuthBusy,
+  googleAuthMessage,
+  githubAuthBusy,
+  githubAuthMessage,
+  microsoftAuthBusy,
+  microsoftAuthMessage,
   opencode,
   sessions,
   mcpStatus,
   vaultPath,
   activeSkillsRevision,
+  onContinueAsGuest,
+  onConnectGoogle,
+  onConnectGithub,
+  onConnectMicrosoft,
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
@@ -188,7 +215,7 @@ export const Workspace = ({
     const snapshot = selectWorkspaceSnapshot(workspaceStore.getState());
 
     void layoutStore
-      .save(DEFAULT_USER_ID, {
+      .save(currentUserId, {
         version: snapshot.version,
         workspaceState: snapshot,
         updatedAt: new Date().toISOString(),
@@ -197,7 +224,7 @@ export const Workspace = ({
       .catch((error) => {
         console.warn('Failed to persist workspace layout.', error);
       });
-  }, [layoutStore, workspaceStore]);
+  }, [currentUserId, layoutStore, workspaceStore]);
 
   const scheduleLayoutSave = useCallback((): void => {
     if (saveTimerRef.current !== null) {
@@ -218,7 +245,7 @@ export const Workspace = ({
 
     void (async () => {
       try {
-        const savedLayout = await layoutStore.load(DEFAULT_USER_ID);
+        const savedLayout = await layoutStore.load(currentUserId);
         if (!active) {
           return;
         }
@@ -251,7 +278,7 @@ export const Workspace = ({
 
       saveLayoutNow();
     };
-  }, [layoutStore, saveLayoutNow, scheduleLayoutSave, workspaceStore]);
+  }, [currentUserId, layoutStore, saveLayoutNow, scheduleLayoutSave, workspaceStore]);
 
   const openOrFocusPane = useCallback(
     (kind: 'settings' | 'memory'): void => {
@@ -308,7 +335,32 @@ export const Workspace = ({
       settings: {
         kind: 'settings',
         defaultTitle: 'Settings',
-        render: ({ pane }) => <>{getRenderer('settings')(requirePaneData('settings', pane.data))}</>,
+        render: () => (
+          <SettingsPane
+            currentUserName={currentUserName}
+            currentUserProvider={currentUserProvider}
+            currentUserEmail={currentUserEmail}
+            currentUserAvatarUrl={currentUserAvatarUrl}
+            nativeRuntimeAvailable={nativeRuntimeAvailable}
+            guestBusy={guestBusy}
+            guestMessage={guestMessage}
+            providerBusy={{
+              google: googleAuthBusy,
+              github: githubAuthBusy,
+              microsoft: microsoftAuthBusy,
+            }}
+            providerMessages={{
+              google: googleAuthMessage,
+              github: githubAuthMessage,
+              microsoft: microsoftAuthMessage,
+            }}
+            sessions={sessions}
+            onContinueAsGuest={onContinueAsGuest}
+            onConnectGoogle={onConnectGoogle}
+            onConnectGithub={onConnectGithub}
+            onConnectMicrosoft={onConnectMicrosoft}
+          />
+        ),
       },
       memory: {
         kind: 'memory',
@@ -316,7 +368,27 @@ export const Workspace = ({
         render: ({ pane }) => <>{getRenderer('memory')(requirePaneData('memory', pane.data))}</>,
       },
     };
-  }, [signalPaneAttention]);
+  }, [
+    currentUserAvatarUrl,
+    currentUserEmail,
+    currentUserName,
+    currentUserProvider,
+    guestBusy,
+    guestMessage,
+    githubAuthBusy,
+    githubAuthMessage,
+    googleAuthBusy,
+    googleAuthMessage,
+    microsoftAuthBusy,
+    microsoftAuthMessage,
+    nativeRuntimeAvailable,
+    onConnectGithub,
+    onConnectGoogle,
+    onConnectMicrosoft,
+    onContinueAsGuest,
+    sessions,
+    signalPaneAttention,
+  ]);
 
   const chatPaneRuntime = useMemo(
     () => ({
@@ -369,7 +441,7 @@ export const Workspace = ({
             {modelConnected ? 'Model connected' : 'Model disconnected'}
           </Badge>
           <Badge variant="default" size="small">
-            {sessions.google?.email ?? sessions.github?.email ?? sessions.microsoft?.email ?? 'Offline mode'}
+            {currentUserEmail ?? currentUserName}
           </Badge>
           <Badge variant="default" size="small">
             {vaultPath ?? 'No vault selected'}

@@ -18,7 +18,7 @@ import {
 } from '@tinker/memory';
 import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
 import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus, SSOSession, User, VaultConfig } from '@tinker/shared-types';
-import { DEFAULT_USER_ID, ONBOARDING_KEY, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
+import { GUEST_USER_ID, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import {
   checkExaBootHealth,
@@ -26,10 +26,8 @@ import {
   EXA_MCP_NAME,
   type MCPStatus,
 } from './integrations.js';
-import { FirstRun } from './panes/FirstRun.js';
 import { createWorkspaceClient, getOpencodeDirectory, pickFirstOauthProvider } from './opencode.js';
-import { SignIn } from './routes/SignIn/index.js';
-import { isTauriRuntime, WEB_PREVIEW_NOTICE } from './runtime.js';
+import { isTauriRuntime } from './runtime.js';
 import { Workspace } from './workspace/Workspace.js';
 
 type ReadyAppState = {
@@ -42,7 +40,6 @@ type ReadyAppState = {
   sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
-  onboarded: boolean;
   modelConnected: boolean;
   vaultRevision: number;
   activeSkillsRevision: number;
@@ -56,6 +53,13 @@ type AppState =
 
 type ProviderBusyState = Record<AuthProvider, boolean>;
 type ProviderMessageState = Record<AuthProvider, string | null>;
+type CurrentUserState = {
+  id: string;
+  provider: User['provider'];
+  displayName: string;
+  email: string | null;
+  avatarUrl: string | null;
+};
 
 const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
 const MODEL_CONNECT_TIMEOUT_MS = 180_000;
@@ -91,14 +95,14 @@ const buildStoredUserId = (provider: User['provider'], providerUserId: string): 
   return `${provider}:${providerUserId}`;
 };
 
-const createLocalUser = (): User => {
+const createGuestUser = (): User => {
   const timestamp = new Date().toISOString();
 
   return {
-    id: DEFAULT_USER_ID,
+    id: GUEST_USER_ID,
     provider: 'local',
-    providerUserId: DEFAULT_USER_ID,
-    displayName: 'Offline mode',
+    providerUserId: GUEST_USER_ID,
+    displayName: 'Guest',
     createdAt: timestamp,
     lastSeenAt: timestamp,
   };
@@ -108,7 +112,28 @@ const pickCurrentUserId = (sessions: SSOStatus): User['id'] => {
   const activeSession = sessions.google ?? sessions.github ?? sessions.microsoft;
   return activeSession
     ? buildStoredUserId(activeSession.provider, activeSession.userId)
-    : DEFAULT_USER_ID;
+    : GUEST_USER_ID;
+};
+
+const resolveCurrentUser = (sessions: SSOStatus): CurrentUserState => {
+  const activeSession = sessions.google ?? sessions.github ?? sessions.microsoft;
+  if (!activeSession) {
+    return {
+      id: GUEST_USER_ID,
+      provider: 'local',
+      displayName: 'Guest',
+      email: null,
+      avatarUrl: null,
+    };
+  }
+
+  return {
+    id: buildStoredUserId(activeSession.provider, activeSession.userId),
+    provider: activeSession.provider,
+    displayName: activeSession.displayName,
+    email: activeSession.email,
+    avatarUrl: activeSession.avatarUrl ?? null,
+  };
 };
 
 const toStoredUser = (session: SSOSession): User => {
@@ -136,6 +161,14 @@ const withDefaultSessions = (status: Partial<SSOStatus> | null | undefined): SSO
 
 const readAuthStatus = async (): Promise<SSOStatus> => {
   return withDefaultSessions(await invoke<AuthStatus>('auth_status'));
+};
+
+const syncStoredUsers = async (sessions: SSOStatus): Promise<void> => {
+  const connectedSessions = Object.values(sessions).filter((session): session is SSOSession => session !== null);
+  await Promise.all([
+    upsertUser(createGuestUser()),
+    ...connectedSessions.map((session) => upsertUser(toStoredUser(session))),
+  ]);
 };
 
 const syncCurrentUserMemoryPath = async (
@@ -296,6 +329,8 @@ export const App = (): JSX.Element => {
   const [modelAuthMessage, setModelAuthMessage] = useState<string | null>(null);
   const [providerBusy, setProviderBusy] = useState<ProviderBusyState>(EMPTY_PROVIDER_BUSY);
   const [providerMessages, setProviderMessages] = useState<ProviderMessageState>(EMPTY_PROVIDER_MESSAGES);
+  const [guestBusy, setGuestBusy] = useState(false);
+  const [guestMessage, setGuestMessage] = useState<string | null>(null);
   const [memorySweepState, setMemorySweepState] = useState<MemoryRunState | null>(null);
   const [memorySweepBusy, setMemorySweepBusy] = useState(false);
   const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
@@ -345,7 +380,6 @@ export const App = (): JSX.Element => {
             sessions: withDefaultSessions(null),
             mcpStatus: {},
             vaultPath: null,
-            onboarded: false,
             modelConnected: false,
             vaultRevision: 0,
             activeSkillsRevision: 0,
@@ -355,7 +389,7 @@ export const App = (): JSX.Element => {
         }
 
         const [opencode, sessions] = await Promise.all([invoke<OpencodeConnection>('get_opencode_connection'), readAuthStatus()]);
-        await upsertUser(createLocalUser());
+        await syncStoredUsers(sessions);
         await syncCurrentUserMemoryPath(sessions, { emit: false });
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
 
@@ -388,7 +422,6 @@ export const App = (): JSX.Element => {
           sessions,
           mcpStatus: {},
           vaultPath,
-          onboarded: window.localStorage.getItem(ONBOARDING_KEY) === '1',
           modelConnected,
           vaultRevision,
           activeSkillsRevision: 0,
@@ -867,6 +900,7 @@ export const App = (): JSX.Element => {
       }
 
       setProviderMessage(provider, `${providerDisplayName(provider)} connected as ${session.email}.`);
+      setGuestMessage(null);
     } catch (error) {
       setProviderMessage(provider, error instanceof Error ? error.message : String(error));
     } finally {
@@ -899,6 +933,7 @@ export const App = (): JSX.Element => {
       }
 
       setProviderMessage(provider, `${providerDisplayName(provider)} disconnected.`);
+      setGuestMessage(null);
     } catch (error) {
       setProviderMessage(provider, error instanceof Error ? error.message : String(error));
     } finally {
@@ -922,20 +957,46 @@ export const App = (): JSX.Element => {
     }
   };
 
-  const finishOnboarding = (): void => {
-    if (!nativeRuntime) {
-      return;
-    }
+  const handleContinueAsGuest = async (): Promise<void> => {
+    setGuestBusy(true);
+    setGuestMessage('Switching to guest mode…');
 
-    window.localStorage.setItem(ONBOARDING_KEY, '1');
-    setState((current) =>
-      current.status !== 'ready'
-        ? current
-        : {
-            ...current,
-            onboarded: true,
-          },
-    );
+    try {
+      requireNativeRuntime('Continuing as guest');
+
+      const providersToClear = (['google', 'github', 'microsoft'] as const).filter(
+        (provider) => state.sessions[provider] !== null,
+      );
+
+      if (providersToClear.length > 0) {
+        await Promise.all(providersToClear.map((provider) => invoke('auth_sign_out', { provider })));
+      }
+
+      await upsertUser(createGuestUser());
+
+      if (providersToClear.includes('github')) {
+        await refreshWorkspaceConnection();
+      } else {
+        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
+        await syncCurrentUserMemoryPath(nextState.sessions);
+        setState((current) =>
+          current.status !== 'ready'
+            ? current
+            : {
+                ...current,
+                sessions: nextState.sessions,
+                modelConnected: nextState.modelConnected,
+              },
+        );
+      }
+
+      setProviderMessages(EMPTY_PROVIDER_MESSAGES);
+      setGuestMessage('Guest mode active.');
+    } catch (error) {
+      setGuestMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGuestBusy(false);
+    }
   };
 
   const handleRunScheduledJobNow = async (jobId: string): Promise<void> => {
@@ -947,95 +1008,60 @@ export const App = (): JSX.Element => {
     await engine.runNow(jobId);
   };
 
-  const hasSignedIn =
-    state.sessions.google !== null ||
-    state.sessions.github !== null ||
-    state.sessions.microsoft !== null;
-  const signInGateVisible = nativeRuntime && !hasSignedIn;
-  const workspaceAvailable = nativeRuntime && state.onboarded && hasSignedIn;
+  const currentUser = resolveCurrentUser(state.sessions);
   const currentUserId = pickCurrentUserId(state.sessions);
-
-  if (signInGateVisible) {
-    return (
-      <div className="tinker-app">
-        <SignIn
-          nativeRuntimeAvailable={nativeRuntime}
-          providerMessages={providerMessages}
-          onSignIn={handleProviderConnect}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="tinker-app">
-      {!workspaceAvailable ? (
-        <FirstRun
-          nativeRuntimeAvailable={nativeRuntime}
-          runtimeNotice={nativeRuntime ? null : WEB_PREVIEW_NOTICE}
-          modelConnected={state.modelConnected}
-          modelAuthBusy={modelAuthBusy}
-          modelAuthMessage={modelAuthMessage}
-          googleAuthBusy={providerBusy.google}
-          googleAuthMessage={providerMessages.google}
-          githubAuthBusy={providerBusy.github}
-          githubAuthMessage={providerMessages.github}
-          microsoftAuthBusy={providerBusy.microsoft}
-          microsoftAuthMessage={providerMessages.microsoft}
-          sessions={state.sessions}
-          mcpStatus={state.mcpStatus}
-          vaultPath={state.vaultPath}
-          onConnectModel={handleConnectModel}
-          onConnectGoogle={() => handleProviderConnect('google')}
-          onConnectGithub={() => handleProviderConnect('github')}
-          onConnectMicrosoft={() => handleProviderConnect('microsoft')}
-          onCreateVault={handleCreateVault}
-          onSelectVault={handlePickVault}
-          onContinue={finishOnboarding}
-        />
-      ) : (
-        <Workspace
-          key={currentUserId}
-          currentUserId={currentUserId}
-          layoutStore={state.layoutStore}
-          memoryStore={state.memoryStore}
-          schedulerStore={state.schedulerStore}
-          schedulerRevision={state.schedulerRevision}
-          skillStore={state.skillStore}
-          modelConnected={state.modelConnected}
-          modelAuthBusy={modelAuthBusy}
-          modelAuthMessage={modelAuthMessage}
-          googleAuthBusy={providerBusy.google}
-          googleAuthMessage={providerMessages.google}
-          githubAuthBusy={providerBusy.github}
-          githubAuthMessage={providerMessages.github}
-          microsoftAuthBusy={providerBusy.microsoft}
-          microsoftAuthMessage={providerMessages.microsoft}
-          opencode={state.opencode}
-          sessions={state.sessions}
-          mcpStatus={state.mcpStatus}
-          vaultPath={state.vaultPath}
-          vaultRevision={state.vaultRevision}
-          activeSkillsRevision={state.activeSkillsRevision}
-          memorySweepState={memorySweepState}
-          memorySweepBusy={memorySweepBusy}
-          onConnectGoogle={() => handleProviderConnect('google')}
-          onDisconnectGoogle={() => handleProviderDisconnect('google')}
-          onConnectGithub={() => handleProviderConnect('github')}
-          onDisconnectGithub={() => handleProviderDisconnect('github')}
-          onConnectMicrosoft={() => handleProviderConnect('microsoft')}
-          onDisconnectMicrosoft={() => handleProviderDisconnect('microsoft')}
-          onConnectModel={handleConnectModel}
-          onDisconnectModel={handleDisconnectModel}
-          onCreateVault={handleCreateVault}
-          onSelectVault={handlePickVault}
-          onRunScheduledJobNow={handleRunScheduledJobNow}
-          onSchedulerChanged={bumpSchedulerRevision}
-          onActiveSkillsChanged={handleActiveSkillsChanged}
-          onRunMemorySweep={handleRunMemorySweep}
-          onMemoryCommitted={handleMemoryCommitted}
-        />
-      )}
+      <Workspace
+        key={currentUserId}
+        currentUserId={currentUserId}
+        currentUserName={currentUser.displayName}
+        currentUserProvider={currentUser.provider}
+        currentUserEmail={currentUser.email}
+        currentUserAvatarUrl={currentUser.avatarUrl}
+        nativeRuntimeAvailable={nativeRuntime}
+        layoutStore={state.layoutStore}
+        memoryStore={state.memoryStore}
+        schedulerStore={state.schedulerStore}
+        schedulerRevision={state.schedulerRevision}
+        skillStore={state.skillStore}
+        modelConnected={state.modelConnected}
+        modelAuthBusy={modelAuthBusy}
+        modelAuthMessage={modelAuthMessage}
+        guestBusy={guestBusy}
+        guestMessage={guestMessage}
+        googleAuthBusy={providerBusy.google}
+        googleAuthMessage={providerMessages.google}
+        githubAuthBusy={providerBusy.github}
+        githubAuthMessage={providerMessages.github}
+        microsoftAuthBusy={providerBusy.microsoft}
+        microsoftAuthMessage={providerMessages.microsoft}
+        opencode={state.opencode}
+        sessions={state.sessions}
+        mcpStatus={state.mcpStatus}
+        vaultPath={state.vaultPath}
+        vaultRevision={state.vaultRevision}
+        activeSkillsRevision={state.activeSkillsRevision}
+        memorySweepState={memorySweepState}
+        memorySweepBusy={memorySweepBusy}
+        onContinueAsGuest={handleContinueAsGuest}
+        onConnectGoogle={() => handleProviderConnect('google')}
+        onDisconnectGoogle={() => handleProviderDisconnect('google')}
+        onConnectGithub={() => handleProviderConnect('github')}
+        onDisconnectGithub={() => handleProviderDisconnect('github')}
+        onConnectMicrosoft={() => handleProviderConnect('microsoft')}
+        onDisconnectMicrosoft={() => handleProviderDisconnect('microsoft')}
+        onConnectModel={handleConnectModel}
+        onDisconnectModel={handleDisconnectModel}
+        onCreateVault={handleCreateVault}
+        onSelectVault={handlePickVault}
+        onRunScheduledJobNow={handleRunScheduledJobNow}
+        onSchedulerChanged={bumpSchedulerRevision}
+        onActiveSkillsChanged={handleActiveSkillsChanged}
+        onRunMemorySweep={handleRunMemorySweep}
+        onMemoryCommitted={handleMemoryCommitted}
+      />
     </div>
   );
 };

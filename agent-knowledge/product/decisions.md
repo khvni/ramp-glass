@@ -249,6 +249,17 @@ Log of what's explicitly OUT of scope or deferred, with reasoning. Coding agents
 - **Non-goals reaffirmed** (from existing PRD §6, relisted so MVP agents don't drift): multi-provider model support, cloud sync, mobile dispatch, enterprise SSO (SAML / SCIM / dedicated-tenant federation — stays per D1 / D8), legacy desktop-shell compatibility, prompt marketplace. Plus D25 adds: no entity extraction / FTS indexing (memory = flat markdown files read top-N-recent), no vault-wide indexing (folder scope = session scope), no sub-agent orchestration, no scheduled jobs, no additional MCP integrations beyond qmd / smart-connections / exa (built-in integrations like GitHub / Linear / Gmail wait until post-MVP), no Playbook / Coach skill marketplace.
 - **In scope for MVP identity**: Google + GitHub + Microsoft consumer OAuth via Better Auth (per D2 / D4). Per-user chat-history persistence to `<session-folder>/.tinker/chats/<user-id>/<session-id>.jsonl`. Per-user memory scoping. Tokens in OS keychain (D5).
 
+### `[2026-04-22]` D26 — Workspace boots as guest; Better Auth starts on demand
+
+- **Decision**: Cold boot lands directly in Workspace under a local `guest` identity. Better Auth is no longer part of boot. The auth sidecar starts only when the user explicitly clicks Google / GitHub / Microsoft from Settings → Account.
+- **Why**: Boot-time sign-in and setup screens added friction and broke the "first useful outcome happens in the product" rule. The workspace is useful before identity is configured.
+- **How to apply**:
+  - Always ensure a `users` row exists for `id='guest'`, `provider='local'`, `provider_user_id='guest'`.
+  - When no provider session is active, `guest` is the current user for session FKs, memory subdir resolution, and layout persistence.
+  - Settings → Account is the sanctioned entry point for consumer sign-in from the workspace.
+  - Do not warm-start Better Auth from Tauri `setup()`.
+  - Sign-out returns the app to guest workspace mode, not a sign-in gate.
+
 ## Open Questions (not yet decided)
 
 - **Scheduler implementation**: in-process TypeScript cron vs. OS-level (launchd/Task Scheduler/systemd). Leaning in-process for cross-platform simplicity; revisit when app sleep/wake behavior is tested.
