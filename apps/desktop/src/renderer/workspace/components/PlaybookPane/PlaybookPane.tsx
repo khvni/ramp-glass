@@ -148,12 +148,11 @@ const PlaybookPaneInner = ({
     async (sourcePath: string): Promise<void> => {
       setInstalling(true);
       try {
-        await skillStore.installFromFile(sourcePath);
-        const next = await refresh();
-        const latest = next.find((entry) => sourcePath.includes(entry.slug));
+        const installed = await skillStore.installFromFile(sourcePath);
+        await refresh();
         onActiveSkillsChanged();
         toast.show({
-          title: latest ? `Installed ${latest.title}` : 'Skill installed',
+          title: `Installed ${installed.title}`,
           variant: 'success',
         });
         void runAutoSync();
@@ -224,29 +223,21 @@ const PlaybookPaneInner = ({
   );
 
   const handleSyncNow = useCallback(async (): Promise<void> => {
+    // Validation errors surface inline in PlaybookSettingsModal via its own
+    // try/catch → setError. Throw a descriptive Error and let the modal render
+    // it; no toast here (single source of truth per review).
     const config = await skillStore.getGitConfig();
     if (!config) {
-      toast.show({
-        title: 'No git remote configured',
-        description: 'Add a remote URL in Settings before syncing.',
-        variant: 'warning',
-      });
-      throw new Error('No git remote configured.');
+      throw new Error('No git remote configured. Add one in Settings before syncing.');
     }
 
     const isAvailable = await (gitAvailabilityOverride ?? isGitAvailable)();
     if (!isAvailable) {
-      toast.show({
-        title: 'Git unavailable',
-        description: 'Install git on this machine before syncing skills.',
-        variant: 'warning',
-      });
-      throw new Error('Git is not available on this machine.');
+      throw new Error('Git is not available on this machine. Install git before syncing skills.');
     }
 
     if (!skillsRootPath) {
-      toast.show({ title: 'Skill store not initialized', variant: 'error' });
-      throw new Error('Skill store not initialized.');
+      throw new Error('Skill store is not initialized yet.');
     }
 
     const syncFn = syncSkillsOverride ?? syncSkills;
@@ -257,7 +248,6 @@ const PlaybookPaneInner = ({
       description: `${report.message}${report.conflicts.length > 0 ? ` · conflicts: ${report.conflicts.join(', ')}` : ''}`,
       variant: report.conflicts.length > 0 ? 'warning' : 'success',
     });
-    return;
   }, [gitAvailabilityOverride, refresh, skillStore, skillsRootPath, syncSkillsOverride, toast]);
 
   const roleOptions = useMemo(() => derivePlaybookRoleOptions(skills), [skills]);
