@@ -28,7 +28,7 @@ describe('registerWorkspacePaneRenderers', () => {
     expect(settingsMarkup).toContain('Settings panel coming soon');
     expect(settingsMarkup).toContain('workspace controls');
     expect(memoryMarkup).toContain('Memory files');
-    expect(memoryMarkup).toContain('Current user');
+    expect(memoryMarkup).toContain('tinker-memory-pane');
     expect(memoryMarkup).toContain('Loading…');
   });
 });

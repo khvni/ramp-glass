@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, type JSX } from 'react';
+import { createAttentionStore, type FlashReason } from '@tinker/attention';
 import {
   createWorkspaceStore,
   findActiveTab,
@@ -36,6 +37,7 @@ import { MemoryPaneRuntimeContext } from './memory-pane-runtime.js';
 import { getRenderer } from './pane-registry.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
+const DESKTOP_WORKSPACE_ATTENTION_ID = 'desktop-workspace';
 
 type WorkspaceProps = {
   currentUserId: string;
@@ -116,12 +118,14 @@ export const Workspace = ({
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
+  const attentionStoreRef = useRef(createAttentionStore());
   if (!workspaceStoreRef.current) {
     workspaceStoreRef.current = createWorkspaceStore<TinkerPaneData>({
       initial: createDefaultWorkspaceState(),
     });
   }
   const workspaceStore = workspaceStoreRef.current;
+  const attentionStore = attentionStoreRef.current;
   const saveTimerRef = useRef<number | null>(null);
   const vaultPathRef = useRef<string | null>(vaultPath);
   const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
@@ -165,6 +169,17 @@ export const Workspace = ({
   const openNewChatPane = useCallback((): void => {
     openNewChatPanel(workspaceStore);
   }, [workspaceStore]);
+
+  const signalPaneAttention = useCallback(
+    (paneId: string, reason: FlashReason): void => {
+      attentionStore.getState().actions.signal({
+        workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+        paneId,
+        reason,
+      });
+    },
+    [attentionStore],
+  );
 
   const handleAgentFileWritten = useCallback(
     (reportedPath: string): void => {
@@ -283,11 +298,13 @@ export const Workspace = ({
       chat: {
         kind: 'chat',
         defaultTitle: 'Chat',
-        render: ({ pane, tabId }) => (
+        render: ({ pane, tabId, isActive }) => (
           <RegisteredChatPane
             tabId={tabId}
             paneId={pane.id}
+            isActive={isActive}
             paneData={requirePaneData('chat', pane.data)}
+            onAttentionSignal={(reason) => signalPaneAttention(pane.id, reason)}
           />
         ),
       },
@@ -307,7 +324,7 @@ export const Workspace = ({
         render: ({ pane }) => <>{getRenderer('memory')(requirePaneData('memory', pane.data))}</>,
       },
     };
-  }, []);
+  }, [signalPaneAttention]);
 
   const chatPaneRuntime = useMemo(
     () => ({
@@ -383,7 +400,15 @@ export const Workspace = ({
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
         <MemoryPaneRuntimeContext.Provider value={{ currentUserId }}>
           <FilePaneRuntimeContext.Provider value={filePaneRuntime}>
-            <PanesWorkspace store={workspaceStore} registry={registry} ariaLabel="Tinker workspace" />
+            <PanesWorkspace
+              store={workspaceStore}
+              registry={registry}
+              attention={{
+                store: attentionStore,
+                workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+              }}
+              ariaLabel="Tinker workspace"
+            />
           </FilePaneRuntimeContext.Provider>
         </MemoryPaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
