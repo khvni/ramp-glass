@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { SSOStatus } from '@tinker/shared-types';
+import { createDefaultWorkspacePreferences, type SSOStatus } from '@tinker/shared-types';
 import { FilePaneRuntimeContext } from '../panes/FilePane/file-pane-runtime.js';
 import { getRenderer, resetPaneRegistry } from './pane-registry.js';
 import { MemoryPaneRuntimeContext } from './memory-pane-runtime.js';
@@ -17,6 +17,8 @@ const settingsRuntime: SettingsPaneRuntime = {
   activeSession: null,
   signOutBusy: false,
   signOutMessage: null,
+  workspacePreferences: createDefaultWorkspacePreferences(),
+  onWorkspacePreferencesChange: vi.fn(),
   onSignOut: vi.fn(),
   opencode: null,
   vaultPath: null,
@@ -29,7 +31,7 @@ describe('registerWorkspacePaneRenderers', () => {
     resetPaneRegistry();
   });
 
-  it('registers settings placeholder and memory pane renderers', () => {
+  it('registers settings and memory panes once', () => {
     registerWorkspacePaneRenderers();
     expect(() => registerWorkspacePaneRenderers()).not.toThrow();
 
@@ -47,6 +49,7 @@ describe('registerWorkspacePaneRenderers', () => {
     );
 
     expect(settingsMarkup).toContain('Account');
+    expect(settingsMarkup).toContain('Memory');
     expect(settingsMarkup).toContain('Not signed in');
     expect(memoryMarkup).toContain('Memory files');
     expect(memoryMarkup).toContain('tinker-memory-pane');

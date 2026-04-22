@@ -1,6 +1,6 @@
 import { useMemo, type JSX } from 'react';
 import { AccountPanel } from '../AccountPanel/index.js';
-import { EmptyPane } from '../EmptyPane/index.js';
+import { MemorySettingsPanel } from '../MemorySettingsPanel/index.js';
 import { SettingsShell, type SettingsShellSection } from '../SettingsShell/index.js';
 import { useSettingsPaneRuntime } from '../../settings-pane-runtime.js';
 import { ConnectionsSection } from '../../../panes/Settings/ConnectionsSection/index.js';
@@ -17,6 +17,24 @@ const UserIcon = (): JSX.Element => (
   >
     <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
     <circle cx="12" cy="7" r="4" />
+  </svg>
+);
+
+const MemoryIcon = (): JSX.Element => (
+  <svg
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
+    <path d="M4 7h16" />
+    <path d="M4 12h10" />
+    <path d="M4 17h7" />
+    <path d="M18 15v4" />
+    <path d="M16 17h4" />
   </svg>
 );
 
@@ -56,6 +74,17 @@ export const SettingsPane = (): JSX.Element => {
         ),
       },
       {
+        id: 'memory',
+        label: 'Memory',
+        icon: <MemoryIcon />,
+        content: (
+          <MemorySettingsPanel
+            workspacePreferences={runtime.workspacePreferences}
+            onWorkspacePreferencesChange={runtime.onWorkspacePreferencesChange}
+          />
+        ),
+      },
+      {
         id: 'connections',
         label: 'Connections',
         icon: <PlugIcon />,
@@ -75,6 +104,8 @@ export const SettingsPane = (): JSX.Element => {
       runtime.signOutBusy,
       runtime.signOutMessage,
       runtime.onSignOut,
+      runtime.workspacePreferences,
+      runtime.onWorkspacePreferencesChange,
       runtime.opencode,
       runtime.vaultPath,
       runtime.mcpSeedStatuses,
@@ -82,13 +113,5 @@ export const SettingsPane = (): JSX.Element => {
     ],
   );
 
-  const emptyState = (
-    <EmptyPane
-      eyebrow="Settings"
-      title="Settings panel coming soon"
-      description="More sections land here as features ship."
-    />
-  );
-
-  return <SettingsShell sections={sections} emptyState={emptyState} />;
+  return <SettingsShell sections={sections} />;
 };

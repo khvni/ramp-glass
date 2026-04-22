@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { createAttentionStore, type FlashReason } from '@tinker/attention';
 import {
   createWorkspaceStore,
@@ -117,6 +117,12 @@ export const Workspace = ({
   layoutStore,
   skillStore,
   modelConnected,
+  googleAuthBusy,
+  googleAuthMessage,
+  githubAuthBusy,
+  githubAuthMessage,
+  microsoftAuthBusy,
+  microsoftAuthMessage,
   opencode,
   sessions,
   vaultPath,
@@ -124,12 +130,6 @@ export const Workspace = ({
   activeSkillsRevision,
   sessionFolderBusy,
   onSelectSessionFolder,
-  googleAuthBusy,
-  googleAuthMessage,
-  githubAuthBusy,
-  githubAuthMessage,
-  microsoftAuthBusy,
-  microsoftAuthMessage,
   onDisconnectGoogle,
   onDisconnectGithub,
   onDisconnectMicrosoft,
@@ -149,10 +149,17 @@ export const Workspace = ({
   const saveTimerRef = useRef<number | null>(null);
   const vaultPathRef = useRef<string | null>(vaultPath);
   const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
+  const [workspacePreferences, setWorkspacePreferences] = useState<WorkspacePreferences>(
+    createDefaultWorkspacePreferences(),
+  );
 
   useEffect(() => {
     vaultPathRef.current = vaultPath;
   }, [vaultPath]);
+
+  useEffect(() => {
+    workspacePreferencesRef.current = workspacePreferences;
+  }, [workspacePreferences]);
 
   const resolveAgentPath = useCallback((reportedPath: string): string | null => {
     const resolvedPath = resolveWorkspaceFilePath(reportedPath, vaultPathRef.current);
@@ -238,6 +245,12 @@ export const Workspace = ({
     }, LAYOUT_SAVE_DEBOUNCE_MS);
   }, [saveLayoutNow]);
 
+  const handleWorkspacePreferencesChange = useCallback((nextPreferences: WorkspacePreferences): void => {
+    workspacePreferencesRef.current = nextPreferences;
+    setWorkspacePreferences(nextPreferences);
+    scheduleLayoutSave();
+  }, [scheduleLayoutSave]);
+
   useEffect(() => {
     let active = true;
     const unsubscribe = workspaceStore.subscribe(() => {
@@ -251,7 +264,9 @@ export const Workspace = ({
           return;
         }
 
-        workspacePreferencesRef.current = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+        const nextPreferences = savedLayout?.preferences ?? createDefaultWorkspacePreferences();
+        workspacePreferencesRef.current = nextPreferences;
+        setWorkspacePreferences(nextPreferences);
 
         if (savedLayout) {
           try {
@@ -418,6 +433,8 @@ export const Workspace = ({
       activeSession,
       signOutBusy: activeSession ? busyByProvider[activeSession.provider] : false,
       signOutMessage: activeSession ? messageByProvider[activeSession.provider] : null,
+      workspacePreferences,
+      onWorkspacePreferencesChange: handleWorkspacePreferencesChange,
       onSignOut: async (session: SSOSession) => {
         await disconnectByProvider[session.provider]();
       },
@@ -437,6 +454,8 @@ export const Workspace = ({
     onDisconnectGoogle,
     onDisconnectGithub,
     onDisconnectMicrosoft,
+    workspacePreferences,
+    handleWorkspacePreferencesChange,
     opencode,
     vaultPath,
     mcpStatus,

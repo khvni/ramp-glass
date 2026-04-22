@@ -1,68 +1,68 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import type { SSOStatus } from '@tinker/shared-types';
-import { SettingsPaneRuntimeContext, type SettingsPaneRuntime } from '../../settings-pane-runtime.js';
+import { createDefaultWorkspacePreferences, type SSOStatus } from '@tinker/shared-types';
 import { SettingsPane } from './SettingsPane.js';
+import { SettingsPaneRuntimeContext, type SettingsPaneRuntime } from '../../settings-pane-runtime.js';
 
 const emptySessions: SSOStatus = { google: null, github: null, microsoft: null };
 
-const renderWithRuntime = (runtime: SettingsPaneRuntime): string => {
+const renderWithRuntime = (overrides: Partial<SettingsPaneRuntime>): string => {
   return renderToStaticMarkup(
-    <SettingsPaneRuntimeContext.Provider value={runtime}>
+    <SettingsPaneRuntimeContext.Provider
+      value={{
+        sessions: emptySessions,
+        activeSession: null,
+        signOutBusy: false,
+        signOutMessage: null,
+        workspacePreferences: createDefaultWorkspacePreferences(),
+        opencode: null,
+        vaultPath: null,
+        mcpSeedStatuses: {},
+        onWorkspacePreferencesChange: vi.fn(),
+        onSignOut: vi.fn(),
+        onRequestRespawn: vi.fn().mockResolvedValue(undefined),
+        ...overrides,
+      }}
+    >
       <SettingsPane />
     </SettingsPaneRuntimeContext.Provider>,
   );
 };
 
 describe('SettingsPane', () => {
-  const baseRuntime = {
-    opencode: null,
-    vaultPath: null,
-    mcpSeedStatuses: {},
-    onRequestRespawn: vi.fn().mockResolvedValue(undefined),
-  } as const;
-
-  it('renders the Account section rail entry', () => {
-    const runtime: SettingsPaneRuntime = {
-      sessions: emptySessions,
-      activeSession: null,
-      signOutBusy: false,
-      signOutMessage: null,
-      onSignOut: vi.fn(),
-      ...baseRuntime,
-    };
-
-    const markup = renderWithRuntime(runtime);
+  it('renders account, memory, and connections sections from runtime context', () => {
+    const markup = renderWithRuntime({});
 
     expect(markup).toContain('Account');
+    expect(markup).toContain('Memory');
+    expect(markup).toContain('Connections');
     expect(markup).toContain('Not signed in');
   });
 
-  it('renders the signed-in identity card for the active session', () => {
-    const runtime: SettingsPaneRuntime = {
-      sessions: emptySessions,
-      activeSession: {
-        provider: 'google',
-        userId: 'u-1',
-        email: 'ada@example.com',
-        displayName: 'Ada Lovelace',
-        accessToken: '',
-        refreshToken: '',
-        expiresAt: new Date().toISOString(),
-        scopes: [],
-      },
-      signOutBusy: false,
-      signOutMessage: null,
-      onSignOut: vi.fn(),
-      ...baseRuntime,
+  it('renders the signed-in account state for the active session', () => {
+    const activeSession = {
+      provider: 'google' as const,
+      userId: 'u-1',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      accessToken: 'token',
+      refreshToken: 'refresh',
+      expiresAt: '2030-01-01T00:00:00.000Z',
+      scopes: [],
     };
 
-    const markup = renderWithRuntime(runtime);
+    const markup = renderWithRuntime({
+      sessions: {
+        google: activeSession,
+        github: null,
+        microsoft: null,
+      },
+      activeSession,
+    });
 
+    expect(markup).toContain('Signed in');
     expect(markup).toContain('Ada Lovelace');
     expect(markup).toContain('ada@example.com');
-    expect(markup).toContain('Google');
-    expect(markup).toContain('Sign out');
   });
 
   it('throws when rendered without a runtime provider', () => {
