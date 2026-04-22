@@ -16,8 +16,13 @@ import {
 import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
 import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus, SSOSession, VaultConfig } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, ONBOARDING_KEY, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
-import type { MCPStatus } from './components/IntegrationsStrip.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
+import {
+  checkExaBootHealth,
+  EXA_CHECKING_STATUS,
+  EXA_MCP_NAME,
+  type MCPStatus,
+} from './integrations.js';
 import { FirstRun } from './panes/FirstRun.js';
 import { createWorkspaceClient, getOpencodeDirectory, OPENCODE_OPENAI_PROVIDER_ID } from './opencode.js';
 import { isTauriRuntime, WEB_PREVIEW_NOTICE } from './runtime.js';
@@ -118,9 +123,7 @@ const syncConnectorState = async (
   connection: OpencodeConnection,
   vaultPath: string | null,
   sessions: SSOStatus,
-): Promise<Record<string, MCPStatus>> => {
-  const client = createWorkspaceClient(connection, getOpencodeDirectory(vaultPath));
-
+): Promise<void> => {
   if (sessions.google) {
     await forwardGoogleAuth(connection, vaultPath, sessions.google);
   } else {
@@ -129,28 +132,6 @@ const syncConnectorState = async (
     } catch (error) {
       console.warn('Could not clear Google auth from OpenCode.', error);
     }
-  }
-
-  if (sessions.github) {
-    try {
-      await client.mcp.connect({ name: 'github' });
-    } catch (error) {
-      console.warn('Could not connect GitHub MCP server.', error);
-    }
-  } else {
-    try {
-      await client.mcp.disconnect({ name: 'github' });
-    } catch (error) {
-      console.warn('Could not disconnect GitHub MCP server.', error);
-    }
-  }
-
-  try {
-    const response = await client.mcp.status();
-    return response.data ?? {};
-  } catch (error) {
-    console.warn('Could not read MCP status from OpenCode.', error);
-    return {};
   }
 };
 
@@ -309,13 +290,10 @@ export const App = (): JSX.Element => {
           vaultRevision = 1;
         }
 
-        const [mcpStatus, modelConnected] = await Promise.all([
-          syncConnectorState(opencode, vaultPath, sessions).catch((error) => {
-            console.warn('Could not restore connector state on boot.', error);
-            return {};
-          }),
-          probeModelConnection(opencode, vaultPath),
-        ]);
+        await syncConnectorState(opencode, vaultPath, sessions).catch((error) => {
+          console.warn('Could not restore connector state on boot.', error);
+        });
+        const modelConnected = await probeModelConnection(opencode, vaultPath);
 
         if (!active) {
           return;
@@ -329,7 +307,7 @@ export const App = (): JSX.Element => {
           schedulerStore,
           opencode,
           sessions,
-          mcpStatus,
+          mcpStatus: {},
           vaultPath,
           onboarded: window.localStorage.getItem(ONBOARDING_KEY) === '1',
           modelConnected,
@@ -553,6 +531,61 @@ export const App = (): JSX.Element => {
     state.status === 'ready' ? state.vaultPath : null,
   ]);
 
+  useEffect(() => {
+    if (!nativeRuntime || state.status !== 'ready') {
+      return;
+    }
+
+    const connection = state.opencode;
+    const directory = getOpencodeDirectory(state.vaultPath);
+    let active = true;
+
+    setState((current) =>
+      current.status !== 'ready' || current.opencode.baseUrl !== connection.baseUrl
+        ? current
+        : {
+            ...current,
+            mcpStatus: {
+              ...current.mcpStatus,
+              [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
+            },
+          },
+    );
+
+    void (async () => {
+      const status = await checkExaBootHealth(() => {
+        const client = createWorkspaceClient(connection, directory);
+        return client.mcp.status();
+      });
+
+      if (!active) {
+        return;
+      }
+
+      setState((current) =>
+        current.status !== 'ready' || current.opencode.baseUrl !== connection.baseUrl
+          ? current
+          : {
+              ...current,
+              mcpStatus: {
+                ...current.mcpStatus,
+                [EXA_MCP_NAME]: status,
+              },
+            },
+      );
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    nativeRuntime,
+    state.status,
+    state.status === 'ready' ? state.opencode.baseUrl : null,
+    state.status === 'ready' ? state.opencode.username : null,
+    state.status === 'ready' ? state.opencode.password : null,
+  ]);
+
   if (state.status === 'loading') {
     return (
       <div className="tinker-app">
@@ -583,12 +616,10 @@ export const App = (): JSX.Element => {
 
   const reloadConnectionState = async (connection: OpencodeConnection, vaultPath: string | null) => {
     const sessions = await readAuthStatus();
-    const [mcpStatus, modelConnected] = await Promise.all([
-      syncConnectorState(connection, vaultPath, sessions),
-      probeModelConnection(connection, vaultPath),
-    ]);
+    await syncConnectorState(connection, vaultPath, sessions);
+    const modelConnected = await probeModelConnection(connection, vaultPath);
 
-    return { sessions, mcpStatus, modelConnected };
+    return { sessions, modelConnected };
   };
 
   const refreshWorkspaceConnection = async (): Promise<void> => {
@@ -603,7 +634,10 @@ export const App = (): JSX.Element => {
             ...current,
             opencode,
             sessions: nextState.sessions,
-            mcpStatus: nextState.mcpStatus,
+            mcpStatus: {
+              ...current.mcpStatus,
+              [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
+            },
             modelConnected: nextState.modelConnected,
           },
     );
@@ -617,13 +651,10 @@ export const App = (): JSX.Element => {
     await skillStore.reindex();
     window.localStorage.setItem(VAULT_PATH_KEY, config.path);
 
-    const [modelConnected, mcpStatus] = await Promise.all([
-      probeModelConnection(state.opencode, config.path),
-      syncConnectorState(state.opencode, config.path, state.sessions).catch((error) => {
-        console.warn('Could not refresh connector state after vault change.', error);
-        return state.mcpStatus;
-      }),
-    ]);
+    await syncConnectorState(state.opencode, config.path, state.sessions).catch((error) => {
+      console.warn('Could not refresh connector state after vault change.', error);
+    });
+    const modelConnected = await probeModelConnection(state.opencode, config.path);
 
     setState((current) =>
       current.status !== 'ready'
@@ -632,7 +663,6 @@ export const App = (): JSX.Element => {
             ...current,
             vaultPath: config.path,
             modelConnected,
-            mcpStatus,
             vaultRevision: current.vaultRevision + 1,
             activeSkillsRevision: current.activeSkillsRevision + 1,
           },
@@ -748,7 +778,6 @@ export const App = (): JSX.Element => {
             : {
                 ...current,
                 sessions: nextState.sessions,
-                mcpStatus: nextState.mcpStatus,
                 modelConnected: nextState.modelConnected,
               },
         );
@@ -780,7 +809,6 @@ export const App = (): JSX.Element => {
             : {
                 ...current,
                 sessions: nextState.sessions,
-                mcpStatus: nextState.mcpStatus,
                 modelConnected: nextState.modelConnected,
               },
         );
