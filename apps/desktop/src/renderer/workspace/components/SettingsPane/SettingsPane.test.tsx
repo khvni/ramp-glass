@@ -1,57 +1,66 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createDefaultWorkspacePreferences, type SSOStatus } from '@tinker/shared-types';
-
-vi.mock('../../../panes/Settings/index.js', () => ({
-  Settings: ({ modelConnected }: { modelConnected: boolean }) => (
-    <div>{modelConnected ? 'Mock settings connected' : 'Mock settings disconnected'}</div>
-  ),
-}));
-
 import { SettingsPane } from './SettingsPane.js';
-import { SettingsPaneRuntimeContext } from '../../settings-pane-runtime.js';
+import { SettingsPaneRuntimeContext, type SettingsPaneRuntime } from '../../settings-pane-runtime.js';
 
-const EMPTY_SESSIONS: SSOStatus = {
-  google: null,
-  github: null,
-  microsoft: null,
+const emptySessions: SSOStatus = { google: null, github: null, microsoft: null };
+
+const renderWithRuntime = (overrides: Partial<SettingsPaneRuntime>): string => {
+  return renderToStaticMarkup(
+    <SettingsPaneRuntimeContext.Provider
+      value={{
+        sessions: emptySessions,
+        activeSession: null,
+        signOutBusy: false,
+        signOutMessage: null,
+        workspacePreferences: createDefaultWorkspacePreferences(),
+        onWorkspacePreferencesChange: vi.fn(),
+        onSignOut: vi.fn(),
+        ...overrides,
+      }}
+    >
+      <SettingsPane />
+    </SettingsPaneRuntimeContext.Provider>,
+  );
 };
 
 describe('SettingsPane', () => {
-  it('renders the wired settings surface through runtime context', () => {
-    const markup = renderToStaticMarkup(
-      <SettingsPaneRuntimeContext.Provider
-        value={{
-          modelConnected: false,
-          modelAuthBusy: false,
-          modelAuthMessage: null,
-          googleAuthBusy: false,
-          googleAuthMessage: null,
-          githubAuthBusy: false,
-          githubAuthMessage: null,
-          microsoftAuthBusy: false,
-          microsoftAuthMessage: null,
-          sessions: EMPTY_SESSIONS,
-          mcpStatus: {},
-          vaultPath: null,
-          onConnectModel: async () => undefined,
-          onConnectGoogle: async () => undefined,
-          onConnectGithub: async () => undefined,
-          onConnectMicrosoft: async () => undefined,
-          onDisconnectModel: async () => undefined,
-          onDisconnectGoogle: async () => undefined,
-          onDisconnectGithub: async () => undefined,
-          onDisconnectMicrosoft: async () => undefined,
-          onCreateVault: async () => undefined,
-          onSelectVault: async () => undefined,
-          workspacePreferences: createDefaultWorkspacePreferences(),
-          onWorkspacePreferencesChange: () => undefined,
-        }}
-      >
-        <SettingsPane />
-      </SettingsPaneRuntimeContext.Provider>,
-    );
+  it('renders account and memory sections from runtime context', () => {
+    const markup = renderWithRuntime({});
 
-    expect(markup).toContain('Mock settings disconnected');
+    expect(markup).toContain('Account');
+    expect(markup).toContain('Memory');
+    expect(markup).toContain('Not signed in');
+  });
+
+  it('renders the signed-in account state for the active session', () => {
+    const activeSession = {
+      provider: 'google' as const,
+      userId: 'u-1',
+      displayName: 'Ada Lovelace',
+      email: 'ada@example.com',
+      accessToken: 'token',
+      refreshToken: 'refresh',
+      expiresAt: '2030-01-01T00:00:00.000Z',
+      scopes: [],
+    };
+
+    const markup = renderWithRuntime({
+      sessions: {
+        google: activeSession,
+        github: null,
+        microsoft: null,
+      },
+      activeSession,
+    });
+
+    expect(markup).toContain('Signed in');
+    expect(markup).toContain('Ada Lovelace');
+    expect(markup).toContain('ada@example.com');
+  });
+
+  it('throws when rendered without a runtime provider', () => {
+    expect(() => renderToStaticMarkup(<SettingsPane />)).toThrow(/Settings pane runtime is missing/);
   });
 });

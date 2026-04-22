@@ -1,16 +1,24 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { createDefaultWorkspacePreferences, type SSOStatus } from '@tinker/shared-types';
+import { getRenderer, resetPaneRegistry } from './pane-registry.js';
+import { registerWorkspacePaneRenderers } from './register-pane-renderers.js';
+import {
+  SettingsPaneRuntimeContext,
+  type SettingsPaneRuntime,
+} from './settings-pane-runtime.js';
 
-vi.mock('./components/SettingsPane/index.js', () => ({
-  SettingsPane: () => <div>settings-pane</div>,
-}));
+const emptySessions: SSOStatus = { google: null, github: null, microsoft: null };
 
-vi.mock('./components/MemoryPane/index.js', () => ({
-  MemoryPane: () => <div>memory-pane</div>,
-}));
-
-const { getRenderer, resetPaneRegistry } = await import('./pane-registry.js');
-const { registerWorkspacePaneRenderers } = await import('./register-pane-renderers.js');
+const settingsRuntime: SettingsPaneRuntime = {
+  sessions: emptySessions,
+  activeSession: null,
+  signOutBusy: false,
+  signOutMessage: null,
+  workspacePreferences: createDefaultWorkspacePreferences(),
+  onWorkspacePreferencesChange: vi.fn(),
+  onSignOut: vi.fn(),
+};
 
 describe('registerWorkspacePaneRenderers', () => {
   afterEach(() => {
@@ -22,11 +30,16 @@ describe('registerWorkspacePaneRenderers', () => {
     expect(() => registerWorkspacePaneRenderers()).not.toThrow();
 
     const settingsMarkup = renderToStaticMarkup(
-      <>{getRenderer('settings')({ kind: 'settings' })}</>,
+      <SettingsPaneRuntimeContext.Provider value={settingsRuntime}>
+        <>{getRenderer('settings')({ kind: 'settings' })}</>
+      </SettingsPaneRuntimeContext.Provider>,
     );
     const memoryMarkup = renderToStaticMarkup(<>{getRenderer('memory')({ kind: 'memory' })}</>);
 
-    expect(settingsMarkup).toContain('settings-pane');
-    expect(memoryMarkup).toContain('memory-pane');
+    expect(settingsMarkup).toContain('Account');
+    expect(settingsMarkup).toContain('Memory');
+    expect(settingsMarkup).toContain('Not signed in');
+    expect(memoryMarkup).toContain('Memory view coming soon');
+    expect(memoryMarkup).toContain('cross-session recall');
   });
 });

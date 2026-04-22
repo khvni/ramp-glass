@@ -6,6 +6,8 @@ export type MemoryPathChangedDetail = {
   reason: MemoryPathChangeReason;
   previousRoot?: string;
   nextRoot?: string;
+  previousPath?: string | null;
+  nextPath?: string | null;
   previousUserId?: string;
   nextUserId?: string;
 };

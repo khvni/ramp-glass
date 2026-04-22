@@ -1,7 +1,15 @@
 import { createContext, useContext } from 'react';
-import type { SettingsProps } from '../panes/Settings/Settings.js';
+import type { SSOSession, SSOStatus, WorkspacePreferences } from '@tinker/shared-types';
 
-export type SettingsPaneRuntime = SettingsProps;
+export type SettingsPaneRuntime = {
+  readonly sessions: SSOStatus;
+  readonly activeSession: SSOSession | null;
+  readonly signOutBusy: boolean;
+  readonly signOutMessage: string | null;
+  readonly workspacePreferences: WorkspacePreferences;
+  onWorkspacePreferencesChange(nextPreferences: WorkspacePreferences): void;
+  onSignOut(session: SSOSession): Promise<void>;
+};
 
 export const SettingsPaneRuntimeContext = createContext<SettingsPaneRuntime | null>(null);
 
@@ -14,4 +22,11 @@ export const useSettingsPaneRuntime = (): SettingsPaneRuntime => {
   }
 
   return runtime;
+};
+
+// Identity model permits one active user at a time (feature 28-mvp-identity); ordering
+// resolves the rare case where multiple providers are connected — prefer Google, then
+// GitHub, then Microsoft, mirroring the same precedence used by App's `pickCurrentUserId`.
+export const pickActiveSession = (sessions: SSOStatus): SSOSession | null => {
+  return sessions.google ?? sessions.github ?? sessions.microsoft ?? null;
 };

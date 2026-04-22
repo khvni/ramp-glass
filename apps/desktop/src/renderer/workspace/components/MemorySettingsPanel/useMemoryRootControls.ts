@@ -8,7 +8,7 @@ import {
   type MemoryRootMoveProgress,
   validateMemoryRootWritable,
 } from '@tinker/memory';
-import { openFolderPicker } from '../../../bindings.js';
+import { openFolderPicker } from '../../../../bindings.js';
 
 export type MemoryRootNotice = {
   kind: 'error' | 'success';

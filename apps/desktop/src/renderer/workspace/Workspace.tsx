@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { createAttentionStore, type FlashReason } from '@tinker/attention';
 import {
   createWorkspaceStore,
   findActiveTab,
@@ -8,7 +9,6 @@ import {
   Workspace as PanesWorkspace,
 } from '@tinker/panes';
 import '@tinker/panes/styles.css';
-import { Badge, Button } from '@tinker/design';
 import type { MemoryRunState } from '@tinker/memory';
 import {
   createDefaultWorkspacePreferences,
@@ -16,6 +16,7 @@ import {
   type MemoryStore,
   type ScheduledJobStore,
   type SkillStore,
+  type SSOSession,
   type SSOStatus,
   type TinkerPaneData,
   type TinkerPaneKind,
@@ -23,18 +24,23 @@ import {
 } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
-import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 import type { MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
+import { Titlebar } from './components/Titlebar/index.js';
 import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
 import { getRenderer } from './pane-registry.js';
-import { SettingsPaneRuntimeContext } from './settings-pane-runtime.js';
+import {
+  SettingsPaneRuntimeContext,
+  pickActiveSession,
+  type SettingsPaneRuntime,
+} from './settings-pane-runtime.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
+const DESKTOP_WORKSPACE_ATTENTION_ID = 'desktop-workspace';
 
 type WorkspaceProps = {
   currentUserId: string;
@@ -60,6 +66,8 @@ type WorkspaceProps = {
   activeSkillsRevision: number;
   memorySweepState: MemoryRunState | null;
   memorySweepBusy: boolean;
+  sessionFolderBusy: boolean;
+  onSelectSessionFolder(): Promise<void>;
   onConnectModel(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
@@ -106,8 +114,6 @@ export const Workspace = ({
   layoutStore,
   skillStore,
   modelConnected,
-  modelAuthBusy,
-  modelAuthMessage,
   googleAuthBusy,
   googleAuthMessage,
   githubAuthBusy,
@@ -116,28 +122,24 @@ export const Workspace = ({
   microsoftAuthMessage,
   opencode,
   sessions,
-  mcpStatus,
   vaultPath,
   activeSkillsRevision,
-  onConnectModel,
-  onDisconnectModel,
-  onConnectGoogle,
-  onConnectGithub,
-  onConnectMicrosoft,
+  sessionFolderBusy,
+  onSelectSessionFolder,
   onDisconnectGoogle,
   onDisconnectGithub,
   onDisconnectMicrosoft,
-  onCreateVault,
-  onSelectVault,
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
+  const attentionStoreRef = useRef(createAttentionStore());
   if (!workspaceStoreRef.current) {
     workspaceStoreRef.current = createWorkspaceStore<TinkerPaneData>({
       initial: createDefaultWorkspaceState(),
     });
   }
   const workspaceStore = workspaceStoreRef.current;
+  const attentionStore = attentionStoreRef.current;
   const saveTimerRef = useRef<number | null>(null);
   const vaultPathRef = useRef<string | null>(vaultPath);
   const workspacePreferencesRef = useRef<WorkspacePreferences>(createDefaultWorkspacePreferences());
@@ -183,6 +185,17 @@ export const Workspace = ({
   const openNewChatPane = useCallback((): void => {
     openNewChatPanel(workspaceStore);
   }, [workspaceStore]);
+
+  const signalPaneAttention = useCallback(
+    (paneId: string, reason: FlashReason): void => {
+      attentionStore.getState().actions.signal({
+        workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+        paneId,
+        reason,
+      });
+    },
+    [attentionStore],
+  );
 
   const handleAgentFileWritten = useCallback(
     (reportedPath: string): void => {
@@ -309,11 +322,13 @@ export const Workspace = ({
       chat: {
         kind: 'chat',
         defaultTitle: 'Chat',
-        render: ({ pane, tabId }) => (
+        render: ({ pane, tabId, isActive }) => (
           <RegisteredChatPane
             tabId={tabId}
             paneId={pane.id}
+            isActive={isActive}
             paneData={requirePaneData('chat', pane.data)}
+            onAttentionSignal={(reason) => signalPaneAttention(pane.id, reason)}
           />
         ),
       },
@@ -333,7 +348,7 @@ export const Workspace = ({
         render: ({ pane }) => <>{getRenderer('memory')(requirePaneData('memory', pane.data))}</>,
       },
     };
-  }, []);
+  }, [signalPaneAttention]);
 
   const chatPaneRuntime = useMemo(
     () => ({
@@ -344,10 +359,13 @@ export const Workspace = ({
       sessionFolderPath: vaultPath,
       vaultPath,
       activeSkillsRevision,
+      sessionFolderBusy,
+      onSelectSessionFolder,
       onFileWritten: handleAgentFileWritten,
       onOpenFileLink: openFileInWorkspace,
       onOpenNewChat: openNewChatPane,
       onMemoryCommitted,
+      onAttentionSignal: undefined,
     }),
     [
       activeSkillsRevision,
@@ -355,109 +373,83 @@ export const Workspace = ({
       handleAgentFileWritten,
       modelConnected,
       onMemoryCommitted,
+      onSelectSessionFolder,
       openFileInWorkspace,
       openNewChatPane,
       opencode,
+      sessionFolderBusy,
       vaultPath,
       skillStore,
     ],
   );
 
-  const settingsPaneRuntime = useMemo(
-    () => ({
-      modelConnected,
-      modelAuthBusy,
-      modelAuthMessage,
-      googleAuthBusy,
-      googleAuthMessage,
-      githubAuthBusy,
-      githubAuthMessage,
-      microsoftAuthBusy,
-      microsoftAuthMessage,
+  const settingsPaneRuntime = useMemo<SettingsPaneRuntime>(() => {
+    const activeSession = pickActiveSession(sessions);
+
+    const busyByProvider: Record<SSOSession['provider'], boolean> = {
+      google: googleAuthBusy,
+      github: githubAuthBusy,
+      microsoft: microsoftAuthBusy,
+    };
+    const messageByProvider: Record<SSOSession['provider'], string | null> = {
+      google: googleAuthMessage,
+      github: githubAuthMessage,
+      microsoft: microsoftAuthMessage,
+    };
+    const disconnectByProvider: Record<SSOSession['provider'], () => Promise<void>> = {
+      google: onDisconnectGoogle,
+      github: onDisconnectGithub,
+      microsoft: onDisconnectMicrosoft,
+    };
+
+    return {
       sessions,
-      mcpStatus,
-      vaultPath,
-      onConnectModel,
-      onConnectGoogle,
-      onConnectGithub,
-      onConnectMicrosoft,
-      onDisconnectModel,
-      onDisconnectGoogle,
-      onDisconnectGithub,
-      onDisconnectMicrosoft,
-      onCreateVault,
-      onSelectVault,
+      activeSession,
+      signOutBusy: activeSession ? busyByProvider[activeSession.provider] : false,
+      signOutMessage: activeSession ? messageByProvider[activeSession.provider] : null,
       workspacePreferences,
       onWorkspacePreferencesChange: handleWorkspacePreferencesChange,
-    }),
-    [
-      githubAuthBusy,
-      githubAuthMessage,
-      googleAuthBusy,
-      googleAuthMessage,
-      handleWorkspacePreferencesChange,
-      mcpStatus,
-      microsoftAuthBusy,
-      microsoftAuthMessage,
-      modelAuthBusy,
-      modelAuthMessage,
-      modelConnected,
-      onConnectGithub,
-      onConnectGoogle,
-      onConnectMicrosoft,
-      onConnectModel,
-      onCreateVault,
-      onDisconnectGithub,
-      onDisconnectGoogle,
-      onDisconnectMicrosoft,
-      onDisconnectModel,
-      onSelectVault,
-      sessions,
-      vaultPath,
-      workspacePreferences,
-    ],
-  );
+      onSignOut: async (session: SSOSession) => {
+        await disconnectByProvider[session.provider]();
+      },
+    };
+  }, [
+    sessions,
+    googleAuthBusy,
+    googleAuthMessage,
+    githubAuthBusy,
+    githubAuthMessage,
+    microsoftAuthBusy,
+    microsoftAuthMessage,
+    onDisconnectGoogle,
+    onDisconnectGithub,
+    onDisconnectMicrosoft,
+    workspacePreferences,
+    handleWorkspacePreferencesChange,
+  ]);
 
   return (
     <main className="tinker-workspace-shell">
-      <header className="tinker-header">
-        <div>
-          <p className="tinker-eyebrow">Workspace</p>
-          <h1>Tinker</h1>
-        </div>
-        <div className="tinker-inline-actions">
-          <Button variant="secondary" size="s" onClick={openNewChatPane}>
-            New chat
-          </Button>
-          <Button variant="secondary" size="s" onClick={openMemoryPane}>
-            Memory
-          </Button>
-          <Button variant="secondary" size="s" onClick={openSettingsPane}>
-            Settings
-          </Button>
-        </div>
-        <div className="tinker-header-meta">
-          <Badge variant={modelConnected ? 'success' : 'default'} size="small">
-            {modelConnected ? 'Model connected' : 'Model disconnected'}
-          </Badge>
-          <Badge variant="default" size="small">
-            {sessions.google?.email ?? sessions.github?.email ?? sessions.microsoft?.email ?? 'Offline mode'}
-          </Badge>
-          <Badge variant="default" size="small">
-            {vaultPath ?? 'No vault selected'}
-          </Badge>
-        </div>
-      </header>
+      <Titlebar
+        sessionFolderPath={vaultPath}
+        onNewSession={openNewChatPane}
+        onOpenMemory={openMemoryPane}
+        onOpenSettings={openSettingsPane}
+      />
 
-      <div className="tinker-workspace-integrations">
-        <IntegrationsStrip compact mcpStatus={mcpStatus} sessions={sessions} />
-      </div>
-
-      <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
-        <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
-          <PanesWorkspace store={workspaceStore} registry={registry} ariaLabel="Tinker workspace" />
-        </ChatPaneRuntimeContext.Provider>
-      </SettingsPaneRuntimeContext.Provider>
+      <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
+        <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
+          <PanesWorkspace
+            store={workspaceStore}
+            registry={registry}
+            attention={{
+              store: attentionStore,
+              workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+            }}
+            ariaLabel="Tinker workspace"
+          />
+        </SettingsPaneRuntimeContext.Provider>
+      </ChatPaneRuntimeContext.Provider>
     </main>
   );
 };

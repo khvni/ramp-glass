@@ -52,6 +52,7 @@ import {
   getMemoryRoot,
   moveMemoryRoot,
   resolveDefaultMemoryRoot,
+  syncActiveMemoryPath,
   subscribeMemoryPathChanged,
   validateMemoryRootWritable,
 } from './memory-paths.js';
@@ -265,6 +266,10 @@ describe('default memory root resolution', () => {
       reason: 'root-changed',
       previousRoot: '/old-memory',
       nextRoot: '/new-memory',
+      previousPath: null,
+      nextPath: null,
+      previousUserId: null,
+      nextUserId: null,
     });
     expect(progress).toHaveBeenNthCalledWith(1, {
       copiedFiles: 0,
@@ -360,5 +365,38 @@ describe('default memory root resolution', () => {
 
     expect(mockRemove).not.toHaveBeenCalledWith('/old-memory', { recursive: true });
     expect(listener).not.toHaveBeenCalled();
+  });
+
+  it('emits only when the active user path changes', async () => {
+    mockSettingsGet.mockResolvedValue(makeSetting('/memory-root'));
+
+    const listener = vi.fn();
+    const unsubscribe = subscribeMemoryPathChanged(listener);
+
+    await expect(syncActiveMemoryPath('user-1', { runtimePlatform: 'linux' })).resolves.toBe('/memory-root/user-1');
+    await expect(syncActiveMemoryPath('user-1', { runtimePlatform: 'linux' })).resolves.toBe('/memory-root/user-1');
+    await expect(syncActiveMemoryPath('user-2', { runtimePlatform: 'linux' })).resolves.toBe('/memory-root/user-2');
+
+    unsubscribe();
+
+    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenNthCalledWith(1, {
+      reason: 'user-changed',
+      previousRoot: '/memory-root',
+      nextRoot: '/memory-root',
+      previousPath: null,
+      nextPath: '/memory-root/user-1',
+      previousUserId: null,
+      nextUserId: 'user-1',
+    });
+    expect(listener).toHaveBeenNthCalledWith(2, {
+      reason: 'user-changed',
+      previousRoot: '/memory-root',
+      nextRoot: '/memory-root',
+      previousPath: '/memory-root/user-1',
+      nextPath: '/memory-root/user-2',
+      previousUserId: 'user-1',
+      nextUserId: 'user-2',
+    });
   });
 });
