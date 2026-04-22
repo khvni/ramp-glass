@@ -20,6 +20,7 @@ import {
   EmptyState,
   IconButton,
   ModelPicker,
+  SelectFolderButton,
   Textarea,
 } from '@tinker/design';
 import {
@@ -31,7 +32,14 @@ import {
   streamSessionEvents,
   type ChatHistoryWriter,
 } from '@tinker/bridge';
-import { createSession, findLatestSessionForFolder, resolveRelevantEntities, updateLastActive } from '@tinker/memory';
+import {
+  createSession,
+  findLatestSessionForFolder,
+  listSessionsForUser,
+  resolveRelevantEntities,
+  updateLastActive,
+  updateSession,
+} from '@tinker/memory';
 import { DEFAULT_SESSION_MODE, type SkillStore } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../../bindings.js';
 import { captureConversationMemory } from '../../memory.js';
@@ -47,6 +55,8 @@ import { AttachmentIcon } from './AttachmentIcon.js';
 import { SaveAsSkillButton } from './components/SaveAsSkillButton/index.js';
 import { SaveAsSkillModal, buildSkillTranscript } from './components/SaveAsSkillModal/index.js';
 import { ChatMessage } from '../ChatMessage/index.js';
+import { McpConnectionGate } from './components/McpConnectionGate/index.js';
+import { resolvePreferredStoredModelId, resolveSelectedModelId } from './modelSelection.js';
 import {
   calculateComposerHeight,
   shouldAbortComposerKey,
@@ -65,6 +75,7 @@ import {
 } from './chatState.js';
 import { draftReducer } from './draftReducer.js';
 import { replayChatHistory, type ChatMessageRecord } from './historyReplay.js';
+import { useMcpConnectionGate } from './useMcpConnectionGate.js';
 
 type ChatProps = {
   skillStore: SkillStore;
@@ -80,6 +91,8 @@ type ChatProps = {
    */
   skillsRootPath: string | null;
   activeSkillsRevision: number;
+  sessionFolderBusy?: boolean;
+  onSelectSessionFolder?: () => Promise<void> | void;
   onFileWritten?: (path: string) => void;
   onOpenFileLink?: (path: string) => void;
   onOpenNewChat?: () => void;
@@ -89,6 +102,8 @@ type ChatProps = {
    * re-inject. Also called after "Save as skill" publishes a new skill.
    */
   onActiveSkillsChanged?: () => void;
+  paneIsActive?: boolean;
+  onAttentionSignal?: (reason: 'notification-arrival') => void;
   modeToggleSlot?: ReactNode;
   reasoningPickerSlot?: ReactNode;
 };
@@ -229,15 +244,25 @@ export const Chat = ({
   vaultPath,
   skillsRootPath,
   activeSkillsRevision,
+  sessionFolderBusy = false,
+  onSelectSessionFolder,
   onFileWritten,
   onOpenFileLink,
   onOpenNewChat,
   onMemoryCommitted,
   onActiveSkillsChanged,
+  paneIsActive = true,
+  onAttentionSignal,
   modeToggleSlot,
   reasoningPickerSlot,
 }: ChatProps): JSX.Element => {
-  const readyStatus = modelConnected ? 'OpenCode is ready.' : 'Connect an AI model in Settings to start chatting.';
+  const folderPickerAvailable = typeof onSelectSessionFolder === 'function';
+  const awaitingFolder = !sessionFolderPath && folderPickerAvailable;
+  const readyStatus = awaitingFolder
+    ? 'Pick a folder to start a session.'
+    : modelConnected
+      ? 'OpenCode is ready.'
+      : 'Connect an AI model in Settings to start chatting.';
   const client = useMemo(
     () => createWorkspaceClient(opencode, getOpencodeDirectory(vaultPath)),
     [opencode.baseUrl, opencode.password, opencode.username, vaultPath],
@@ -255,10 +280,12 @@ export const Chat = ({
   const [status, setStatus] = useState(readyStatus);
   const [contextUsage, setContextUsage] = useState<ResolvedContextUsage | null>(null);
   const [showNewMessagesPill, setShowNewMessagesPill] = useState(false);
+  const [requiresMcpConnectionGate, setRequiresMcpConnectionGate] = useState(false);
   // Global default applied where no per-disclosure override exists. ⌥T flips this and clears overrides.
   const [defaultDisclosureOpen, setDefaultDisclosureOpen] = useState(false);
   const [disclosureOverrides, setDisclosureOverrides] = useState<Record<string, boolean>>({});
   const [saveAsSkillOpen, setSaveAsSkillOpen] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const sessionIDRef = useRef<string | null>(null);
   const historyWriterRef = useRef<ChatHistoryWriter | null>(null);
@@ -268,6 +295,8 @@ export const Chat = ({
   const abortRequestedRef = useRef(false);
   const contextUsageSnapshotRef = useRef<ContextUsageSnapshot | null>(null);
   const draftBlocksRef = useRef<Block[]>([]);
+  const selectedModelRef = useRef<WorkspaceModelOption | undefined>(undefined);
+  const attentionRaisedForDraftRef = useRef(false);
   const shouldStickToBottomRef = useRef(true);
   const lastTailSignatureRef = useRef('empty');
   // Tracks which (sessionID, activeSkillsRevision) pair we last injected
@@ -275,6 +304,11 @@ export const Chat = ({
   // inject on the next prompt without wiping the live session.
   const injectedSkillsSignatureRef = useRef<string | null>(null);
   const selectedModel = useMemo(() => findModelOptionById(modelOptions, selectedModelId), [modelOptions, selectedModelId]);
+  const mcpConnectionGate = useMcpConnectionGate({
+    enabled: !hydratingHistory && !awaitingFolder && requiresMcpConnectionGate,
+    loadStatus: () => client.mcp.status(),
+  });
+  const composerBlocked = busy || hydratingHistory || awaitingFolder || !modelConnected || mcpConnectionGate.blocked;
 
   const saveAsSkillDefaultBody = useMemo(() => {
     return saveAsSkillOpen ? buildSkillTranscript(messages) : '';
@@ -309,27 +343,34 @@ export const Chat = ({
 
     setModelOptionsLoading(true);
 
-    void client.config
-      .providers()
-      .then((response) => {
+    void (async () => {
+      try {
+        const [response, folderSession, priorSessions] = await Promise.all([
+          client.config.providers(),
+          sessionFolderPath ? findLatestSessionForFolder(currentUserId, sessionFolderPath) : Promise.resolve(null),
+          sessionFolderPath ? listSessionsForUser(currentUserId) : Promise.resolve([]),
+        ]);
         if (cancelled) {
           return;
         }
 
         const providers = response.data?.providers ?? [];
         const nextOptions = buildModelPickerItems(providers);
-        const nextSelectedId = pickDefaultModelOptionId(providers, response.data?.default ?? {}) ?? nextOptions[0]?.id;
+        const preferredStoredModelId = resolvePreferredStoredModelId(folderSession, priorSessions);
+        const defaultSelectedId =
+          pickDefaultModelOptionId(providers, response.data?.default ?? {}) ?? nextOptions[0]?.id;
 
         setModelOptions(nextOptions);
-        setSelectedModelId((current) => {
-          if (current && nextOptions.some((option) => option.id === current)) {
-            return current;
-          }
-
-          return nextSelectedId;
-        });
-      })
-      .catch((error) => {
+        setSelectedModelId((current) =>
+          resolveSelectedModelId({
+            options: nextOptions,
+            currentSelectedId: current,
+            preserveCurrent: sessionIDRef.current !== null,
+            preferredStoredModelId,
+            defaultSelectedId,
+          }),
+        );
+      } catch (error) {
         console.warn('Failed to load model picker options from OpenCode.', error);
         if (cancelled) {
           return;
@@ -337,21 +378,22 @@ export const Chat = ({
 
         setModelOptions([]);
         setSelectedModelId(undefined);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setModelOptionsLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [client, modelConnected]);
+  }, [client, currentUserId, modelConnected, sessionFolderPath]);
 
   const activateSession = useCallback(
     (sessionID: string): void => {
       sessionIDRef.current = sessionID;
+      setActiveSessionId(sessionID);
 
       const previousWriter = historyWriterRef.current;
       historyWriterRef.current = sessionFolderPath
@@ -374,6 +416,7 @@ export const Chat = ({
 
     const existing = sessionIDRef.current;
     sessionIDRef.current = null;
+    setActiveSessionId(null);
     abortRequestedRef.current = false;
     shouldStickToBottomRef.current = true;
     lastTailSignatureRef.current = 'empty';
@@ -397,9 +440,11 @@ export const Chat = ({
     setShowNewMessagesPill(false);
     setDisclosureOverrides({});
     setDefaultDisclosureOpen(false);
+    setRequiresMcpConnectionGate(false);
 
     if (!sessionFolderPath) {
       setHydratingHistory(false);
+      setRequiresMcpConnectionGate(false);
       setStatus(readyStatus);
       return () => {
         cancelled = true;
@@ -420,9 +465,13 @@ export const Chat = ({
           }));
 
         if (!restoredSessionID || cancelled || !mountedRef.current) {
+          if (!cancelled && mountedRef.current) {
+            setRequiresMcpConnectionGate(true);
+          }
           return;
         }
 
+        setRequiresMcpConnectionGate(false);
         activateSession(restoredSessionID);
 
         if (!existingSession) {
@@ -435,6 +484,7 @@ export const Chat = ({
               createdAt: timestamp,
               lastActiveAt: timestamp,
               mode: DEFAULT_SESSION_MODE,
+              ...(selectedModelRef.current ? { modelId: selectedModelRef.current.storedId } : {}),
             });
           } catch (error) {
             console.warn('Failed to restore the session row from chat history.', error);
@@ -456,6 +506,9 @@ export const Chat = ({
         });
       } catch (error) {
         console.warn('Failed to hydrate chat history from disk.', error);
+        if (!cancelled && mountedRef.current) {
+          setRequiresMcpConnectionGate(true);
+        }
       } finally {
         if (!cancelled && mountedRef.current) {
           setHydratingHistory(false);
@@ -474,8 +527,53 @@ export const Chat = ({
   }, [activateSession, client, currentUserId, readyStatus, sessionFolderPath]);
 
   useEffect(() => {
+    if (!activeSessionId || !selectedModel) {
+      return;
+    }
+
+    void updateSession(activeSessionId, { modelId: selectedModel.storedId }).catch((error) => {
+      console.warn('Failed to persist the selected model for the active chat session.', error);
+    });
+  }, [activeSessionId, selectedModel]);
+
+  useEffect(() => {
     draftBlocksRef.current = draftBlocks;
   }, [draftBlocks]);
+
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
+
+  useEffect(() => {
+    if (paneIsActive) {
+      attentionRaisedForDraftRef.current = false;
+      return;
+    }
+
+    if (attentionRaisedForDraftRef.current || !busy || draftBlocks.length === 0) {
+      return;
+    }
+
+    const hasAssistantActivity = draftBlocks.some((block) => {
+      if (block.kind === 'text') {
+        return block.text.trim().length > 0;
+      }
+
+      return true;
+    });
+    if (!hasAssistantActivity) {
+      return;
+    }
+
+    attentionRaisedForDraftRef.current = true;
+    onAttentionSignal?.('notification-arrival');
+  }, [busy, draftBlocks, onAttentionSignal, paneIsActive]);
+
+  useEffect(() => {
+    if (!busy && draftBlocks.length === 0) {
+      attentionRaisedForDraftRef.current = false;
+    }
+  }, [busy, draftBlocks.length]);
 
   useLayoutEffect(() => {
     syncComposerHeight(composerRef.current);
@@ -694,6 +792,7 @@ export const Chat = ({
     }
 
     activateSession(session.id);
+    setRequiresMcpConnectionGate(false);
 
     if (selectedModel) {
       applyContextUsageSnapshot({
@@ -718,6 +817,7 @@ export const Chat = ({
           createdAt: timestamp,
           lastActiveAt: timestamp,
           mode: DEFAULT_SESSION_MODE,
+          ...(selectedModel ? { modelId: selectedModel.storedId } : {}),
         });
       } catch (error) {
         console.warn('Failed to persist the active chat session.', error);
@@ -797,7 +897,7 @@ export const Chat = ({
   }, [busy, client]);
   const sendMessage = async (): Promise<void> => {
     const text = input.trim();
-    if (!text || busy || hydratingHistory || !modelConnected) {
+    if (!text || busy || hydratingHistory || !modelConnected || mcpConnectionGate.blocked) {
       return;
     }
 
@@ -1013,6 +1113,14 @@ export const Chat = ({
             disabled={busy || hydratingHistory}
             emptyLabel="No models available in OpenCode."
           />
+          {folderPickerAvailable ? (
+            <SelectFolderButton
+              folderPath={sessionFolderPath}
+              loading={sessionFolderBusy}
+              disabled={busy || hydratingHistory}
+              onClick={() => void onSelectSessionFolder?.()}
+            />
+          ) : null}
           <SaveAsSkillButton
             disabled={busy || hydratingHistory || messages.length === 0}
             onClick={() => setSaveAsSkillOpen(true)}
@@ -1046,32 +1154,65 @@ export const Chat = ({
           tabIndex={-1}
         >
           {messages.length === 0 ? (
-            <EmptyState
-              title={
-                hydratingHistory
-                  ? 'Restoring chat history'
-                  : modelConnected
-                    ? 'Start a conversation'
-                    : 'No model connected'
-              }
-              description={
-                hydratingHistory
-                  ? 'Loading prior messages from the session folder before OpenCode resumes streaming.'
-                  : modelConnected
-                    ? 'Ask Tinker a question. Messages stream from OpenCode over HTTP + SSE.'
-                    : 'Connect an AI model in Settings before sending a message.'
-              }
-              icon={
-                <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path
-                    d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v8c0 1.38-1.12 2.5-2.5 2.5H10l-4 3v-3H6.5C5.12 17 4 15.88 4 14.5v-8Z"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              }
-            />
+            awaitingFolder ? (
+              <EmptyState
+                title="Select a folder to start"
+                description="The agent works inside a local folder. Use the “Select folder” button in the header to pick one."
+                action={
+                  <Button
+                    variant="primary"
+                    onClick={() => void onSelectSessionFolder?.()}
+                    disabled={sessionFolderBusy}
+                  >
+                    {sessionFolderBusy ? 'Starting…' : 'Select folder'}
+                  </Button>
+                }
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v8c0 1.38-1.12 2.5-2.5 2.5H10l-4 3v-3H6.5C5.12 17 4 15.88 4 14.5v-8Z"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                }
+              />
+            ) : mcpConnectionGate.visible ? (
+              <McpConnectionGate
+                services={mcpConnectionGate.services}
+                errorMessage={mcpConnectionGate.errorMessage}
+                onRetry={mcpConnectionGate.retry}
+                onSkip={mcpConnectionGate.skip}
+              />
+            ) : (
+              <EmptyState
+                title={
+                  hydratingHistory
+                    ? 'Restoring chat history'
+                    : modelConnected
+                      ? 'Start a conversation'
+                      : 'No model connected'
+                }
+                description={
+                  hydratingHistory
+                    ? 'Loading prior messages from the session folder before OpenCode resumes streaming.'
+                    : modelConnected
+                      ? 'Ask Tinker a question. Messages stream from OpenCode over HTTP + SSE.'
+                      : 'Connect an AI model in Settings before sending a message.'
+                }
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v8c0 1.38-1.12 2.5-2.5 2.5H10l-4 3v-3H6.5C5.12 17 4 15.88 4 14.5v-8Z"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                }
+              />
+            )
           ) : null}
 
           {historyWindow.renderedMessages.flatMap((message) =>
@@ -1134,6 +1275,11 @@ export const Chat = ({
       </div>
 
       <div className="tinker-composer-card__wrap">
+        {mcpConnectionGate.notice ? (
+          <Badge variant="info" size="small">
+            {mcpConnectionGate.notice}
+          </Badge>
+        ) : null}
         <div
           className={`tinker-composer-card${busy ? ' tinker-composer-card--busy' : ''}`}
         >
@@ -1146,7 +1292,7 @@ export const Chat = ({
               placeholder="Ask about the vault, your project, or the next change to make."
               onChange={(event) => setInput(event.currentTarget.value)}
               onKeyDown={handleComposerKeyDown}
-              disabled={busy || hydratingHistory || !modelConnected}
+              disabled={composerBlocked}
             />
           </div>
           <div className="tinker-composer-card__footer">
@@ -1169,7 +1315,7 @@ export const Chat = ({
                 <Button
                   variant="primary"
                   onClick={sendMessage}
-                  disabled={hydratingHistory || !modelConnected || input.trim().length === 0}
+                  disabled={composerBlocked || input.trim().length === 0}
                 >
                   Send message
                 </Button>
