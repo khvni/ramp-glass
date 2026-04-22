@@ -1,20 +1,61 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
+import type { SSOStatus } from '@tinker/shared-types';
 import { FilePaneRuntimeContext } from '../panes/FilePane/file-pane-runtime.js';
 import { getRenderer, resetPaneRegistry } from './pane-registry.js';
 import { MemoryPaneRuntimeContext } from './memory-pane-runtime.js';
 import { registerWorkspacePaneRenderers } from './register-pane-renderers.js';
+import {
+  SettingsPaneRuntimeContext,
+  type SettingsPaneRuntime,
+} from './settings-pane-runtime.js';
+
+const emptySessions: SSOStatus = { google: null, github: null, microsoft: null };
+
+const settingsRuntime: SettingsPaneRuntime = {
+  nativeRuntimeAvailable: true,
+  currentUserName: 'Guest',
+  currentUserProvider: 'local',
+  currentUserEmail: null,
+  currentUserAvatarUrl: null,
+  sessions: emptySessions,
+  activeSession: null,
+  signOutBusy: false,
+  signOutMessage: null,
+  guestBusy: false,
+  guestMessage: null,
+  providerBusy: { google: false, github: false, microsoft: false },
+  providerMessages: { google: null, github: null, microsoft: null },
+  modelConnected: false,
+  modelAuthBusy: false,
+  modelAuthMessage: null,
+  opencode: null,
+  vaultPath: null,
+  mcpSeedStatuses: {},
+  onSignOut: vi.fn().mockResolvedValue(undefined),
+  onContinueAsGuest: vi.fn().mockResolvedValue(undefined),
+  onConnectGoogle: vi.fn().mockResolvedValue(undefined),
+  onConnectGithub: vi.fn().mockResolvedValue(undefined),
+  onConnectMicrosoft: vi.fn().mockResolvedValue(undefined),
+  onConnectModel: vi.fn().mockResolvedValue(undefined),
+  onDisconnectModel: vi.fn().mockResolvedValue(undefined),
+  onRequestRespawn: vi.fn().mockResolvedValue(undefined),
+};
 
 describe('registerWorkspacePaneRenderers', () => {
   afterEach(() => {
     resetPaneRegistry();
   });
 
-  it('registers fallback settings and memory pane renderers', () => {
+  it('registers settings and memory pane renderers', () => {
     registerWorkspacePaneRenderers();
     expect(() => registerWorkspacePaneRenderers()).not.toThrow();
 
-    const settingsMarkup = renderToStaticMarkup(<>{getRenderer('settings')({ kind: 'settings' })}</>);
+    const settingsMarkup = renderToStaticMarkup(
+      <SettingsPaneRuntimeContext.Provider value={settingsRuntime}>
+        <>{getRenderer('settings')({ kind: 'settings' })}</>
+      </SettingsPaneRuntimeContext.Provider>,
+    );
     const memoryMarkup = renderToStaticMarkup(
       <MemoryPaneRuntimeContext.Provider value={{ currentUserId: 'local-user' }}>
         <FilePaneRuntimeContext.Provider value={{ vaultRevision: 0, openFile: () => undefined }}>
@@ -23,7 +64,9 @@ describe('registerWorkspacePaneRenderers', () => {
       </MemoryPaneRuntimeContext.Provider>,
     );
 
-    expect(settingsMarkup).toBe('');
+    expect(settingsMarkup).toContain('Account');
+    expect(settingsMarkup).toContain('Model');
+    expect(settingsMarkup).toContain('Connections');
     expect(memoryMarkup).toContain('Memory files');
     expect(memoryMarkup).toContain('tinker-memory-pane');
     expect(memoryMarkup).toContain('Loading…');

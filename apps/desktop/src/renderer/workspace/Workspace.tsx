@@ -16,6 +16,7 @@ import {
   type MemoryStore,
   type ScheduledJobStore,
   type SkillStore,
+  type SSOSession,
   type SSOStatus,
   type TinkerPaneData,
   type TinkerPaneKind,
@@ -24,18 +25,22 @@ import {
 } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
-import type { MCPStatus } from '../integrations.js';
+import { BUILTIN_MCP_NAMES, type BuiltinMcpName, type MCPStatus } from '../integrations.js';
 import { FilePaneRuntimeContext } from '../panes/FilePane/file-pane-runtime.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
-import { SettingsPane } from './components/SettingsPane/index.js';
 import { Titlebar } from './components/Titlebar/index.js';
 import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
 import { MemoryPaneRuntimeContext } from './memory-pane-runtime.js';
 import { getRenderer } from './pane-registry.js';
+import {
+  SettingsPaneRuntimeContext,
+  pickActiveSession,
+  type SettingsPaneRuntime,
+} from './settings-pane-runtime.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 const DESKTOP_WORKSPACE_ATTENTION_ID = 'desktop-workspace';
@@ -90,6 +95,7 @@ type WorkspaceProps = {
   onSchedulerChanged(): void;
   onRunMemorySweep(): Promise<void>;
   onMemoryCommitted(): void;
+  onRequestMcpRespawn(): Promise<void>;
 };
 
 const createWorkspaceTabId = (): string => {
@@ -149,7 +155,12 @@ export const Workspace = ({
   onConnectGoogle,
   onConnectGithub,
   onConnectMicrosoft,
+  onDisconnectGoogle,
+  onDisconnectGithub,
+  onDisconnectMicrosoft,
   onMemoryCommitted,
+  mcpStatus,
+  onRequestMcpRespawn,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
   const attentionStoreRef = useRef(createAttentionStore());
@@ -350,37 +361,7 @@ export const Workspace = ({
       settings: {
         kind: 'settings',
         defaultTitle: 'Settings',
-        render: () => (
-          <SettingsPane
-            currentUserName={currentUserName}
-            currentUserProvider={currentUserProvider}
-            currentUserEmail={currentUserEmail}
-            currentUserAvatarUrl={currentUserAvatarUrl}
-            nativeRuntimeAvailable={nativeRuntimeAvailable}
-            guestBusy={guestBusy}
-            guestMessage={guestMessage}
-            modelConnected={modelConnected}
-            modelAuthBusy={modelAuthBusy}
-            modelAuthMessage={modelAuthMessage}
-            providerBusy={{
-              google: googleAuthBusy,
-              github: githubAuthBusy,
-              microsoft: microsoftAuthBusy,
-            }}
-            providerMessages={{
-              google: googleAuthMessage,
-              github: githubAuthMessage,
-              microsoft: microsoftAuthMessage,
-            }}
-            sessions={sessions}
-            onContinueAsGuest={onContinueAsGuest}
-            onConnectModel={onConnectModel}
-            onDisconnectModel={onDisconnectModel}
-            onConnectGoogle={onConnectGoogle}
-            onConnectGithub={onConnectGithub}
-            onConnectMicrosoft={onConnectMicrosoft}
-          />
-        ),
+        render: ({ pane }) => <>{getRenderer('settings')(requirePaneData('settings', pane.data))}</>,
       },
       memory: {
         kind: 'memory',
@@ -388,32 +369,7 @@ export const Workspace = ({
         render: ({ pane }) => <>{getRenderer('memory')(requirePaneData('memory', pane.data))}</>,
       },
     };
-  }, [
-    currentUserAvatarUrl,
-    currentUserEmail,
-    currentUserName,
-    currentUserProvider,
-    guestBusy,
-    guestMessage,
-    githubAuthBusy,
-    githubAuthMessage,
-    googleAuthBusy,
-    googleAuthMessage,
-    microsoftAuthBusy,
-    microsoftAuthMessage,
-    modelAuthBusy,
-    modelAuthMessage,
-    modelConnected,
-    nativeRuntimeAvailable,
-    onConnectGithub,
-    onConnectGoogle,
-    onConnectMicrosoft,
-    onConnectModel,
-    onContinueAsGuest,
-    onDisconnectModel,
-    sessions,
-    signalPaneAttention,
-  ]);
+  }, [signalPaneAttention]);
 
   const chatPaneRuntime = useMemo(
     () => ({
@@ -455,6 +411,105 @@ export const Workspace = ({
     [openFileInWorkspace, vaultRevision],
   );
 
+  const settingsPaneRuntime = useMemo<SettingsPaneRuntime>(() => {
+    const activeSession = pickActiveSession(sessions);
+
+    const busyByProvider: Record<SSOSession['provider'], boolean> = {
+      google: googleAuthBusy,
+      github: githubAuthBusy,
+      microsoft: microsoftAuthBusy,
+    };
+    const messageByProvider: Record<SSOSession['provider'], string | null> = {
+      google: googleAuthMessage,
+      github: githubAuthMessage,
+      microsoft: microsoftAuthMessage,
+    };
+    const disconnectByProvider: Record<SSOSession['provider'], () => Promise<void>> = {
+      google: onDisconnectGoogle,
+      github: onDisconnectGithub,
+      microsoft: onDisconnectMicrosoft,
+    };
+
+    const mcpSeedStatuses: Partial<Record<BuiltinMcpName, MCPStatus>> = {};
+    for (const name of BUILTIN_MCP_NAMES) {
+      const seeded = mcpStatus[name];
+      if (seeded) {
+        mcpSeedStatuses[name] = seeded;
+      }
+    }
+
+    return {
+      nativeRuntimeAvailable,
+      currentUserName,
+      currentUserProvider,
+      currentUserEmail,
+      currentUserAvatarUrl,
+      sessions,
+      activeSession,
+      signOutBusy: activeSession ? busyByProvider[activeSession.provider] : false,
+      signOutMessage: activeSession ? messageByProvider[activeSession.provider] : null,
+      guestBusy,
+      guestMessage,
+      providerBusy: {
+        google: googleAuthBusy,
+        github: githubAuthBusy,
+        microsoft: microsoftAuthBusy,
+      },
+      providerMessages: {
+        google: googleAuthMessage,
+        github: githubAuthMessage,
+        microsoft: microsoftAuthMessage,
+      },
+      modelConnected,
+      modelAuthBusy,
+      modelAuthMessage,
+      opencode,
+      vaultPath,
+      mcpSeedStatuses,
+      onSignOut: async (session: SSOSession) => {
+        await disconnectByProvider[session.provider]();
+      },
+      onContinueAsGuest,
+      onConnectGoogle,
+      onConnectGithub,
+      onConnectMicrosoft,
+      onConnectModel,
+      onDisconnectModel,
+      onRequestRespawn: onRequestMcpRespawn,
+    };
+  }, [
+    nativeRuntimeAvailable,
+    currentUserName,
+    currentUserProvider,
+    currentUserEmail,
+    currentUserAvatarUrl,
+    sessions,
+    googleAuthBusy,
+    googleAuthMessage,
+    githubAuthBusy,
+    githubAuthMessage,
+    microsoftAuthBusy,
+    microsoftAuthMessage,
+    guestBusy,
+    guestMessage,
+    modelConnected,
+    modelAuthBusy,
+    modelAuthMessage,
+    onContinueAsGuest,
+    onConnectGoogle,
+    onConnectGithub,
+    onConnectMicrosoft,
+    onConnectModel,
+    onDisconnectGoogle,
+    onDisconnectGithub,
+    onDisconnectMicrosoft,
+    onDisconnectModel,
+    opencode,
+    vaultPath,
+    mcpStatus,
+    onRequestMcpRespawn,
+  ]);
+
   return (
     <main className="tinker-workspace-shell">
       <Titlebar
@@ -465,19 +520,21 @@ export const Workspace = ({
       />
 
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
-        <MemoryPaneRuntimeContext.Provider value={{ currentUserId }}>
-          <FilePaneRuntimeContext.Provider value={filePaneRuntime}>
-            <PanesWorkspace
-              store={workspaceStore}
-              registry={registry}
-              attention={{
-                store: attentionStore,
-                workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
-              }}
-              ariaLabel="Tinker workspace"
-            />
-          </FilePaneRuntimeContext.Provider>
-        </MemoryPaneRuntimeContext.Provider>
+        <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
+          <MemoryPaneRuntimeContext.Provider value={{ currentUserId }}>
+            <FilePaneRuntimeContext.Provider value={filePaneRuntime}>
+              <PanesWorkspace
+                store={workspaceStore}
+                registry={registry}
+                attention={{
+                  store: attentionStore,
+                  workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+                }}
+                ariaLabel="Tinker workspace"
+              />
+            </FilePaneRuntimeContext.Provider>
+          </MemoryPaneRuntimeContext.Provider>
+        </SettingsPaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
     </main>
   );

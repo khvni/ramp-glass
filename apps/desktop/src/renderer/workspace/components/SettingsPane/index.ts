@@ -1,1 +1,1 @@
-export { SettingsPane, type SettingsPaneProps } from './SettingsPane.js';
+export { SettingsPane } from './SettingsPane.js';
