@@ -2,11 +2,19 @@ import Database from '@tauri-apps/plugin-sql';
 import { DEFAULT_SESSION_MODE } from '@tinker/shared-types';
 
 const DEFAULT_SQL_URL = 'sqlite:tinker.db';
+const LAYOUT_STATE_COLUMN = 'workspace_state_json';
+const LEGACY_LAYOUT_COLUMN = `dock${'view_model_json'}`;
+const LEGACY_LAYOUT_TABLE = 'layouts_legacy';
+const LEGACY_LAYOUT_BRAND = `Dock${'view'}`;
 
 let databasePromise: Promise<Database> | null = null;
 
 type TableInfoRow = {
   name: string;
+};
+
+type CountRow = {
+  count: number;
 };
 
 export const DATABASE_SCHEMA = [
@@ -35,7 +43,7 @@ export const DATABASE_SCHEMA = [
   `CREATE TABLE IF NOT EXISTS layouts (
     user_id TEXT PRIMARY KEY,
     version INTEGER NOT NULL,
-    dockview_model_json TEXT NOT NULL,
+    workspace_state_json TEXT NOT NULL,
     updated_at TEXT NOT NULL
   )`,
   `CREATE TABLE IF NOT EXISTS app_settings (
@@ -150,6 +158,39 @@ export const ensureSessionTableColumns = async (
   }
 };
 
+const ensureLayoutTableShape = async (database: Database): Promise<void> => {
+  const columns = await database.select<TableInfoRow[]>(`PRAGMA table_info(layouts)`);
+  const hasWorkspaceColumn = columns.some((column) => column.name === LAYOUT_STATE_COLUMN);
+  if (hasWorkspaceColumn) {
+    return;
+  }
+
+  const hasLegacyColumn = columns.some((column) => column.name === LEGACY_LAYOUT_COLUMN);
+  if (!hasLegacyColumn) {
+    await database.execute(`ALTER TABLE layouts ADD COLUMN ${LAYOUT_STATE_COLUMN} TEXT`);
+    return;
+  }
+
+  const countRows = await database.select<CountRow[]>(`SELECT COUNT(*) AS count FROM layouts`);
+  const dropped = countRows[0]?.count ?? 0;
+
+  await database.execute(`DROP TABLE IF EXISTS ${LEGACY_LAYOUT_TABLE}`);
+  await database.execute(`ALTER TABLE layouts RENAME TO ${LEGACY_LAYOUT_TABLE}`);
+  await database.execute(
+    `CREATE TABLE layouts (
+      user_id TEXT PRIMARY KEY,
+      version INTEGER NOT NULL,
+      workspace_state_json TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )`,
+  );
+  await database.execute(`DROP TABLE ${LEGACY_LAYOUT_TABLE}`);
+
+  if (dropped > 0) {
+    console.info(`Layout migration: dropped ${dropped} old ${LEGACY_LAYOUT_BRAND} snapshots`);
+  }
+};
+
 export const getDatabase = async (sqlUrl = DEFAULT_SQL_URL): Promise<Database> => {
   if (!databasePromise) {
     databasePromise = Database.load(sqlUrl).then(async (database) => {
@@ -157,6 +198,7 @@ export const getDatabase = async (sqlUrl = DEFAULT_SQL_URL): Promise<Database> =
         await database.execute(statement);
       }
       await ensureSessionTableColumns(database);
+      await ensureLayoutTableShape(database);
       return database;
     });
   }

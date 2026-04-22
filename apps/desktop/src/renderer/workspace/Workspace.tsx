@@ -9,7 +9,7 @@ import {
 } from '@tinker/panes';
 import '@tinker/panes/styles.css';
 import { Badge, Button } from '@tinker/design';
-import { resolveVaultPath, type MemoryRunState } from '@tinker/memory';
+import type { MemoryRunState } from '@tinker/memory';
 import {
   createDefaultWorkspacePreferences,
   type LayoutStore,
@@ -22,6 +22,7 @@ import {
   type WorkspacePreferences,
 } from '@tinker/shared-types';
 import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
+import { resolveWorkspaceFilePath } from '../file-links.js';
 import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 import type { MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
@@ -127,21 +128,18 @@ export const Workspace = ({
   }, [vaultPath]);
 
   const resolveAgentPath = useCallback((reportedPath: string): string | null => {
-    if (isAbsolutePath(reportedPath)) {
-      return reportedPath;
+    const resolvedPath = resolveWorkspaceFilePath(reportedPath, vaultPathRef.current);
+    if (resolvedPath) {
+      return resolvedPath;
     }
 
-    const activeVault = vaultPathRef.current;
-    if (!activeVault) {
+    if (!vaultPathRef.current && !isAbsolutePath(reportedPath)) {
+      console.warn(`Ignoring file link "${reportedPath}" because no active session folder is available.`);
       return null;
     }
 
-    try {
-      return resolveVaultPath(activeVault, reportedPath);
-    } catch (error) {
-      console.warn(`Ignoring agent file event with unsafe path "${reportedPath}".`, error);
-      return null;
-    }
+    console.warn(`Ignoring unsafe file link "${reportedPath}".`);
+    return null;
   }, []);
 
   const openFileInWorkspace = useCallback(
@@ -151,7 +149,7 @@ export const Workspace = ({
         return;
       }
 
-      openWorkspaceFile(workspaceStore, absolutePath);
+      void openWorkspaceFile(workspaceStore, absolutePath);
     },
     [resolveAgentPath, workspaceStore],
   );
@@ -329,6 +327,7 @@ export const Workspace = ({
       vaultPath,
       activeSkillsRevision,
       onFileWritten: handleAgentFileWritten,
+      onOpenFileLink: openFileInWorkspace,
       onOpenNewChat: openNewChatPane,
       onMemoryCommitted,
       persistPaneSessionId: persistChatPaneSessionId,
@@ -339,6 +338,7 @@ export const Workspace = ({
       handleAgentFileWritten,
       modelConnected,
       onMemoryCommitted,
+      openFileInWorkspace,
       openNewChatPane,
       opencode,
       persistChatPaneSessionId,
