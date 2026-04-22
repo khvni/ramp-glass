@@ -31,6 +31,8 @@ import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
 import { Titlebar } from './components/Titlebar/index.js';
+import { WorkspaceShell } from './components/WorkspaceShell/index.js';
+import { WorkspaceSidebar } from './components/WorkspaceSidebar/index.js';
 import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
@@ -529,15 +531,28 @@ export const Workspace = ({
     onRequestMcpRespawn,
   ]);
 
-  return (
-    <main className="tinker-workspace-shell">
-      <Titlebar
-        sessionFolderPath={vaultPath}
-        onNewSession={openNewChatPane}
-        onOpenMemory={openMemoryPane}
-        onOpenSettings={openSettingsPane}
-      />
+  const userInitial = (currentUserId.trim()[0] ?? 'T').toUpperCase();
 
+  return (
+    <WorkspaceShell
+      titlebar={
+        <Titlebar
+          sessionFolderPath={vaultPath}
+          onNewSession={openNewChatPane}
+          onOpenMemory={openMemoryPane}
+          onOpenSettings={openSettingsPane}
+        />
+      }
+      sidebar={
+        <WorkspaceSidebar
+          userInitial={userInitial}
+          onOpenChat={openNewChatPane}
+          onOpenMemory={openMemoryPane}
+          onOpenSettings={openSettingsPane}
+          onOpenAccount={openSettingsPane}
+        />
+      }
+    >
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
         <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
           <MemoryPaneRuntimeContext.Provider value={{ currentUserId }}>
@@ -555,6 +570,6 @@ export const Workspace = ({
           </MemoryPaneRuntimeContext.Provider>
         </SettingsPaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
-    </main>
+    </WorkspaceShell>
   );
 };
