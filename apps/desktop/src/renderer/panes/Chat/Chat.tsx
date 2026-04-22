@@ -37,8 +37,10 @@ import {
   createSession,
   findLatestSessionForFolder,
   getActiveMemoryPath,
+  listSessionsForUser,
   subscribeMemoryPathChanged,
   updateLastActive,
+  updateSession,
 } from '@tinker/memory';
 import { DEFAULT_SESSION_MODE, type SkillStore } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../../bindings.js';
@@ -53,6 +55,7 @@ import {
 import { AttachmentIcon } from './AttachmentIcon.js';
 import { ChatMessage } from '../ChatMessage/index.js';
 import { McpConnectionGate } from './components/McpConnectionGate/index.js';
+import { resolvePreferredStoredModelId, resolveSelectedModelId } from './modelSelection.js';
 import {
   calculateComposerHeight,
   shouldAbortComposerKey,
@@ -267,6 +270,7 @@ export const Chat = ({
   // Global default applied where no per-disclosure override exists. ⌥T flips this and clears overrides.
   const [defaultDisclosureOpen, setDefaultDisclosureOpen] = useState(false);
   const [disclosureOverrides, setDisclosureOverrides] = useState<Record<string, boolean>>({});
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const mountedRef = useRef(true);
   const sessionIDRef = useRef<string | null>(null);
   const sessionCreatedAtRef = useRef<string | null>(null);
@@ -277,6 +281,7 @@ export const Chat = ({
   const abortRequestedRef = useRef(false);
   const contextUsageSnapshotRef = useRef<ContextUsageSnapshot | null>(null);
   const draftBlocksRef = useRef<Block[]>([]);
+  const selectedModelRef = useRef<WorkspaceModelOption | undefined>(undefined);
   const attentionRaisedForDraftRef = useRef(false);
   const shouldStickToBottomRef = useRef(true);
   const lastTailSignatureRef = useRef('empty');
@@ -318,27 +323,34 @@ export const Chat = ({
 
     setModelOptionsLoading(true);
 
-    void client.config
-      .providers()
-      .then((response) => {
+    void (async () => {
+      try {
+        const [response, folderSession, priorSessions] = await Promise.all([
+          client.config.providers(),
+          sessionFolderPath ? findLatestSessionForFolder(currentUserId, sessionFolderPath) : Promise.resolve(null),
+          sessionFolderPath ? listSessionsForUser(currentUserId) : Promise.resolve([]),
+        ]);
         if (cancelled) {
           return;
         }
 
         const providers = response.data?.providers ?? [];
         const nextOptions = buildModelPickerItems(providers);
-        const nextSelectedId = pickDefaultModelOptionId(providers, response.data?.default ?? {}) ?? nextOptions[0]?.id;
+        const preferredStoredModelId = resolvePreferredStoredModelId(folderSession, priorSessions);
+        const defaultSelectedId =
+          pickDefaultModelOptionId(providers, response.data?.default ?? {}) ?? nextOptions[0]?.id;
 
         setModelOptions(nextOptions);
-        setSelectedModelId((current) => {
-          if (current && nextOptions.some((option) => option.id === current)) {
-            return current;
-          }
-
-          return nextSelectedId;
-        });
-      })
-      .catch((error) => {
+        setSelectedModelId((current) =>
+          resolveSelectedModelId({
+            options: nextOptions,
+            currentSelectedId: current,
+            preserveCurrent: sessionIDRef.current !== null,
+            preferredStoredModelId,
+            defaultSelectedId,
+          }),
+        );
+      } catch (error) {
         console.warn('Failed to load model picker options from OpenCode.', error);
         if (cancelled) {
           return;
@@ -346,22 +358,23 @@ export const Chat = ({
 
         setModelOptions([]);
         setSelectedModelId(undefined);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) {
           setModelOptionsLoading(false);
         }
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;
     };
-  }, [client, modelConnected]);
+  }, [client, currentUserId, modelConnected, sessionFolderPath]);
 
   const activateSession = useCallback(
     (sessionID: string, sessionCreatedAt: string): void => {
       sessionIDRef.current = sessionID;
       sessionCreatedAtRef.current = sessionCreatedAt;
+      setActiveSessionId(sessionID);
 
       const previousWriter = historyWriterRef.current;
       historyWriterRef.current = sessionFolderPath
@@ -403,6 +416,7 @@ export const Chat = ({
     const existing = sessionIDRef.current;
     sessionIDRef.current = null;
     sessionCreatedAtRef.current = null;
+    setActiveSessionId(null);
     abortRequestedRef.current = false;
     shouldStickToBottomRef.current = true;
     lastTailSignatureRef.current = 'empty';
@@ -469,6 +483,7 @@ export const Chat = ({
               createdAt: restoredCreatedAt,
               lastActiveAt: restoredCreatedAt,
               mode: DEFAULT_SESSION_MODE,
+              ...(selectedModelRef.current ? { modelId: selectedModelRef.current.storedId } : {}),
             });
           } catch (error) {
             console.warn('Failed to restore the session row from chat history.', error);
@@ -507,8 +522,22 @@ export const Chat = ({
   }, [activateSession, activeSkillsRevision, client, currentUserId, readyStatus, sessionFolderPath]);
 
   useEffect(() => {
+    if (!activeSessionId || !selectedModel) {
+      return;
+    }
+
+    void updateSession(activeSessionId, { modelId: selectedModel.storedId }).catch((error) => {
+      console.warn('Failed to persist the selected model for the active chat session.', error);
+    });
+  }, [activeSessionId, selectedModel]);
+
+  useEffect(() => {
     draftBlocksRef.current = draftBlocks;
   }, [draftBlocks]);
+
+  useEffect(() => {
+    selectedModelRef.current = selectedModel;
+  }, [selectedModel]);
 
   useEffect(() => {
     if (paneIsActive) {
@@ -782,6 +811,7 @@ export const Chat = ({
           createdAt: timestamp,
           lastActiveAt: timestamp,
           mode: DEFAULT_SESSION_MODE,
+          ...(selectedModel ? { modelId: selectedModel.storedId } : {}),
         });
       } catch (error) {
         console.warn('Failed to persist the active chat session.', error);

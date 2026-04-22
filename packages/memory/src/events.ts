@@ -8,8 +8,8 @@ export type MemoryPathChangedDetail = {
   nextRoot?: string;
   previousPath?: string | null;
   nextPath?: string | null;
-  previousUserId?: string;
-  nextUserId?: string;
+  previousUserId?: string | null;
+  nextUserId?: string | null;
 };
 
 type MemoryPathChangedListener = (detail: MemoryPathChangedDetail) => void;
