@@ -41,9 +41,7 @@ export const buildStoredUserId = (provider: User['provider'], providerUserId: st
   return `${provider}:${providerUserId}`;
 };
 
-export const createLocalUser = (): User => {
-  const timestamp = new Date().toISOString();
-
+export const createLocalUser = (timestamp: string = new Date().toISOString()): User => {
   return {
     id: DEFAULT_USER_ID,
     provider: 'local',
@@ -54,9 +52,7 @@ export const createLocalUser = (): User => {
   };
 };
 
-export const toStoredUser = (session: SSOSession): User => {
-  const timestamp = new Date().toISOString();
-
+export const toStoredUser = (session: SSOSession, timestamp: string = new Date().toISOString()): User => {
   return {
     id: buildStoredUserId(session.provider, session.userId),
     provider: session.provider,
@@ -111,13 +107,14 @@ const readRestoredState = async (
   restore: () => Promise<SSOSession | null>,
   readStatus: () => Promise<SSOStatus>,
   storeUser: (user: User) => Promise<void>,
+  timestamp: string,
 ): Promise<ResolvedCurrentUserState | null> => {
   const restored = await restore();
   if (!restored) {
     return null;
   }
 
-  const user = toStoredUser(restored);
+  const user = toStoredUser(restored, timestamp);
   await storeUser(user);
 
   return {
@@ -134,7 +131,10 @@ export const resolveCurrentUser = async ({
   restoreAuthSession,
   upsertUser,
 }: ResolveCurrentUserDeps): Promise<ResolvedCurrentUserState> => {
-  await upsertUser(createLocalUser());
+  const nowMs = now();
+  const timestamp = new Date(nowMs).toISOString();
+
+  await upsertUser(createLocalUser(timestamp));
 
   const [users, sessions] = await Promise.all([listUsersByLastSeen(), readAuthStatus()]);
 
@@ -144,7 +144,7 @@ export const resolveCurrentUser = async ({
     }
 
     const session = getSessionForUser(sessions, user);
-    if (session && !shouldAttemptSilentRestore(session, now())) {
+    if (session && !shouldAttemptSilentRestore(session, nowMs)) {
       return {
         authState: 'authenticated',
         sessions,
@@ -156,6 +156,7 @@ export const resolveCurrentUser = async ({
       () => restoreAuthSession(user.provider, user.providerUserId),
       readAuthStatus,
       upsertUser,
+      timestamp,
     );
     if (restoredState) {
       return restoredState;
@@ -163,8 +164,8 @@ export const resolveCurrentUser = async ({
   }
 
   for (const session of orderedSessions(sessions)) {
-    if (!shouldAttemptSilentRestore(session, now())) {
-      const user = toStoredUser(session);
+    if (!shouldAttemptSilentRestore(session, nowMs)) {
+      const user = toStoredUser(session, timestamp);
       await upsertUser(user);
       return {
         authState: 'authenticated',
@@ -177,6 +178,7 @@ export const resolveCurrentUser = async ({
       () => restoreAuthSession(session.provider, session.userId),
       readAuthStatus,
       upsertUser,
+      timestamp,
     );
     if (restoredState) {
       return restoredState;

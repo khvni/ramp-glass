@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SSOSession, SSOStatus, User } from '@tinker/shared-types';
-import { resolveCurrentUser, shouldAttemptSilentRestore } from './useCurrentUser.js';
+import { resolveCurrentUser, shouldAttemptSilentRestore, toStoredUser } from './useCurrentUser.js';
 
 const BASE_SESSION: SSOSession = {
   provider: 'google',
@@ -140,14 +140,7 @@ describe('resolveCurrentUser', () => {
     });
 
     expect(upsertUser).toHaveBeenCalledWith(
-      expect.objectContaining({
-        id: 'google:user-123',
-        provider: 'google',
-        providerUserId: 'user-123',
-        displayName: 'Ada Lovelace',
-        email: 'ada@example.com',
-        avatarUrl: 'https://example.com/ada.png',
-      }),
+      toStoredUser(restoredSession, '2026-04-22T00:00:00.000Z'),
     );
   });
 
