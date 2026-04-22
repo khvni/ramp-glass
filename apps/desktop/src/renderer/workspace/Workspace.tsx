@@ -51,6 +51,8 @@ type WorkspaceProps = {
   googleAuthMessage: string | null;
   githubAuthBusy: boolean;
   githubAuthMessage: string | null;
+  microsoftAuthBusy: boolean;
+  microsoftAuthMessage: string | null;
   opencode: OpencodeConnection;
   sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
@@ -63,8 +65,10 @@ type WorkspaceProps = {
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
   onConnectGithub(): Promise<void>;
+  onConnectMicrosoft(): Promise<void>;
   onDisconnectGoogle(): Promise<void>;
   onDisconnectGithub(): Promise<void>;
+  onDisconnectMicrosoft(): Promise<void>;
   onCreateVault(): Promise<void>;
   onSelectVault(): Promise<void>;
   onActiveSkillsChanged(): void;
@@ -87,13 +91,17 @@ export const Workspace = ({
   googleAuthMessage,
   githubAuthBusy,
   githubAuthMessage,
+  microsoftAuthBusy,
+  microsoftAuthMessage,
   onConnectModel,
   onConnectGithub,
   onConnectGoogle,
+  onConnectMicrosoft,
   onCreateVault,
   onDisconnectGithub,
   onDisconnectModel,
   onDisconnectGoogle,
+  onDisconnectMicrosoft,
   onSelectVault,
   onActiveSkillsChanged,
   onRunScheduledJobNow,
@@ -321,15 +329,19 @@ export const Workspace = ({
             googleAuthMessage={googleAuthMessage}
             githubAuthBusy={githubAuthBusy}
             githubAuthMessage={githubAuthMessage}
+            microsoftAuthBusy={microsoftAuthBusy}
+            microsoftAuthMessage={microsoftAuthMessage}
             sessions={sessions}
             mcpStatus={mcpStatus}
             vaultPath={vaultPath}
             onConnectModel={onConnectModel}
             onConnectGoogle={onConnectGoogle}
             onConnectGithub={onConnectGithub}
+            onConnectMicrosoft={onConnectMicrosoft}
             onDisconnectModel={onDisconnectModel}
             onDisconnectGoogle={onDisconnectGoogle}
             onDisconnectGithub={onDisconnectGithub}
+            onDisconnectMicrosoft={onDisconnectMicrosoft}
             onCreateVault={onCreateVault}
             onSelectVault={onSelectVault}
             workspacePreferences={workspacePreferences}
@@ -358,12 +370,16 @@ export const Workspace = ({
       googleAuthMessage,
       githubAuthBusy,
       githubAuthMessage,
+      microsoftAuthBusy,
+      microsoftAuthMessage,
       onConnectGoogle,
       onConnectGithub,
+      onConnectMicrosoft,
       onConnectModel,
       onCreateVault,
       onDisconnectGoogle,
       onDisconnectGithub,
+      onDisconnectMicrosoft,
       onDisconnectModel,
       onMemoryCommitted,
       onRunMemorySweep,
@@ -537,7 +553,7 @@ export const Workspace = ({
             {modelConnected ? 'Model connected' : 'Model disconnected'}
           </Badge>
           <Badge variant="default" size="small">
-            {sessions.google?.email ?? sessions.github?.email ?? 'Offline mode'}
+            {sessions.google?.email ?? sessions.github?.email ?? sessions.microsoft?.email ?? 'Offline mode'}
           </Badge>
           <Badge variant="default" size="small">
             {vaultPath ?? 'No vault selected'}
