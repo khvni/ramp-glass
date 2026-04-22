@@ -27,6 +27,7 @@ export type StreamingMarkdown = {
   text: string;
   append: (chunk: string) => void;
   reset: () => void;
+  read: () => string;
 };
 
 const getScheduler = (): {
@@ -84,6 +85,8 @@ export const useStreamingMarkdown = (): StreamingMarkdown => {
     setText('');
   }, []);
 
+  const read = useCallback(() => bufferRef.current.read(), []);
+
   useEffect(() => {
     const scheduler = schedulerRef.current;
     return () => {
@@ -94,5 +97,5 @@ export const useStreamingMarkdown = (): StreamingMarkdown => {
     };
   }, []);
 
-  return { text, append, reset };
+  return { text, append, reset, read };
 };
