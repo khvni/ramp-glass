@@ -15,7 +15,6 @@ import {
   type MemoryEntryBucket,
   type MemoryMarkdownFile,
 } from '@tinker/memory';
-import { useFilePaneRuntime } from '../FilePane/file-pane-runtime.js';
 import { useMemoryPaneRuntime } from '../../workspace/memory-pane-runtime.js';
 import { MemorySidebar } from './components/MemorySidebar/index.js';
 import { MemoryDetail } from './components/MemoryDetail/index.js';
@@ -78,9 +77,24 @@ const findDefaultSelection = (
   return null;
 };
 
+const findSelectionByPath = (
+  buckets: CategorisedMemoryFiles['buckets'],
+  absolutePath: string,
+): Selection | null => {
+  for (const [bucket, files] of Object.entries(buckets) as Array<
+    [MemoryEntryBucket, MemoryMarkdownFile[]]
+  >) {
+    const file = files.find((candidate) => candidate.absolutePath === absolutePath);
+    if (file) {
+      return { file, bucket };
+    }
+  }
+
+  return null;
+};
+
 export const MemoryPane = (): JSX.Element => {
   const { currentUserId } = useMemoryPaneRuntime();
-  const filePaneRuntime = useFilePaneRuntime();
   const nativeRuntime = isTauriRuntime();
   const browserPreview = !nativeRuntime;
 
@@ -120,15 +134,14 @@ export const MemoryPane = (): JSX.Element => {
         setLoad({ status: 'ready' });
 
         setSelection((current) => {
-          if (current) {
-            const stillExists = Object.values(result.buckets)
-              .flat()
-              .some((file) => file.absolutePath === current.file.absolutePath);
-            if (stillExists) {
-              return current;
-            }
+          if (!current) {
+            return findDefaultSelection(result.buckets);
           }
-          return findDefaultSelection(result.buckets);
+
+          return (
+            findSelectionByPath(result.buckets, current.file.absolutePath) ??
+            findDefaultSelection(result.buckets)
+          );
         });
       })
       .catch((error) => {
@@ -254,13 +267,6 @@ export const MemoryPane = (): JSX.Element => {
     }
   }, [browserPreview, isBusy, reloadFiles, selection]);
 
-  const handleOpenInTab = useCallback(
-    (file: MemoryMarkdownFile): void => {
-      filePaneRuntime?.openFile(file.absolutePath, { mime: 'text/markdown' });
-    },
-    [filePaneRuntime],
-  );
-
   if (load.status === 'error') {
     return (
       <div className="tinker-memory-pane tinker-memory-pane--error">
@@ -306,8 +312,12 @@ export const MemoryPane = (): JSX.Element => {
           onDismiss={() => {
             void handleDismiss();
           }}
-          onOpenInTab={handleOpenInTab}
           isBusy={isBusy}
+          allowEditing={!browserPreview}
+          onSaved={() => {
+            setActionError(null);
+            reloadFiles();
+          }}
           previewMarkdown={
             !browserPreview || !selection
               ? null
