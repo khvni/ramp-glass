@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_SKILL_VERSION } from '@tinker/shared-types';
 import {
   draftToSkillContent,
   isSkillRelativePath,
@@ -10,7 +11,25 @@ import {
   slugify,
 } from './skill-parser.js';
 
-const skillMarkdown = `---
+const canonicalSkillMarkdown = `---
+author: byalikhani
+id: gong-call-analysis
+role: sales
+tools:
+  - gmail
+title: Gong Call Analysis
+version: 2.1.0
+---
+
+## When to Use This
+After a sales call lands in Gong.
+
+## How to Do It
+1. Pull transcript.
+2. Summarize objections.
+`;
+
+const legacySkillMarkdown = `---
 description: Analyze a Gong call transcript and surface coaching moments.
 name: gong-call-analysis
 tags:
@@ -28,24 +47,6 @@ After a sales call lands in Gong.
 ## How to Do It
 1. Pull the transcript.
 2. Summarize objections.
-`;
-
-const canonicalSkillMarkdown = `---
-id: account-plan
-title: Account Plan Builder
-role: assistant
-tools:
-  - exa
-version: 2
-author:
-  name: Tinker
-  email: hello@example.com
----
-
-# Account Plan Builder
-
-## When to Use This
-Before a strategic account review.
 `;
 
 describe('slugify', () => {
@@ -93,157 +94,122 @@ describe('skillRelativePath and slugFromRelativePath', () => {
 });
 
 describe('parseSkillFile', () => {
-  it('extracts slug, title, description, tools and tags from frontmatter', () => {
-    const parsed = parseSkillFile(skillMarkdown, 'fallback-slug');
+  it('extracts canonical skill metadata from the new frontmatter shape', () => {
+    const parsed = parseSkillFile(canonicalSkillMarkdown, 'fallback-slug');
 
+    expect(parsed.id).toBe('gong-call-analysis');
     expect(parsed.slug).toBe('gong-call-analysis');
     expect(parsed.title).toBe('Gong Call Analysis');
+    expect(parsed.role).toBe('sales');
+    expect(parsed.tools).toEqual(['gmail']);
+    expect(parsed.version).toBe('2.1.0');
+    expect(parsed.author).toBe('byalikhani');
+    expect(parsed.frontmatter).toEqual({
+      id: 'gong-call-analysis',
+      title: 'Gong Call Analysis',
+      role: 'sales',
+      tools: ['gmail'],
+      version: '2.1.0',
+      author: 'byalikhani',
+    });
+  });
+
+  it('normalizes legacy skill frontmatter into the canonical spec', () => {
+    const parsed = parseSkillFile(legacySkillMarkdown, 'fallback-slug');
+
+    expect(parsed.id).toBe('gong-call-analysis');
+    expect(parsed.slug).toBe('gong-call-analysis');
+    expect(parsed.title).toBe('Gong Call Analysis');
+    expect(parsed.role).toBeNull();
     expect(parsed.description).toBe('Analyze a Gong call transcript and surface coaching moments.');
     expect(parsed.tools).toEqual(['gmail']);
     expect(parsed.tags).toEqual(['sales', 'calls']);
-    expect(parsed.frontmatter.name).toBe('gong-call-analysis');
+    expect(parsed.version).toBe(DEFAULT_SKILL_VERSION);
+    expect(parsed.author).toBeNull();
     expect(parsed.frontmatter.id).toBe('gong-call-analysis');
     expect(parsed.frontmatter.title).toBe('Gong Call Analysis');
-    expect(parsed.frontmatter.role).toBe('assistant');
-    expect(parsed.frontmatter.version).toBe('1');
-    expect(parsed.spec).toEqual({
-      id: 'gong-call-analysis',
-      title: 'Gong Call Analysis',
-      role: 'assistant',
-      tools: ['gmail'],
-      version: '1',
-      body: parsed.body,
-    });
+    expect(parsed.frontmatter.version).toBe(DEFAULT_SKILL_VERSION);
+    expect(parsed.frontmatter.name).toBeUndefined();
     expect(parsed.body).toContain('# Gong Call Analysis');
   });
 
   it('falls back to the supplied slug when frontmatter is missing', () => {
     const parsed = parseSkillFile('Body only, no frontmatter.', 'fallback-slug');
 
+    expect(parsed.id).toBe('fallback-slug');
     expect(parsed.slug).toBe('fallback-slug');
+    expect(parsed.title).toBe('fallback-slug');
+    expect(parsed.role).toBeNull();
     expect(parsed.description).toBe('');
     expect(parsed.tools).toEqual([]);
     expect(parsed.tags).toEqual([]);
-    expect(parsed.spec.id).toBe('fallback-slug');
-    expect(parsed.spec.role).toBe('assistant');
-    expect(parsed.spec.version).toBe('1');
+    expect(parsed.version).toBe(DEFAULT_SKILL_VERSION);
+    expect(parsed.author).toBeNull();
   });
 
-  it('slugifies invalid frontmatter names', () => {
+  it('slugifies invalid frontmatter ids', () => {
     const parsed = parseSkillFile(
-      '---\nname: Bad Name!\ndescription: desc\n---\n\n# Title\n',
+      '---\nid: Bad Name!\ndescription: desc\n---\n\n# Title\n',
       'fallback',
     );
 
+    expect(parsed.id).toBe('bad-name');
     expect(parsed.slug).toBe('bad-name');
-    expect(parsed.frontmatter.name).toBe('bad-name');
     expect(parsed.frontmatter.id).toBe('bad-name');
-  });
-
-  it('parses the canonical frontmatter spec into a typed skill spec', () => {
-    const parsed = parseSkillFile(canonicalSkillMarkdown, 'fallback');
-
-    expect(parsed.slug).toBe('account-plan');
-    expect(parsed.title).toBe('Account Plan Builder');
-    expect(parsed.frontmatter.id).toBe('account-plan');
-    expect(parsed.frontmatter.title).toBe('Account Plan Builder');
-    expect(parsed.frontmatter.role).toBe('assistant');
-    expect(parsed.frontmatter.version).toBe('2');
-    expect(parsed.frontmatter.author).toEqual({
-      name: 'Tinker',
-      email: 'hello@example.com',
-    });
-    expect(parsed.spec).toEqual({
-      id: 'account-plan',
-      title: 'Account Plan Builder',
-      role: 'assistant',
-      tools: ['exa'],
-      version: '2',
-      author: {
-        name: 'Tinker',
-        email: 'hello@example.com',
-      },
-      body: parsed.body,
-    });
-  });
-
-  it('normalizes string author values into structured author metadata', () => {
-    const parsed = parseSkillFile(
-      '---\nid: pipeline\ntitle: Pipeline\nrole: assistant\nversion: 1\nauthor: Jane Doe\n---\n',
-      'fallback',
-    );
-
-    expect(parsed.frontmatter.author).toEqual({ name: 'Jane Doe' });
-    expect(parsed.spec.author).toEqual({ name: 'Jane Doe' });
   });
 });
 
 describe('draftToSkillContent', () => {
-  it('builds canonical frontmatter + body from a draft', () => {
+  it('builds frontmatter + body from a draft', () => {
     const result = draftToSkillContent({
       slug: 'Gong Call Analysis',
+      title: 'Gong Call Analysis',
+      role: 'sales',
       description: ' Analyze call ',
       body: '# Title\n\nStep 1.\n',
       tools: ['gmail'],
       tags: ['sales'],
-      version: '2',
-      author: { name: 'Tinker' },
+      version: '2.0.0',
+      author: 'byalikhani',
     });
 
     expect(result.slug).toBe('gong-call-analysis');
-    expect(result.frontmatter.name).toBe('gong-call-analysis');
     expect(result.frontmatter.id).toBe('gong-call-analysis');
-    expect(result.frontmatter.title).toBe('Title');
-    expect(result.frontmatter.role).toBe('assistant');
-    expect(result.frontmatter.version).toBe('2');
-    expect(result.frontmatter.author).toEqual({ name: 'Tinker' });
+    expect(result.frontmatter.title).toBe('Gong Call Analysis');
+    expect(result.frontmatter.role).toBe('sales');
     expect(result.frontmatter.description).toBe('Analyze call');
     expect(result.frontmatter.tools).toEqual(['gmail']);
     expect(result.frontmatter.tags).toEqual(['sales']);
+    expect(result.frontmatter.version).toBe('2.0.0');
+    expect(result.frontmatter.author).toBe('byalikhani');
     expect(result.body).toBe('# Title\n\nStep 1.\n');
-    expect(result.spec).toEqual({
-      id: 'gong-call-analysis',
-      title: 'Title',
-      role: 'assistant',
-      tools: ['gmail'],
-      version: '2',
-      author: { name: 'Tinker' },
-      body: '# Title\n\nStep 1.\n',
-    });
   });
 
-  it('produces a default body when the draft body is blank', () => {
-    const result = draftToSkillContent({
-      slug: 'my-skill',
-      description: 'desc',
-      body: '   ',
-      title: 'My Skill',
-    });
-
-    expect(result.frontmatter.title).toBe('My Skill');
-    expect(result.frontmatter.role).toBe('assistant');
-    expect(result.frontmatter.version).toBe('1');
-    expect(result.body).toBe('# My Skill\n\n');
-  });
-
-  it('falls back to the slug when neither title nor heading exists', () => {
+  it('produces canonical defaults when draft metadata is sparse', () => {
     const result = draftToSkillContent({ slug: 'my-skill', description: 'desc', body: '   ' });
 
+    expect(result.frontmatter.id).toBe('my-skill');
+    expect(result.frontmatter.title).toBe('my-skill');
+    expect(result.frontmatter.version).toBe(DEFAULT_SKILL_VERSION);
     expect(result.body).toBe('# my-skill\n\n');
   });
 });
 
 describe('serializeSkill round-trip', () => {
-  it('serializes and re-parses consistently', () => {
-    const parsed = parseSkillFile(skillMarkdown, 'fallback');
+  it('serializes canonical frontmatter and re-parses consistently', () => {
+    const parsed = parseSkillFile(legacySkillMarkdown, 'fallback');
     const serialized = serializeSkill(parsed.frontmatter, parsed.body);
     const round = parseSkillFile(serialized, 'fallback');
 
+    expect(serialized).toContain('id: gong-call-analysis');
+    expect(serialized).toContain(`version: ${DEFAULT_SKILL_VERSION}`);
+    expect(serialized).not.toContain('name:');
+    expect(round.id).toBe(parsed.id);
     expect(round.slug).toBe(parsed.slug);
     expect(round.description).toBe(parsed.description);
     expect(round.tools).toEqual(parsed.tools);
     expect(round.tags).toEqual(parsed.tags);
     expect(round.title).toBe(parsed.title);
-    expect(round.spec).toEqual(parsed.spec);
+    expect(round.version).toBe(parsed.version);
   });
 });
