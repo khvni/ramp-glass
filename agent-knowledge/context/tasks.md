@@ -193,7 +193,7 @@ Spec: [[28-mvp-identity]] · Depends on: existing `packages/auth-sidecar` scaffo
 
 | ID | Task | Size | Depends on | Status | Notes |
 |----|------|------|------------|--------|-------|
-| TIN-201 | Visual parity CI gate: Playwright + pixelmatch baselines for Workspace / Memory / Settings panes. | M | X.2 | review | PR #112. Code-baseline approach (not Paper-PNG diff). `dev:web` not `dev:desktop`. |
+| TIN-201 | Visual parity CI gate: Playwright + pixelmatch baselines for Workspace / Memory / Settings panes. | M | X.2 | review | PR #115. Code-baseline approach (not Paper-PNG diff). `dev:web` not `dev:desktop`. |
 
 ### MVP Acceptance Checklist (merge to `main` → tag `v0.1.0`)
 
