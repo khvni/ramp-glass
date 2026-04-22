@@ -1,0 +1,95 @@
+/* Tinker demo-flow — bookish workbench tokens (Light).
+ * Extracted from packages/design Tinker Tokens — Light artboard + Workspace extraction. */
+
+:root {
+  /* Paper stack: three warm off-whites carry every surface. */
+  --paper: #fefcf8;
+  --paper-2: #f9f5ec;
+  --card: #ffffff;
+  --chip-soft: #f4efe4;
+
+  /* Ink: warm charcoal + two muted steps. */
+  --ink: #1a1612;
+  --ink-muted: #5f564c;
+  --ink-faint: #a8a097;
+  --ink-whisper: #8b7f67;
+
+  /* Inverse ink for dark bg buttons. */
+  --ink-inverse: #fbf8f2;
+
+  /* Amber is the only accent that drives action + active state. */
+  --amber: #f9c041;
+  --amber-strong: #e5ad2d;
+  --amber-ink: #c8941f;
+  --amber-soft-22: rgba(249, 192, 65, 0.22); /* active rail button bg */
+  --amber-soft-30: rgba(249, 192, 65, 0.30);
+  --amber-inset-55: rgba(249, 192, 65, 0.55); /* active-tab inset underline */
+
+  /* Hairlines / dividers — alpha on ink. */
+  --hair-4: rgba(26, 22, 18, 0.04);
+  --hair-6: rgba(26, 22, 18, 0.06);
+  --hair-8: rgba(26, 22, 18, 0.08);
+  --hair-10: rgba(26, 22, 18, 0.10);
+  --hair-14: rgba(26, 22, 18, 0.14);
+  --hair-18: rgba(26, 22, 18, 0.18);
+
+  /* Traffic lights. */
+  --tl-red: #ff5f57;
+  --tl-yellow: #febc2e;
+  --tl-green: #28c840;
+
+  /* Status / semantic. */
+  --ok: #22a355;
+  --ok-halo: rgba(34, 163, 85, 0.18);
+  --err: #d33030;
+  --warn: #e5a02d;
+  --skill: #7255d9; /* secondary accent — used only for "skills" surface */
+
+  /* Radii. */
+  --r-app: 12px;
+  --r-card: 8px;
+  --r-tab: 6px;
+  --r-btn: 6px;
+  --r-pill: 9999px;
+
+  /* Spacing scale (4 base). */
+  --s-1: 2px;
+  --s-2: 4px;
+  --s-3: 6px;
+  --s-4: 8px;
+  --s-5: 10px;
+  --s-6: 12px;
+  --s-7: 14px;
+  --s-8: 16px;
+  --s-10: 20px;
+  --s-12: 24px;
+  --s-14: 28px;
+  --s-16: 32px;
+  --s-20: 40px;
+  --s-24: 48px;
+  --s-32: 64px;
+
+  /* Type. */
+  --font-sans: "Host Grotesk", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Shadows. */
+  --shadow-pill: 0 4px 16px rgba(26, 22, 18, 0.08);
+  --shadow-lift: 0 2px 10px rgba(26, 22, 18, 0.06);
+  --shadow-tab-active: inset 0 1px 0 var(--amber-inset-55);
+  --shadow-status-halo: 0 0 0 3px var(--ok-halo);
+
+  /* Rail + shell metrics. */
+  --titlebar-h: 36px;
+  --rail-w: 52px;
+  --rail-slot: 36px;
+  --tab-h: 36px;
+  --pane-pad-h: 40px;
+
+  color-scheme: light;
+}
+
+/* Reserve hook for dark theme if ever needed. */
+[data-theme="dark"] {
+  /* intentionally empty for demo */
+}
