@@ -43,6 +43,11 @@ import { ModeToggle } from '../panes/Chat/components/ModeToggle/index.js';
 import { ReasoningPicker } from '../panes/Chat/components/ReasoningPicker/index.js';
 import type { ReasoningLevel } from '@tinker/shared-types';
 import { SignIn } from './SignIn/index.js';
+import { MemorySidebar } from '../panes/MemoryPane/components/MemorySidebar/index.js';
+import {
+  PREVIEW_MEMORY_BUCKETS,
+  PREVIEW_MEMORY_REFERENCE_TIME_MS,
+} from '../panes/MemoryPane/memory-preview.js';
 import './design-system.css';
 
 type PlaygroundTab =
@@ -1169,6 +1174,10 @@ const EmptyStateTab = (): JSX.Element => (
       />
     </Section>
 
+    <Section label="Memory sidebar (TIN-196)">
+      <MemorySidebarPlayground />
+    </Section>
+
     <Section label="Connections — none connected">
       <EmptyState
         size="s"
@@ -1570,6 +1579,29 @@ const TitlebarTab = (): JSX.Element => (
     </Section>
   </div>
 );
+
+/* --------------------- Memory sidebar -------------------- */
+
+const MemorySidebarPlayground = (): JSX.Element => {
+  const [selected, setSelected] = useState<string | null>(
+    '/memory/demo/pending/writing-articles.md',
+  );
+  const [search, setSearch] = useState('');
+
+  return (
+    <div style={{ height: 480, border: '1px solid var(--color-border-subtle)' }}>
+      <MemorySidebar
+        buckets={PREVIEW_MEMORY_BUCKETS}
+        searchQuery={search}
+        onSearchChange={setSearch}
+        selectedPath={selected}
+        onSelect={(file) => setSelected(file.absolutePath)}
+        seenPaths={new Set(['/memory/demo/pending/writing-articles.md'])}
+        referenceTimeMs={PREVIEW_MEMORY_REFERENCE_TIME_MS}
+      />
+    </div>
+  );
+};
 
 /* ----------------------- Router ------------------------- */
 
