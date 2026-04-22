@@ -52,11 +52,11 @@ Spec: [[20-mvp-panes-workspace]] · Depends on: `@tinker/panes` (done) · D16
 | 1.3 | Register `{ kind: 'chat' }` → existing `<Chat>` component. No Chat-component internals change. | S | 1.2 | review | TIN-12 · PR #35. Boot-time registration via `register-panes.tsx`; `Chat.tsx` unchanged. |
 | 1.4 | Register `{ kind: 'file', data: { path, mime } }` → single dispatch component that reads `mime` and picks renderer. | S | 1.2 | review | TIN-13 · PR #38 |
 | 1.5 | Register `{ kind: 'settings' }` + `{ kind: 'memory' }` placeholders (render empty `<EmptyPane/>` until filled by M5/M6). | S | 1.2 | review | TIN-7 · PR #37 |
-| 1.6 | Rewrite `layout.default.ts` → returns `WorkspaceState<TinkerPaneData>` with a single Chat pane. No split, no secondary pane. | S | 1.3 | not started | MVP default = just Chat. |
-| 1.7 | Swap `Workspace.tsx` internals: replace `<DockviewReact>` with `<Workspace>` from `@tinker/panes/react`. Read + write `WorkspaceState` via `@tinker/memory/layout-store` (already exists). | M | 1.3, 1.4, 1.5, 1.6 | not started | Dockview gone from the render tree. |
-| 1.8 | Delete `workspace/DockviewContext.ts`, `workspace/chat-panels.ts` + callers. Delete Dockview CSS imports. | S | 1.7 | not started | Quarantine cleanup. |
-| 1.9 | Remove `dockview-react` from `apps/desktop/package.json`. Run `pnpm install`. Verify `pnpm typecheck` passes. | S | 1.8 | not started | Kills the dep. |
-| 1.10 | Layout snapshot migration: detect old Dockview-shaped JSON in SQLite `layouts` table → delete + re-seed default. Log once. | S | 1.9 | not started | One-shot. Acceptable data loss on upgrade (pre-v1). |
+| 1.6 | Rewrite `layout.default.ts` → returns `WorkspaceState<TinkerPaneData>` with a single Chat pane. No split, no secondary pane. | S | 1.3 | review | TIN-9/TIN-10/TIN-11 chain · PR #62. Folded into the legacy-shell retirement because `main` still lacked the prerequisite `@tinker/panes` swap. |
+| 1.7 | Swap `Workspace.tsx` internals: replace `<DockviewReact>` with `<Workspace>` from `@tinker/panes/react`. Read + write `WorkspaceState` via `@tinker/memory/layout-store` (already exists). | M | 1.3, 1.4, 1.5, 1.6 | review | TIN-9/TIN-10/TIN-11 chain · PR #62. Legacy workspace shell removed from the render tree. |
+| 1.8 | Delete `workspace/DockviewContext.ts`, `workspace/chat-panels.ts` + callers. Delete Dockview CSS imports. | S | 1.7 | review | TIN-9 · PR #62. |
+| 1.9 | Remove `dockview-react` from `apps/desktop/package.json`. Run `pnpm install`. Verify `pnpm typecheck` passes. | S | 1.8 | review | TIN-10 · PR #62. |
+| 1.10 | Layout snapshot migration: detect old Dockview-shaped JSON in SQLite `layouts` table → delete + re-seed default. Log once. | S | 1.9 | review | TIN-11 · PR #62. One-shot schema migration drops incompatible pre-v1 snapshots. |
 
 ### M2 — Folder-scoped session (every chat starts in a local directory, per-user)
 Spec: [[21-mvp-session-folder]] · Depends on: M1.7 · Sessions are bound to current user from M8.
