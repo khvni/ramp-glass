@@ -19,7 +19,7 @@ import { DEFAULT_USER_ID, ONBOARDING_KEY, type AuthProvider, type AuthStatus, ty
 import type { MCPStatus } from './components/IntegrationsStrip.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import { FirstRun } from './panes/FirstRun.js';
-import { createWorkspaceClient, getOpencodeDirectory, OPENCODE_OPENAI_PROVIDER_ID } from './opencode.js';
+import { createWorkspaceClient, getOpencodeDirectory, pickFirstOauthProvider } from './opencode.js';
 import { isTauriRuntime, WEB_PREVIEW_NOTICE } from './runtime.js';
 import { Workspace } from './workspace/Workspace.js';
 
@@ -51,7 +51,6 @@ type ProviderMessageState = Record<AuthProvider, string | null>;
 const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
 const MODEL_CONNECT_TIMEOUT_MS = 180_000;
 const VAULT_REINDEX_DEBOUNCE_MS = 300;
-const OPENCODE_AUTH_HOST = 'auth.openai.com';
 const EMPTY_PROVIDER_BUSY: ProviderBusyState = { google: false, github: false };
 const EMPTY_PROVIDER_MESSAGES: ProviderMessageState = { google: null, github: null };
 const WEB_PREVIEW_CONNECTION: OpencodeConnection = {
@@ -157,7 +156,7 @@ const syncConnectorState = async (
 const isModelConnected = async (connection: OpencodeConnection, vaultPath: string | null): Promise<boolean> => {
   const client = createWorkspaceClient(connection, getOpencodeDirectory(vaultPath));
   const response = await client.provider.list();
-  return response.data?.connected.includes(OPENCODE_OPENAI_PROVIDER_ID) ?? false;
+  return (response.data?.connected.length ?? 0) > 0;
 };
 
 const probeModelConnection = async (connection: OpencodeConnection, vaultPath: string | null): Promise<boolean> => {
@@ -187,43 +186,47 @@ const waitForModelConnection = async (connection: OpencodeConnection, vaultPath:
 
 const connectModelProvider = async (connection: OpencodeConnection, vaultPath: string | null): Promise<void> => {
   const client = createWorkspaceClient(connection, getOpencodeDirectory(vaultPath));
-  const authResponse = await client.provider.auth();
-  const methods = authResponse.data?.[OPENCODE_OPENAI_PROVIDER_ID] ?? [];
-  const methodIndex = methods.findIndex((method) => method.type === 'oauth');
+  const [providersResponse, authResponse] = await Promise.all([client.provider.list(), client.provider.auth()]);
+  const target = pickFirstOauthProvider(providersResponse.data?.all ?? [], authResponse.data ?? {});
 
-  if (methodIndex < 0) {
-    throw new Error('OpenCode did not expose an OAuth method for OpenAI provider.');
+  if (!target) {
+    throw new Error('OpenCode did not expose an OAuth-capable AI provider.');
   }
 
   const authorizeResponse = await client.provider.oauth.authorize({
-    providerID: OPENCODE_OPENAI_PROVIDER_ID,
-    method: methodIndex,
+    providerID: target.providerId,
+    method: target.methodIndex,
   });
   const authorization = authorizeResponse.data;
 
   if (!authorization?.url) {
-    throw new Error('OpenCode did not return an authorization URL for OpenAI provider.');
+    throw new Error(`OpenCode did not return an authorization URL for provider "${target.providerId}".`);
   }
 
   const authorizationUrl = new URL(authorization.url);
-  if (
-    authorizationUrl.protocol !== 'https:' ||
-    authorizationUrl.hostname !== OPENCODE_AUTH_HOST ||
-    !/^\/(?:oauth|codex)\//u.test(authorizationUrl.pathname)
-  ) {
-    throw new Error('OpenCode returned an unexpected authorization URL for OpenAI provider.');
+  if (authorizationUrl.protocol !== 'https:') {
+    throw new Error(`OpenCode returned a non-HTTPS authorization URL for provider "${target.providerId}".`);
   }
 
   await openExternal(authorizationUrl.toString());
 
   if (!(await waitForModelConnection(connection, vaultPath))) {
-    throw new Error('OpenCode did not finish connecting the AI model before authorization timed out.');
+    throw new Error(`OpenCode did not finish connecting provider "${target.providerId}" before authorization timed out.`);
   }
 };
 
 const disconnectModelProvider = async (connection: OpencodeConnection, vaultPath: string | null): Promise<void> => {
   const client = createWorkspaceClient(connection, getOpencodeDirectory(vaultPath));
-  await client.auth.remove({ providerID: OPENCODE_OPENAI_PROVIDER_ID });
+  const [providersResponse, authResponse] = await Promise.all([client.provider.list(), client.provider.auth()]);
+  const removableProviders = (providersResponse.data?.connected ?? []).filter((providerId) => providerId in (authResponse.data ?? {}));
+
+  if (removableProviders.length === 0) {
+    throw new Error('OpenCode did not expose a removable OAuth-backed model connection.');
+  }
+
+  for (const providerId of removableProviders) {
+    await client.auth.remove({ providerID: providerId });
+  }
 };
 
 export const App = (): JSX.Element => {
