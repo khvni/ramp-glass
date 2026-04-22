@@ -22,7 +22,7 @@ import {
   type TinkerPaneKind,
   type WorkspacePreferences,
 } from '@tinker/shared-types';
-import { DEFAULT_USER_ID, type OpencodeConnection } from '../../bindings.js';
+import type { OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
 import type { MCPStatus } from '../integrations.js';
 import { FilePaneRuntimeContext } from '../panes/FilePane/file-pane-runtime.js';
@@ -220,7 +220,7 @@ export const Workspace = ({
     const snapshot = selectWorkspaceSnapshot(workspaceStore.getState());
 
     void layoutStore
-      .save(DEFAULT_USER_ID, {
+      .save(currentUserId, {
         version: snapshot.version,
         workspaceState: snapshot,
         updatedAt: new Date().toISOString(),
@@ -229,7 +229,7 @@ export const Workspace = ({
       .catch((error) => {
         console.warn('Failed to persist workspace layout.', error);
       });
-  }, [layoutStore, workspaceStore]);
+  }, [currentUserId, layoutStore, workspaceStore]);
 
   const scheduleLayoutSave = useCallback((): void => {
     if (saveTimerRef.current !== null) {
@@ -256,7 +256,7 @@ export const Workspace = ({
 
     void (async () => {
       try {
-        const savedLayout = await layoutStore.load(DEFAULT_USER_ID);
+        const savedLayout = await layoutStore.load(currentUserId);
         if (!active) {
           return;
         }
@@ -291,7 +291,7 @@ export const Workspace = ({
 
       saveLayoutNow();
     };
-  }, [layoutStore, saveLayoutNow, scheduleLayoutSave, workspaceStore]);
+  }, [currentUserId, layoutStore, saveLayoutNow, scheduleLayoutSave, workspaceStore]);
 
   const openOrFocusPane = useCallback(
     (kind: 'settings' | 'memory'): void => {
