@@ -96,6 +96,28 @@ describe('FilePane', () => {
     expect(element.type).toBe(mimeToRenderer[XLSX_MIME]);
   });
 
+  it('dispatches DOCX files through the DOCX renderer', () => {
+    expect(
+      mimeToRenderer['application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ).toBeDefined();
+  });
+
+  it('routes pptx files through the explicit external-preview fallback', () => {
+    const markup = renderToStaticMarkup(
+      <FilePane
+        data={{
+          kind: 'file',
+          path: '/tmp/deck.pptx',
+          mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        }}
+      />,
+    );
+
+    expect(markup).toContain('PPTX preview');
+    expect(markup).toContain('Inline PowerPoint preview is unavailable.');
+    expect(markup).toContain('Open externally');
+  });
+
   it('opens unsupported files through the OS shell helper', async () => {
     await openFileExternally('/tmp/archive.bin');
 

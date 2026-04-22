@@ -1,9 +1,9 @@
-import { describe, expect, it } from 'vitest';
 import { createWorkspaceStore } from '@tinker/panes';
 import type { TinkerPaneData } from '@tinker/shared-types';
+import { describe, expect, it } from 'vitest';
 import { getPanelIdForPath, XLSX_MIME } from '../renderers/file-utils.js';
-import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
+import { openWorkspaceFile } from './file-open.js';
 
 describe('openWorkspaceFile', () => {
   it('focuses an existing file pane instead of opening a duplicate', () => {
@@ -71,6 +71,18 @@ describe('openWorkspaceFile', () => {
       kind: 'file',
       path: '/vault/roadmap.xlsx',
       mime: XLSX_MIME,
+    });
+  });
+
+  it('maps pptx files to the presentation MIME so FilePane can show the fallback renderer', () => {
+    const store = createWorkspaceStore<TinkerPaneData>();
+
+    openWorkspaceFile(store, '/vault/deck.pptx');
+
+    expect(store.getState().tabs[0]?.panes[getPanelIdForPath('file', '/vault/deck.pptx')]?.data).toEqual({
+      kind: 'file',
+      path: '/vault/deck.pptx',
+      mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
     });
   });
 });
