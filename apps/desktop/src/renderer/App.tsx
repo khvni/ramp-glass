@@ -328,11 +328,11 @@ export const App = (): JSX.Element => {
   }, [nativeRuntime, state.status, state.status === 'ready' ? state.vaultPath : null]);
 
   useEffect(() => {
-    if (!nativeRuntime || state.status !== 'ready') {
+    if (!nativeRuntime || state.status !== 'ready' || currentUserState.status !== 'ready') {
       return;
     }
 
-    const sessions = state.sessions;
+    const sessions = currentUserState.sessions;
 
     return subscribeMemoryPathChanged((detail) => {
       if (detail.reason !== 'root-changed') {
@@ -343,7 +343,13 @@ export const App = (): JSX.Element => {
         console.warn('Failed to refresh OpenCode after a memory path change.', error);
       });
     });
-  }, [nativeRuntime, refreshWorkspaceConnection, state.status, state.status === 'ready' ? state.sessions : null]);
+  }, [
+    nativeRuntime,
+    refreshWorkspaceConnection,
+    state.status,
+    currentUserState.status,
+    currentUserState.status === 'ready' ? currentUserState.sessions : null,
+  ]);
 
   useEffect(() => {
     let active = true;
