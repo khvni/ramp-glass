@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   ClickableBadge,
+  ConnectionGate,
   ContextBadge,
   IconButton,
   ModelPicker,
@@ -13,6 +14,7 @@ import {
   Textarea,
   Toggle,
   type BadgeVariant,
+  type ConnectionService,
   type ModelPickerItem,
   type StatusDotState,
 } from '@tinker/design';
@@ -76,6 +78,24 @@ const CONTEXT_BADGE_TOOLTIP_DEMO = {
   windowSize: 200_000,
   model: 'claude-sonnet-4-6',
 } as const;
+
+const CONNECTION_GATE_PENDING: ReadonlyArray<ConnectionService> = [
+  { id: 'qmd', label: 'qmd', status: 'pending' },
+  { id: 'smart-connections', label: 'smart-connections', status: 'pending' },
+  { id: 'exa', label: 'exa', status: 'pending' },
+];
+
+const CONNECTION_GATE_MIXED: ReadonlyArray<ConnectionService> = [
+  { id: 'qmd', label: 'qmd', status: 'connected' },
+  { id: 'smart-connections', label: 'smart-connections', status: 'pending' },
+  { id: 'exa', label: 'exa', status: 'error', detail: 'Network timeout' },
+];
+
+const CONNECTION_GATE_DONE: ReadonlyArray<ConnectionService> = [
+  { id: 'qmd', label: 'qmd', status: 'connected' },
+  { id: 'smart-connections', label: 'smart-connections', status: 'connected' },
+  { id: 'exa', label: 'exa', status: 'connected' },
+];
 
 const PlusIcon = () => (
   <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
@@ -264,6 +284,14 @@ const ComponentsTab = (): JSX.Element => {
           />
           <p className="ds-context-badge-demo__hint">Hover badge to inspect native tooltip counts.</p>
         </div>
+      </Section>
+
+      <Section label="ConnectionGate">
+        <Row>
+          <ConnectionGate services={CONNECTION_GATE_PENDING} title="Connecting tools…" />
+          <ConnectionGate services={CONNECTION_GATE_MIXED} title="Connecting tools…" />
+          <ConnectionGate services={CONNECTION_GATE_DONE} title="Ready" />
+        </Row>
       </Section>
 
       <Section label="SegmentedControl">
