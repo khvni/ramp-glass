@@ -1,4 +1,4 @@
-import { useEffect, useRef, type JSX } from 'react';
+import type { JSX } from 'react';
 import type { FlashReason } from '@tinker/attention';
 import type { TinkerPaneData } from '@tinker/shared-types';
 import { Chat } from '../../../panes/Chat/index.js';
@@ -11,6 +11,8 @@ type RegisteredChatPaneProps = {
   paneData?: Extract<TinkerPaneData, { readonly kind: 'chat' }>;
   onAttentionSignal?: (reason: FlashReason) => void;
   onSelectSessionFolder?: () => Promise<void> | void;
+  onDuplicatePane?: () => void;
+  onClosePane?: () => void;
 };
 
 export const RegisteredChatPane = ({
@@ -20,25 +22,20 @@ export const RegisteredChatPane = ({
   paneData,
   onAttentionSignal,
   onSelectSessionFolder: propOnSelectSessionFolder,
+  onDuplicatePane,
+  onClosePane,
 }: RegisteredChatPaneProps): JSX.Element => {
   const runtime = useChatPaneRuntime();
-  const { persistPaneSessionId, getConnectionForPane, releaseConnectionForPane, onSelectSessionFolder: runtimeOnSelectSessionFolder, ...chatRuntime } = runtime;
+  const {
+    persistPaneSessionId,
+    getConnectionForPane,
+    releaseConnectionForPane,
+    onSelectSessionFolder: runtimeOnSelectSessionFolder,
+    ...chatRuntime
+  } = runtime;
 
   const paneDataWithDefaults = paneData ?? ({ kind: 'chat' } as Extract<TinkerPaneData, { readonly kind: 'chat' }>);
   const opencode = getConnectionForPane ? getConnectionForPane(paneDataWithDefaults) : chatRuntime.opencode;
-
-  const releaseRef = useRef(releaseConnectionForPane);
-  releaseRef.current = releaseConnectionForPane;
-  const paneDataRef = useRef(paneDataWithDefaults);
-  paneDataRef.current = paneDataWithDefaults;
-
-  useEffect(() => {
-    return () => {
-      if (releaseRef.current) {
-        void releaseRef.current(paneDataRef.current);
-      }
-    };
-  }, []);
 
   return (
     <Chat
@@ -46,6 +43,8 @@ export const RegisteredChatPane = ({
       opencode={opencode}
       {...(isActive !== undefined ? { paneIsActive: isActive } : {})}
       {...(onAttentionSignal ? { onAttentionSignal } : {})}
+      {...(onDuplicatePane ? { onDuplicatePane } : {})}
+      {...(onClosePane ? { onClosePane } : {})}
       {...(paneData?.sessionId ? { paneSessionId: paneData.sessionId } : {})}
       onSelectSessionFolder={propOnSelectSessionFolder ?? runtimeOnSelectSessionFolder}
       onReleaseOpencode={() => {

@@ -121,6 +121,7 @@ Spec: [[23-mvp-chat-markdown]] + [[24-mvp-model-picker]] · Depends on: M1.3
 | 4.15 | Clear existing tool-call / thinking UI from `Chat.tsx` that doesn't match 4.5/4.6 semantics. | S | 4.5, 4.6 | review | TIN-52 · PR #67 (bundled — see 4.5). |
 | 4.16 | Build vs Plan mode picker in Chat pane header. Persist per session and pass to OpenCode prompt agent. | M | 2.2, 4.7, 4.8, 5.2 | review | TIN-173 · PR #80. Header ships ModelPicker + ModeToggle + plan badge + ContextBadge wiring. |
 | 4.17 | Reasoning level picker for reasoning-capable models. Persist per session; new session inherits last-used value for that model family. | M | 2.2, 4.7, 4.8, 5.1 | review | TIN-174 · PR #80. Hidden for non-reasoning models; maps UI low/medium/high to OpenCode variants. |
+| 4.18 | Composer/StatusDock pixel parity vs Paper 9I-0: ContextPill, kebab menu, pane actions, ModelPicker dock variant, PromptComposer slot refactor, FolderPill. | L | 4.7, 4.16, 5.3 | review | TIN-199 · PR #119 · `khvni/tin-199`. |
 
 ### M5 — Context usage badge
 Spec: [[25-mvp-context-badge]] · Depends on: M4.2
@@ -257,6 +258,7 @@ Scope preserved for historical context + roadmap signaling. **Do not work on the
 | TIN-158 + TIN-159 | integrations | GitHub + Linear MCP server wiring | review | PR #102. Swapped stale package refs to current official remote MCP endpoints, expanded GitHub scopes for repo access, and added boot-time GitHub/Linear MCP status handling. |
 | TIN-182 | UI.7 | Workspace shell redesign per Paper — Titlebar + tauri Overlay + delete bespoke header + IntegrationsStrip compact | review | Branch `khvni/ui7-shell`. Session [[2026-04-22-0315-ui7-shell]]. Folder-per-component `<Titlebar>` (D21), tokens-only (D14/D23), macOS traffic-lights honored via `titleBarStyle:"Overlay"` + 68px reservation. 9 new tests. |
 | TIN-146 + TIN-147 | 12 | Pane-frame attention ring + pane-tab unread dot in `@tinker/panes`; desktop chat raises unread attention for unfocused assistant output; panes demo can trigger both states | review | PR #89. Branch `khvni/tin146-147-workspace-ui`. Paper MCP unavailable in-session, so parity used existing tokens + local workspace patterns. |
+| TIN-193 + TIN-194 + TIN-195 | UI / M1 | Titlebar toggle buttons (left rail / right inspector), Paper 9J-0 light token flip, rail cleanup (remove deferred items + onOpenConnections + SettingsShell scrollTargetSectionId) | review | PR #118 · Branch `khvni/tin-193-195`. Ships collapse-to-0 WorkspaceShell, ⌘B/⌘⌥B keybinds, D28 decision record. |
 | follow-up | cleanup | Delete legacy `IntegrationsStrip` once FirstRun + Workspace stop importing it — the Settings Connections surface now lives in `ConnectionsSection` (TIN-70) inside the `SettingsPane` rail. | not started | Kicked out of TIN-70/71/175 scope. |
 
 ## Rejected (not coming back)
