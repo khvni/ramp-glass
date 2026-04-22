@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SSOSession, SSOStatus, User } from '@tinker/shared-types';
-import { resolveCurrentUser, shouldAttemptSilentRestore, toStoredUser } from './useCurrentUser.js';
+import { resolveCurrentUser, shouldAttemptSilentRestore } from './useCurrentUser.js';
 
 const BASE_SESSION: SSOSession = {
   provider: 'google',
@@ -139,7 +139,16 @@ describe('resolveCurrentUser', () => {
       }),
     });
 
-    expect(upsertUser).toHaveBeenCalledWith(toStoredUser(restoredSession));
+    expect(upsertUser).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'google:user-123',
+        provider: 'google',
+        providerUserId: 'user-123',
+        displayName: 'Ada Lovelace',
+        email: 'ada@example.com',
+        avatarUrl: 'https://example.com/ada.png',
+      }),
+    );
   });
 
   it('falls back to unauthenticated when no cached or restorable session exists', async () => {
