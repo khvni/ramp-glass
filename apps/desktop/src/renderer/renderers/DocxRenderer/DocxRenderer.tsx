@@ -4,8 +4,7 @@ import { readFile } from '@tauri-apps/plugin-fs';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 import { Button } from '@tinker/design';
 import type mammoth from 'mammoth';
-import type { IDockviewPanelProps } from 'dockview-react';
-import { getPanelTitleForPath, type FilePaneParams } from '../file-utils.js';
+import { getPanelTitleForPath } from '../file-utils.js';
 
 const BYTES_PER_MEGABYTE = 1024 * 1024;
 
@@ -15,6 +14,9 @@ type MammothModule = typeof mammoth;
 type MammothConversionResult = Awaited<ReturnType<MammothModule['convertToHtml']>>;
 type MammothMessage = MammothConversionResult['messages'][number];
 export type DocxConverter = Pick<MammothModule, 'convertToHtml' | 'images'>;
+export type DocxRendererProps = {
+  path: string;
+};
 
 type ConvertDocxToHtmlDependencies = {
   mammothModule?: DocxConverter;
@@ -67,21 +69,13 @@ const logDocxMessages = (path: string, messages: readonly MammothMessage[]): voi
   }
 };
 
-export const DocxRenderer = ({ params }: IDockviewPanelProps<FilePaneParams>): JSX.Element => {
-  const path = params?.path;
+export const DocxRenderer = ({ path }: DocxRendererProps): JSX.Element => {
   const [html, setHtml] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [opening, setOpening] = useState(false);
 
   useEffect(() => {
-    if (!path) {
-      setError('Missing DOCX file path.');
-      setHtml('');
-      setLoading(false);
-      return;
-    }
-
     let active = true;
 
     void (async () => {
@@ -137,7 +131,7 @@ export const DocxRenderer = ({ params }: IDockviewPanelProps<FilePaneParams>): J
       <header className="tinker-pane-header">
         <div>
           <p className="tinker-eyebrow">DOCX preview</p>
-          <h2>{path ? getPanelTitleForPath(path) : 'Untitled document'}</h2>
+          <h2>{getPanelTitleForPath(path)}</h2>
         </div>
       </header>
 
@@ -148,7 +142,7 @@ export const DocxRenderer = ({ params }: IDockviewPanelProps<FilePaneParams>): J
             variant="secondary"
             size="s"
             onClick={() => void handleOpenExternal()}
-            disabled={opening || !path}
+            disabled={opening}
           >
             {opening ? 'Opening…' : 'Open externally'}
           </Button>
