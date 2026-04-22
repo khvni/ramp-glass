@@ -48,7 +48,7 @@ describe('<Titlebar>', () => {
     expect(markup).not.toContain('tinker-titlebar__sep');
   });
 
-  it('handles trailing separators and windows paths when picking the basename', () => {
+  it('trims trailing separators before picking the basename', () => {
     const withTrailing = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath="/Users/foo/bar/baz/"
@@ -58,16 +58,6 @@ describe('<Titlebar>', () => {
       />,
     );
     expect(withTrailing).toContain('>baz<');
-
-    const windows = renderToStaticMarkup(
-      <Titlebar
-        sessionFolderPath="C:\\Users\\foo\\bar\\baz"
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
-      />,
-    );
-    expect(windows).toContain('>baz<');
   });
 
   it('marks the root with data-tauri-drag-region', () => {

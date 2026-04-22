@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { IconButton } from '@tinker/design';
+import { getPanelTitleForPath } from '../../../renderers/file-utils.js';
 import './Titlebar.css';
 
 export type TitlebarProps = {
@@ -9,14 +10,7 @@ export type TitlebarProps = {
   onOpenMemory: () => void;
 };
 
-const basename = (path: string): string => {
-  // Trim trailing separators, then take the last segment. Support both / and \.
-  const trimmed = path.replace(/[\\/]+$/u, '');
-  const lastUnix = trimmed.lastIndexOf('/');
-  const lastWindows = trimmed.lastIndexOf('\\');
-  const lastSep = Math.max(lastUnix, lastWindows);
-  return lastSep >= 0 ? trimmed.slice(lastSep + 1) : trimmed;
-};
+const basename = (path: string): string => getPanelTitleForPath(path.replace(/[\\/]+$/u, ''));
 
 const PlusIcon = (): JSX.Element => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -47,7 +41,7 @@ export const Titlebar = ({
   const crumb = sessionFolderPath !== null ? basename(sessionFolderPath) : null;
 
   return (
-    <header className="tinker-titlebar" role="banner" data-tauri-drag-region>
+    <header className="tinker-titlebar" data-tauri-drag-region>
       <div className="tinker-titlebar__spacer" aria-hidden="true" />
 
       <div className="tinker-titlebar__center">

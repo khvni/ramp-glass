@@ -1,3 +1,4 @@
+/* Paper 9K-0 shell: 36h pad 0/16 gap 12 bg bg-panel border subtle. */
 .tinker-titlebar {
   display: flex;
   align-items: center;
@@ -10,6 +11,7 @@
   user-select: none;
 }
 
+/* macOS traffic-light reservation. OS draws stoplights over this. 68px matches Paper 9L-0. */
 .tinker-titlebar__spacer {
   width: 68px;
   flex-shrink: 0;
@@ -25,7 +27,7 @@
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
-  line-height: 16px;
+  line-height: var(--line-height-tight);
   color: var(--color-text-secondary);
   white-space: nowrap;
   overflow: hidden;
@@ -34,7 +36,6 @@
 
 .tinker-titlebar__brand {
   color: var(--color-text-primary);
-  letter-spacing: -0.005em;
 }
 
 .tinker-titlebar__sep {
@@ -47,7 +48,6 @@
   color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 40ch;
 }
 
 .tinker-titlebar__actions {
