@@ -220,6 +220,8 @@ Scope preserved for historical context + roadmap signaling. **Do not work on the
 | 12 | Workspace attention coordinator | [[12-attention-coordinator]] | Multi-pane UX polish. MVP = one pane. |
 | 13 | Vertical workspace sidebar | [[13-workspace-sidebar]] | Depends on multi-workspace UX which MVP doesn't have. |
 | 14 | Session history windowing | [[14-session-history-windowing]] | Perf feature. Revisit at >1000 messages/session. |
+
+> **[2026-04-21] User-approved D25 override:** `TIN-112` (Playbook skill schema + frontmatter spec) is in review via PR #52. Feature 02 remains post-MVP overall.
 | 15 | Connection gate (full splash + retry) | [[15-connection-gate]] | Minimal variant in M7.8 covers MVP. |
 
 ## Rejected (not coming back)
