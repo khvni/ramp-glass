@@ -1,31 +1,51 @@
+/* Paper 9K-0 shell: 36h pad 0/16 gap 12 bg bg-panel border subtle. */
 .tinker-titlebar {
   display: flex;
   align-items: center;
   height: 36px;
   flex-shrink: 0;
-  padding-inline: 16px;
-  gap: 12px;
-  background-color: var(--color-bg-panel);
+  padding: 0 var(--space-4);
+  gap: var(--space-3);
+  background: var(--color-bg-panel);
   border-bottom: 1px solid var(--color-border-subtle);
   user-select: none;
 }
 
-.tinker-titlebar__traffic-spacer {
-  display: flex;
-  align-items: center;
+/* macOS traffic-light reservation. OS draws stoplights over this. 68px matches Paper 9L-0. */
+.tinker-titlebar__spacer {
   width: 68px;
   flex-shrink: 0;
 }
 
-.tinker-titlebar__title {
+.tinker-titlebar__center {
   flex: 1 1 0;
-  text-align: center;
-  color: var(--color-text-secondary);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
   font-family: var(--font-sans);
   font-size: var(--font-size-base);
   font-weight: var(--font-weight-medium);
-  line-height: 16px;
+  line-height: var(--line-height-tight);
+  color: var(--color-text-secondary);
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tinker-titlebar__brand {
+  color: var(--color-text-primary);
+}
+
+.tinker-titlebar__sep {
+  color: var(--color-text-muted);
+}
+
+.tinker-titlebar__crumb {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  color: var(--color-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -33,37 +53,8 @@
 .tinker-titlebar__actions {
   display: flex;
   align-items: center;
-  width: 68px;
-  flex-shrink: 0;
-  gap: 10px;
   justify-content: flex-end;
-}
-
-.tinker-titlebar__action {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 0;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-xs);
-  color: var(--color-text-muted);
-  cursor: pointer;
-  transition: color var(--duration-fast) var(--ease-standard);
-}
-
-.tinker-titlebar__action:hover:not(:disabled) {
-  color: var(--color-text-secondary);
-}
-
-.tinker-titlebar__action:focus-visible {
-  outline: 2px solid var(--color-accent-ring);
-  outline-offset: 0;
-}
-
-.tinker-titlebar__action:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+  gap: var(--space-2);
+  flex-shrink: 0;
+  min-width: 68px;
 }
