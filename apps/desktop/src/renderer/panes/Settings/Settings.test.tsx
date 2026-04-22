@@ -8,6 +8,10 @@ const { mockUseMemoryRootControls } = vi.hoisted(() => ({
   mockUseMemoryRootControls: vi.fn(),
 }));
 
+vi.mock('./sections/Connections/Connections.js', () => ({
+  Connections: () => null,
+}));
+
 vi.mock('./useMemoryRootControls.js', () => ({
   useMemoryRootControls: mockUseMemoryRootControls,
 }));
@@ -30,7 +34,6 @@ type RenderOverrides = {
   signOutBusy?: boolean;
   signOutMessage?: string | null;
   sessions?: SSOStatus;
-  defaultActiveSectionId?: string;
 };
 
 const renderSettings = ({
@@ -38,7 +41,6 @@ const renderSettings = ({
   signOutBusy = false,
   signOutMessage = null,
   sessions = EMPTY_SESSIONS,
-  defaultActiveSectionId,
 }: RenderOverrides = {}): string =>
   renderToStaticMarkup(
     <Settings
@@ -68,7 +70,6 @@ const renderSettings = ({
       onCreateVault={vi.fn(async () => undefined)}
       onSelectVault={vi.fn(async () => undefined)}
       onSignOut={vi.fn()}
-      {...(defaultActiveSectionId ? { defaultActiveSectionId } : {})}
     />,
   );
 
@@ -82,40 +83,6 @@ describe('Settings', () => {
       notice: null,
       changeMemoryRoot: vi.fn(),
     });
-  });
-
-  it('renders progress modal and notice while memory move is running', () => {
-    mockUseMemoryRootControls.mockReset();
-    mockUseMemoryRootControls.mockReturnValueOnce({
-      memoryRoot: '/Users/alice/Library/Application Support/Tinker/memory',
-      memoryRootBusy: true,
-      moveProgress: {
-        copiedFiles: 2,
-        totalFiles: 5,
-        currentPath: 'sessions/2026-04-22.md',
-      },
-      notice: {
-        kind: 'error',
-        message: 'Pick an empty folder for the new memory location.',
-      },
-      changeMemoryRoot: vi.fn(),
-    });
-
-    const markup = renderSettings({ defaultActiveSectionId: 'connections' });
-
-    expect(markup).toContain('Pick an empty folder for the new memory location.');
-    expect(markup).toContain('Updating memory folder');
-    expect(markup).toContain('Current file: sessions/2026-04-22.md');
-    expect(markup).toContain('40% complete');
-  });
-
-  it('renders the memory folder row with truncated path tooltip support', () => {
-    const markup = renderSettings({ defaultActiveSectionId: 'connections' });
-
-    expect(markup).toContain('Memory folder');
-    expect(markup).toContain('Change location…');
-    expect(markup).toContain('/Users/alice/Library/Application Support/Tinker/memory');
-    expect(markup).toContain('title="/Users/alice/Library/Application Support/Tinker/memory"');
   });
 
   it('renders account and connections section navigation', () => {

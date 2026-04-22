@@ -109,12 +109,8 @@ const createLocalUser = (): User => {
   };
 };
 
-const pickCurrentSession = (sessions: SSOStatus): SSOSession | null => {
-  return sessions.google ?? sessions.github ?? sessions.microsoft;
-};
-
 const pickCurrentUserId = (sessions: SSOStatus): User['id'] => {
-  const activeSession = pickCurrentSession(sessions);
+  const activeSession = sessions.google ?? sessions.github ?? sessions.microsoft;
   return activeSession
     ? buildStoredUserId(activeSession.provider, activeSession.userId)
     : DEFAULT_USER_ID;
@@ -943,9 +939,15 @@ export const App = (): JSX.Element => {
 
     try {
       requireNativeRuntime('Signing out');
-      for (const provider of connected) {
-        await invoke('auth_sign_out', { provider });
-      }
+
+      const results = await Promise.allSettled(
+        connected.map((provider) => invoke('auth_sign_out', { provider })),
+      );
+      const failures = results
+        .map((result, index) => ({ result, provider: connected[index]! }))
+        .filter((entry): entry is { result: PromiseRejectedResult; provider: AuthProvider } =>
+          entry.result.status === 'rejected',
+        );
 
       if (connected.includes('github')) {
         await refreshWorkspaceConnection();
@@ -963,6 +965,11 @@ export const App = (): JSX.Element => {
       }
 
       setProviderMessages(EMPTY_PROVIDER_MESSAGES);
+
+      if (failures.length > 0) {
+        const providerNames = failures.map((entry) => providerDisplayName(entry.provider)).join(', ');
+        setSignOutMessage(`Sign-out partially failed for: ${providerNames}.`);
+      }
     } catch (error) {
       setSignOutMessage(error instanceof Error ? error.message : String(error));
     } finally {
@@ -1018,7 +1025,9 @@ export const App = (): JSX.Element => {
   const signInGateVisible = nativeRuntime && !hasSignedIn;
   const workspaceAvailable = nativeRuntime && state.onboarded && hasSignedIn;
   const currentUserId = pickCurrentUserId(state.sessions);
-  const currentAccountUser = toAccountUser(pickCurrentSession(state.sessions));
+  const currentAccountUser = toAccountUser(
+    state.sessions.google ?? state.sessions.github ?? state.sessions.microsoft,
+  );
 
   const settingsConnectionValue: SettingsConnectionValue = {
     modelConnected: state.modelConnected,

@@ -33,7 +33,6 @@ export const Account = ({
     return (
       <div className="tk-account">
         <header className="tk-account__header">
-          <p className="tk-account__eyebrow">Account</p>
           <h2 className="tk-account__title">Not signed in</h2>
           <p className="tk-account__lede">
             Sign in from the welcome screen to link a provider to this machine.
@@ -48,7 +47,6 @@ export const Account = ({
   return (
     <div className="tk-account">
       <header className="tk-account__header">
-        <p className="tk-account__eyebrow">Account</p>
         <h2 className="tk-account__title">Signed in</h2>
         <p className="tk-account__lede">
           Sign out to clear the refresh token from the OS keychain and return to the sign-in screen.

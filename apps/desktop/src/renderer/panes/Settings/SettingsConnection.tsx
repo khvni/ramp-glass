@@ -46,12 +46,8 @@ export const SettingsConnectionProvider = ({
   <SettingsConnectionContext.Provider value={value}>{children}</SettingsConnectionContext.Provider>
 );
 
-export const useSettingsConnection = (): SettingsConnectionValue | null => {
-  return useContext(SettingsConnectionContext);
-};
-
 export const ConnectedSettings = (): JSX.Element => {
-  const value = useSettingsConnection();
+  const value = useContext(SettingsConnectionContext);
 
   if (!value) {
     return (
