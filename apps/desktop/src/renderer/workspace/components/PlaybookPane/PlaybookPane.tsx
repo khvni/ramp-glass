@@ -18,7 +18,7 @@ import type { Skill, SkillGitConfig, SkillStore } from '@tinker/shared-types';
 import { isGitAvailable, syncSkills } from '@tinker/memory';
 import { usePlaybookPaneRuntime } from '../../playbook-pane-runtime.js';
 import { runSkillAutoSync } from '../../skill-auto-sync.js';
-import { PlaybookSettingsModal } from './PlaybookSettingsModal.js';
+import { PlaybookSettingsModal } from './components/PlaybookSettingsModal/index.js';
 import {
   derivePlaybookRoleOptions,
   matchesPlaybookFilter,
