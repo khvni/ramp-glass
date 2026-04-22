@@ -257,6 +257,14 @@ Detailed Okta docs: https://developer.okta.com/docs/guides/
 
 ---
 
+## Alternative: SAML (ADFS, Shibboleth, legacy SAML apps)
+
+If your IdP is SAML-only, or IT security mandates SAML for desktop apps, the integration shape is different: you **replace the Better Auth sidecar entirely** rather than layering a `FederationAdapter` on top. SAML assertions are XML artifacts, not bearer tokens, and can't be exchanged for downstream service credentials.
+
+See the dedicated [SAML provider adapter guide](./saml-adapter.md) for library choice (`@node-saml/node-saml`), the sign-in flow, assertion validation checklist, and key-storage rules.
+
+---
+
 ## Alternative: Google Workspace
 
 Google Workspace uses OAuth 2.0 with admin-consented scopes via the Workspace Admin Console:
