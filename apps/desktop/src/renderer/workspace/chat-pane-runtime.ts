@@ -1,5 +1,5 @@
 import { createContext, useContext, type ComponentProps } from 'react';
-import { Chat } from '../panes/Chat/index.js';
+import type { Chat } from '../panes/Chat/index.js';
 
 export type ChatPaneRuntime = ComponentProps<typeof Chat>;
 
