@@ -35,6 +35,7 @@ const _bogusKind: TinkerPaneKind = 'not-a-pane';
 
 const _chatData: TinkerPaneData = { kind: 'chat' };
 const _chatDataWithSession: TinkerPaneData = { kind: 'chat', sessionId: 'session-123' };
+const _chatDataWithFolder: TinkerPaneData = { kind: 'chat', folderPath: '/tmp', memorySubdir: '/tmp/m' };
 const _fileData: TinkerPaneData = { kind: 'file', path: '/tmp/a.md', mime: 'text/markdown' };
 const _settingsData: TinkerPaneData = { kind: 'settings' };
 const _memoryData: TinkerPaneData = { kind: 'memory' };
@@ -54,7 +55,7 @@ const _badFilePathType: TinkerPaneData = { kind: 'file', path: 123, mime: 'text/
 const _badKindData: TinkerPaneData = { kind: 'nope' };
 
 // @ts-expect-error — `chat` does not carry arbitrary extra props
-const _chatWithExtras: TinkerPaneData = { kind: 'chat', path: '/x' };
+const _chatWithExtras: TinkerPaneData = { kind: 'chat', unknownProp: '/x' };
 
 // ────────────────────────────────────────────────────────────────────────────
 // Discriminated narrowing: `data.kind` checks make payload fields accessible.
