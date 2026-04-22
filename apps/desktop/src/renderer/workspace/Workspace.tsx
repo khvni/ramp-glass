@@ -16,6 +16,7 @@ import {
   type MemoryStore,
   type ScheduledJobStore,
   type SkillStore,
+  type SSOSession,
   type SSOStatus,
   type TinkerPaneData,
   type TinkerPaneKind,
@@ -32,6 +33,11 @@ import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
 import { getRenderer } from './pane-registry.js';
+import {
+  SettingsPaneRuntimeContext,
+  pickActiveSession,
+  type SettingsPaneRuntime,
+} from './settings-pane-runtime.js';
 
 const LAYOUT_SAVE_DEBOUNCE_MS = 300;
 const DESKTOP_WORKSPACE_ATTENTION_ID = 'desktop-workspace';
@@ -60,6 +66,8 @@ type WorkspaceProps = {
   activeSkillsRevision: number;
   memorySweepState: MemoryRunState | null;
   memorySweepBusy: boolean;
+  sessionFolderBusy: boolean;
+  onSelectSessionFolder(): Promise<void>;
   onConnectModel(): Promise<void>;
   onDisconnectModel(): Promise<void>;
   onConnectGoogle(): Promise<void>;
@@ -107,8 +115,20 @@ export const Workspace = ({
   skillStore,
   modelConnected,
   opencode,
+  sessions,
   vaultPath,
   activeSkillsRevision,
+  sessionFolderBusy,
+  onSelectSessionFolder,
+  googleAuthBusy,
+  googleAuthMessage,
+  githubAuthBusy,
+  githubAuthMessage,
+  microsoftAuthBusy,
+  microsoftAuthMessage,
+  onDisconnectGoogle,
+  onDisconnectGithub,
+  onDisconnectMicrosoft,
   onMemoryCommitted,
 }: WorkspaceProps): JSX.Element => {
   const workspaceStoreRef = useRef<WorkspaceStore<TinkerPaneData> | null>(null);
@@ -324,6 +344,8 @@ export const Workspace = ({
       sessionFolderPath: vaultPath,
       vaultPath,
       activeSkillsRevision,
+      sessionFolderBusy,
+      onSelectSessionFolder,
       onFileWritten: handleAgentFileWritten,
       onOpenFileLink: openFileInWorkspace,
       onOpenNewChat: openNewChatPane,
@@ -335,13 +357,56 @@ export const Workspace = ({
       handleAgentFileWritten,
       modelConnected,
       onMemoryCommitted,
+      onSelectSessionFolder,
       openFileInWorkspace,
       openNewChatPane,
       opencode,
+      sessionFolderBusy,
       vaultPath,
       skillStore,
     ],
   );
+
+  const settingsPaneRuntime = useMemo<SettingsPaneRuntime>(() => {
+    const activeSession = pickActiveSession(sessions);
+
+    const busyByProvider: Record<SSOSession['provider'], boolean> = {
+      google: googleAuthBusy,
+      github: githubAuthBusy,
+      microsoft: microsoftAuthBusy,
+    };
+    const messageByProvider: Record<SSOSession['provider'], string | null> = {
+      google: googleAuthMessage,
+      github: githubAuthMessage,
+      microsoft: microsoftAuthMessage,
+    };
+    const disconnectByProvider: Record<SSOSession['provider'], () => Promise<void>> = {
+      google: onDisconnectGoogle,
+      github: onDisconnectGithub,
+      microsoft: onDisconnectMicrosoft,
+    };
+
+    return {
+      sessions,
+      activeSession,
+      signOutBusy: activeSession ? busyByProvider[activeSession.provider] : false,
+      signOutMessage: activeSession ? messageByProvider[activeSession.provider] : null,
+      onSignOut: async (session: SSOSession) => {
+        await disconnectByProvider[session.provider]();
+      },
+    };
+  }, [
+    sessions,
+    googleAuthBusy,
+    googleAuthMessage,
+    githubAuthBusy,
+    githubAuthMessage,
+    microsoftAuthBusy,
+    microsoftAuthMessage,
+    onDisconnectGoogle,
+    onDisconnectGithub,
+    onDisconnectMicrosoft,
+  ]);
 
   return (
     <main className="tinker-workspace-shell">
@@ -353,15 +418,17 @@ export const Workspace = ({
       />
 
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
-        <PanesWorkspace
-          store={workspaceStore}
-          registry={registry}
-          attention={{
-            store: attentionStore,
-            workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
-          }}
-          ariaLabel="Tinker workspace"
-        />
+        <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
+          <PanesWorkspace
+            store={workspaceStore}
+            registry={registry}
+            attention={{
+              store: attentionStore,
+              workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+            }}
+            ariaLabel="Tinker workspace"
+          />
+        </SettingsPaneRuntimeContext.Provider>
       </ChatPaneRuntimeContext.Provider>
     </main>
   );

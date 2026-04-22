@@ -20,6 +20,7 @@ import {
   EmptyState,
   IconButton,
   ModelPicker,
+  SelectFolderButton,
   Textarea,
 } from '@tinker/design';
 import {
@@ -74,6 +75,8 @@ type ChatProps = {
   sessionFolderPath: string | null;
   vaultPath: string | null;
   activeSkillsRevision: number;
+  sessionFolderBusy?: boolean;
+  onSelectSessionFolder?: () => Promise<void> | void;
   onFileWritten?: (path: string) => void;
   onOpenFileLink?: (path: string) => void;
   onOpenNewChat?: () => void;
@@ -219,6 +222,8 @@ export const Chat = ({
   sessionFolderPath,
   vaultPath,
   activeSkillsRevision,
+  sessionFolderBusy = false,
+  onSelectSessionFolder,
   onFileWritten,
   onOpenFileLink,
   onOpenNewChat,
@@ -228,7 +233,13 @@ export const Chat = ({
   modeToggleSlot,
   reasoningPickerSlot,
 }: ChatProps): JSX.Element => {
-  const readyStatus = modelConnected ? 'OpenCode is ready.' : 'Connect an AI model in Settings to start chatting.';
+  const folderPickerAvailable = typeof onSelectSessionFolder === 'function';
+  const awaitingFolder = !sessionFolderPath && folderPickerAvailable;
+  const readyStatus = awaitingFolder
+    ? 'Pick a folder to start a session.'
+    : modelConnected
+      ? 'OpenCode is ready.'
+      : 'Connect an AI model in Settings to start chatting.';
   const client = useMemo(
     () => createWorkspaceClient(opencode, getOpencodeDirectory(vaultPath)),
     [opencode.baseUrl, opencode.password, opencode.username, vaultPath],
@@ -264,10 +275,10 @@ export const Chat = ({
   const lastTailSignatureRef = useRef('empty');
   const selectedModel = useMemo(() => findModelOptionById(modelOptions, selectedModelId), [modelOptions, selectedModelId]);
   const mcpConnectionGate = useMcpConnectionGate({
-    enabled: !hydratingHistory && requiresMcpConnectionGate,
+    enabled: !hydratingHistory && !awaitingFolder && requiresMcpConnectionGate,
     loadStatus: () => client.mcp.status(),
   });
-  const composerBlocked = busy || hydratingHistory || !modelConnected || mcpConnectionGate.blocked;
+  const composerBlocked = busy || hydratingHistory || awaitingFolder || !modelConnected || mcpConnectionGate.blocked;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -389,7 +400,7 @@ export const Chat = ({
 
     if (!sessionFolderPath) {
       setHydratingHistory(false);
-      setRequiresMcpConnectionGate(true);
+      setRequiresMcpConnectionGate(false);
       setStatus(readyStatus);
       return () => {
         cancelled = true;
@@ -1020,6 +1031,14 @@ export const Chat = ({
             disabled={busy || hydratingHistory}
             emptyLabel="No models available in OpenCode."
           />
+          {folderPickerAvailable ? (
+            <SelectFolderButton
+              folderPath={sessionFolderPath}
+              loading={sessionFolderBusy}
+              disabled={busy || hydratingHistory}
+              onClick={() => void onSelectSessionFolder?.()}
+            />
+          ) : null}
           <span className="tinker-chat-legend" title="Toggle thinking + tool disclosures (Alt+T)">
             ⌥T thinking
           </span>
@@ -1049,7 +1068,31 @@ export const Chat = ({
           tabIndex={-1}
         >
           {messages.length === 0 ? (
-            mcpConnectionGate.visible ? (
+            awaitingFolder ? (
+              <EmptyState
+                title="Select a folder to start"
+                description="The agent works inside a local folder. Use the “Select folder” button in the header to pick one."
+                action={
+                  <Button
+                    variant="primary"
+                    onClick={() => void onSelectSessionFolder?.()}
+                    disabled={sessionFolderBusy}
+                  >
+                    {sessionFolderBusy ? 'Starting…' : 'Select folder'}
+                  </Button>
+                }
+                icon={
+                  <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path
+                      d="M4 6.5C4 5.12 5.12 4 6.5 4h11C18.88 4 20 5.12 20 6.5v8c0 1.38-1.12 2.5-2.5 2.5H10l-4 3v-3H6.5C5.12 17 4 15.88 4 14.5v-8Z"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                }
+              />
+            ) : mcpConnectionGate.visible ? (
               <McpConnectionGate
                 services={mcpConnectionGate.services}
                 errorMessage={mcpConnectionGate.errorMessage}
