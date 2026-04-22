@@ -9,7 +9,6 @@ import {
   Workspace as PanesWorkspace,
 } from '@tinker/panes';
 import '@tinker/panes/styles.css';
-import { Badge, Button } from '@tinker/design';
 import type { MemoryRunState } from '@tinker/memory';
 import {
   createDefaultWorkspacePreferences,
@@ -25,12 +24,12 @@ import {
 } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
-import { IntegrationsStrip } from '../components/IntegrationsStrip.js';
 import type { MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
 import { SettingsPane } from './components/SettingsPane/index.js';
+import { Titlebar } from './components/Titlebar/index.js';
 import { openNewChatPanel } from './chat-panels.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultWorkspaceState } from './layout.default.js';
@@ -132,7 +131,6 @@ export const Workspace = ({
   microsoftAuthMessage,
   opencode,
   sessions,
-  mcpStatus,
   vaultPath,
   activeSkillsRevision,
   onContinueAsGuest,
@@ -420,38 +418,12 @@ export const Workspace = ({
 
   return (
     <main className="tinker-workspace-shell">
-      <header className="tinker-header">
-        <div>
-          <p className="tinker-eyebrow">Workspace</p>
-          <h1>Tinker</h1>
-        </div>
-        <div className="tinker-inline-actions">
-          <Button variant="secondary" size="s" onClick={openNewChatPane}>
-            New chat
-          </Button>
-          <Button variant="secondary" size="s" onClick={openMemoryPane}>
-            Memory
-          </Button>
-          <Button variant="secondary" size="s" onClick={openSettingsPane}>
-            Settings
-          </Button>
-        </div>
-        <div className="tinker-header-meta">
-          <Badge variant={modelConnected ? 'success' : 'default'} size="small">
-            {modelConnected ? 'Model connected' : 'Model disconnected'}
-          </Badge>
-          <Badge variant="default" size="small">
-            {currentUserEmail ?? currentUserName}
-          </Badge>
-          <Badge variant="default" size="small">
-            {vaultPath ?? 'No vault selected'}
-          </Badge>
-        </div>
-      </header>
-
-      <div className="tinker-workspace-integrations">
-        <IntegrationsStrip compact mcpStatus={mcpStatus} sessions={sessions} />
-      </div>
+      <Titlebar
+        sessionFolderPath={vaultPath}
+        onNewSession={openNewChatPane}
+        onOpenMemory={openMemoryPane}
+        onOpenSettings={openSettingsPane}
+      />
 
       <ChatPaneRuntimeContext.Provider value={chatPaneRuntime}>
         <PanesWorkspace

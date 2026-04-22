@@ -61,6 +61,11 @@ type CurrentUserState = {
   avatarUrl: string | null;
 };
 
+type OpencodeRestartConfig = {
+  userId: User['id'];
+  memorySubdir: string;
+};
+
 const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
 const MODEL_CONNECT_TIMEOUT_MS = 180_000;
 const VAULT_REINDEX_DEBOUNCE_MS = 300;
@@ -133,6 +138,14 @@ const resolveCurrentUser = (sessions: SSOStatus): CurrentUserState => {
     displayName: activeSession.displayName,
     email: activeSession.email,
     avatarUrl: activeSession.avatarUrl ?? null,
+  };
+};
+
+const resolveOpencodeRestartConfig = async (sessions: SSOStatus): Promise<OpencodeRestartConfig> => {
+  const userId = pickCurrentUserId(sessions);
+  return {
+    userId,
+    memorySubdir: await getActiveMemoryPath(userId),
   };
 };
 
@@ -317,6 +330,17 @@ const disconnectModelProvider = async (connection: OpencodeConnection, vaultPath
   }
 };
 
+const restartWorkspaceOpencode = async (
+  vaultPath: string | null,
+  sessions: SSOStatus,
+): Promise<{ opencode: OpencodeConnection; modelConnected: boolean }> => {
+  const restartConfig = await resolveOpencodeRestartConfig(sessions);
+  const opencode = await invoke<OpencodeConnection>('restart_opencode', restartConfig);
+  await syncConnectorState(opencode, vaultPath, sessions);
+  const modelConnected = await probeModelConnection(opencode, vaultPath);
+  return { opencode, modelConnected };
+};
+
 export const App = (): JSX.Element => {
   const nativeRuntime = useMemo(() => isTauriRuntime(), []);
   const memoryStore = useMemo(() => createMemoryStore(), []);
@@ -388,7 +412,7 @@ export const App = (): JSX.Element => {
           return;
         }
 
-        const [opencode, sessions] = await Promise.all([invoke<OpencodeConnection>('get_opencode_connection'), readAuthStatus()]);
+        const sessions = await readAuthStatus();
         await syncStoredUsers(sessions);
         await syncCurrentUserMemoryPath(sessions, { emit: false });
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
@@ -403,10 +427,7 @@ export const App = (): JSX.Element => {
           vaultRevision = 1;
         }
 
-        await syncConnectorState(opencode, vaultPath, sessions).catch((error) => {
-          console.warn('Could not restore connector state on boot.', error);
-        });
-        const modelConnected = await probeModelConnection(opencode, vaultPath);
+        const { opencode, modelConnected } = await restartWorkspaceOpencode(vaultPath, sessions);
 
         if (!active) {
           return;
@@ -726,7 +747,10 @@ export const App = (): JSX.Element => {
     );
   }
 
-  const reloadConnectionState = async (connection: OpencodeConnection, vaultPath: string | null) => {
+  const reloadConnectionState = async (
+    connection: OpencodeConnection,
+    vaultPath: string | null,
+  ): Promise<{ sessions: SSOStatus; modelConnected: boolean }> => {
     const sessions = await readAuthStatus();
     await syncConnectorState(connection, vaultPath, sessions);
     const modelConnected = await probeModelConnection(connection, vaultPath);
@@ -734,19 +758,19 @@ export const App = (): JSX.Element => {
     return { sessions, modelConnected };
   };
 
-  const refreshWorkspaceConnection = async (): Promise<void> => {
+  const refreshWorkspaceConnection = async (sessions?: SSOStatus): Promise<void> => {
     requireNativeRuntime('Restarting OpenCode');
-    const opencode = await invoke<OpencodeConnection>('restart_opencode');
-    const nextState = await reloadConnectionState(opencode, state.vaultPath);
-    await syncCurrentUserMemoryPath(nextState.sessions);
+    const nextSessions = sessions ?? (await readAuthStatus());
+    const nextState = await restartWorkspaceOpencode(state.vaultPath, nextSessions);
+    await syncCurrentUserMemoryPath(nextSessions);
 
     setState((current) =>
       current.status !== 'ready'
         ? current
         : {
             ...current,
-            opencode,
-            sessions: nextState.sessions,
+            opencode: nextState.opencode,
+            sessions: nextSessions,
             mcpStatus: {
               ...current.mcpStatus,
               [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
@@ -883,8 +907,9 @@ export const App = (): JSX.Element => {
       await upsertUser(toStoredUser(session));
       await getActiveMemoryPath(buildStoredUserId(session.provider, session.userId));
 
+      const nextSessions = await readAuthStatus();
       if (providerNeedsWorkspaceRefresh(provider)) {
-        await refreshWorkspaceConnection();
+        await refreshWorkspaceConnection(nextSessions);
       } else {
         const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
         await syncCurrentUserMemoryPath(nextState.sessions);

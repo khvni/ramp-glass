@@ -12,9 +12,7 @@ describe('registerWorkspacePaneRenderers', () => {
     registerWorkspacePaneRenderers();
     expect(() => registerWorkspacePaneRenderers()).not.toThrow();
 
-    const settingsMarkup = renderToStaticMarkup(
-      <>{getRenderer('settings')({ kind: 'settings' })}</>,
-    );
+    const settingsMarkup = renderToStaticMarkup(<>{getRenderer('settings')({ kind: 'settings' })}</>);
     const memoryMarkup = renderToStaticMarkup(<>{getRenderer('memory')({ kind: 'memory' })}</>);
 
     expect(settingsMarkup).toBe('');
