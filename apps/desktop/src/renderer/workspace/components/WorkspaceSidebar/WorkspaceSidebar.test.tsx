@@ -12,7 +12,7 @@ import { WorkspaceSidebar } from './WorkspaceSidebar.js';
 const noop = (): void => {};
 
 describe('WorkspaceSidebar', () => {
-  it('renders the rail with user initial and core nav labels', () => {
+  it('renders the rail with user initial and core MVP nav labels', () => {
     const markup = renderToStaticMarkup(
       <WorkspaceSidebar
         userInitial="K"
@@ -20,20 +20,18 @@ describe('WorkspaceSidebar', () => {
         onOpenMemory={noop}
         onOpenSettings={noop}
         onOpenAccount={noop}
+        onOpenConnections={noop}
       />,
     );
 
     expect(markup).toContain('aria-label="Workspace navigation"');
-    expect(markup).toContain('aria-label="Workspaces"');
-    expect(markup).toContain('aria-label="Chats"');
-    expect(markup).toContain('aria-label="Memory"');
-    expect(markup).toContain('aria-label="Settings"');
-    expect(markup).toContain('aria-label="Account"');
-    expect(markup).toContain('aria-current="page"');
+    for (const label of ['Chats', 'Memory', 'Connections', 'New tab', 'Settings', 'Account']) {
+      expect(markup).toContain(`aria-label="${label}"`);
+    }
     expect(markup).toContain('>K<');
   });
 
-  it('disables deferred nav items', () => {
+  it('hides deferred post-MVP rail items', () => {
     const markup = renderToStaticMarkup(
       <WorkspaceSidebar
         userInitial="T"
@@ -41,39 +39,14 @@ describe('WorkspaceSidebar', () => {
         onOpenMemory={noop}
         onOpenSettings={noop}
         onOpenAccount={noop}
+        onOpenConnections={noop}
       />,
     );
 
-    const deferred = ['Explorer', 'Skills', 'Agents', 'Connections', 'Playbook', 'Analytics'];
-    for (const label of deferred) {
-      const pattern = new RegExp(`<button[^>]*aria-label="${label}"[^>]*disabled`);
-      expect(markup).toMatch(pattern);
+    const hidden = ['Workspaces', 'Explorer', 'Skills', 'Agents', 'Playbook', 'Analytics'];
+    for (const label of hidden) {
+      expect(markup).not.toContain(`aria-label="${label}"`);
     }
-  });
-
-  it('shows the playbook badge when showPlaybookBadge is true', () => {
-    const withBadge = renderToStaticMarkup(
-      <WorkspaceSidebar
-        userInitial="K"
-        showPlaybookBadge
-        onOpenChat={noop}
-        onOpenMemory={noop}
-        onOpenSettings={noop}
-        onOpenAccount={noop}
-      />,
-    );
-    const withoutBadge = renderToStaticMarkup(
-      <WorkspaceSidebar
-        userInitial="K"
-        onOpenChat={noop}
-        onOpenMemory={noop}
-        onOpenSettings={noop}
-        onOpenAccount={noop}
-      />,
-    );
-
-    expect(withBadge).toContain('tinker-workspace-sidebar__item-dot');
-    expect(withoutBadge).not.toContain('tinker-workspace-sidebar__item-dot');
   });
 
   it('fires callbacks when rail items are clicked', async () => {
@@ -84,6 +57,7 @@ describe('WorkspaceSidebar', () => {
     const onOpenMemory = vi.fn();
     const onOpenSettings = vi.fn();
     const onOpenAccount = vi.fn();
+    const onOpenConnections = vi.fn();
 
     await act(async () => {
       root.render(
@@ -93,6 +67,7 @@ describe('WorkspaceSidebar', () => {
           onOpenMemory={onOpenMemory}
           onOpenSettings={onOpenSettings}
           onOpenAccount={onOpenAccount}
+          onOpenConnections={onOpenConnections}
         />,
       );
     });
@@ -107,12 +82,14 @@ describe('WorkspaceSidebar', () => {
 
     click('Chats');
     click('Memory');
+    click('Connections');
+    click('New tab');
     click('Settings');
     click('Account');
-    click('New tab');
 
     expect(onOpenChat).toHaveBeenCalledTimes(2);
     expect(onOpenMemory).toHaveBeenCalledTimes(1);
+    expect(onOpenConnections).toHaveBeenCalledTimes(1);
     expect(onOpenSettings).toHaveBeenCalledTimes(1);
     expect(onOpenAccount).toHaveBeenCalledTimes(1);
 

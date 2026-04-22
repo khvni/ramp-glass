@@ -14,9 +14,10 @@ describe('<Titlebar>', () => {
     const markup = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath={null}
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
+        isLeftRailVisible
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
       />,
     );
     expect(markup).toContain('Tinker');
@@ -26,9 +27,10 @@ describe('<Titlebar>', () => {
     const markup = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath="/Users/foo/bar/baz"
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
+        isLeftRailVisible
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
       />,
     );
     expect(markup).toContain('tinker-titlebar__crumb');
@@ -39,9 +41,10 @@ describe('<Titlebar>', () => {
     const markup = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath={null}
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
+        isLeftRailVisible
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
       />,
     );
     expect(markup).not.toContain('tinker-titlebar__crumb');
@@ -52,9 +55,10 @@ describe('<Titlebar>', () => {
     const withTrailing = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath="/Users/foo/bar/baz/"
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
+        isLeftRailVisible
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
       />,
     );
     expect(withTrailing).toContain('>baz<');
@@ -64,9 +68,10 @@ describe('<Titlebar>', () => {
     const markup = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath={null}
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
+        isLeftRailVisible
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
       />,
     );
     expect(markup).toMatch(/<header[^>]*class="tinker-titlebar"[^>]*data-tauri-drag-region/);
@@ -76,13 +81,33 @@ describe('<Titlebar>', () => {
     const markup = renderToStaticMarkup(
       <Titlebar
         sessionFolderPath={null}
-        onNewSession={() => undefined}
-        onOpenMemory={() => undefined}
-        onOpenSettings={() => undefined}
+        isLeftRailVisible
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
       />,
     );
     expect(markup).toMatch(
       /<div[^>]*class="tinker-titlebar__actions"[^>]*data-tauri-drag-region="false"/,
+    );
+  });
+
+  it('reflects rail visibility via aria-pressed on each toggle', () => {
+    const collapsed = renderToStaticMarkup(
+      <Titlebar
+        sessionFolderPath={null}
+        isLeftRailVisible={false}
+        isRightInspectorVisible
+        onToggleLeftRail={() => undefined}
+        onToggleRightInspector={() => undefined}
+      />,
+    );
+    // Left rail hidden → aria-pressed="true"; right visible → aria-pressed="false".
+    expect(collapsed).toMatch(
+      /<button[^>]*aria-label="Toggle left sidebar"[^>]*aria-pressed="true"/,
+    );
+    expect(collapsed).toMatch(
+      /<button[^>]*aria-label="Toggle right inspector"[^>]*aria-pressed="false"/,
     );
   });
 
@@ -102,17 +127,17 @@ describe('<Titlebar>', () => {
     });
 
     const renderTitlebar = (handlers: {
-      onNewSession?: () => void;
-      onOpenMemory?: () => void;
-      onOpenSettings?: () => void;
+      onToggleLeftRail?: () => void;
+      onToggleRightInspector?: () => void;
     }): void => {
       act(() => {
         root.render(
           <Titlebar
             sessionFolderPath={null}
-            onNewSession={handlers.onNewSession ?? (() => undefined)}
-            onOpenMemory={handlers.onOpenMemory ?? (() => undefined)}
-            onOpenSettings={handlers.onOpenSettings ?? (() => undefined)}
+            isLeftRailVisible
+            isRightInspectorVisible
+            onToggleLeftRail={handlers.onToggleLeftRail ?? (() => undefined)}
+            onToggleRightInspector={handlers.onToggleRightInspector ?? (() => undefined)}
           />,
         );
       });
@@ -128,24 +153,17 @@ describe('<Titlebar>', () => {
       }
     };
 
-    it('invokes onNewSession when the new-chat button is clicked', () => {
+    it('invokes onToggleLeftRail when the left pane toggle is clicked', () => {
       const spy = vi.fn();
-      renderTitlebar({ onNewSession: spy });
-      clickByLabel('New chat');
+      renderTitlebar({ onToggleLeftRail: spy });
+      clickByLabel('Toggle left sidebar');
       expect(spy).toHaveBeenCalledTimes(1);
     });
 
-    it('invokes onOpenMemory when the memory button is clicked', () => {
+    it('invokes onToggleRightInspector when the right inspector toggle is clicked', () => {
       const spy = vi.fn();
-      renderTitlebar({ onOpenMemory: spy });
-      clickByLabel('Memory');
-      expect(spy).toHaveBeenCalledTimes(1);
-    });
-
-    it('invokes onOpenSettings when the settings button is clicked', () => {
-      const spy = vi.fn();
-      renderTitlebar({ onOpenSettings: spy });
-      clickByLabel('Settings');
+      renderTitlebar({ onToggleRightInspector: spy });
+      clickByLabel('Toggle right inspector');
       expect(spy).toHaveBeenCalledTimes(1);
     });
   });
