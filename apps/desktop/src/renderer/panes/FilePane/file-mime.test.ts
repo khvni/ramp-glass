@@ -8,6 +8,10 @@ describe('getFilePaneMimeFromExtension', () => {
     expect(getFilePaneMimeFromExtension('/tmp/note.md')).toBe('text/markdown');
     expect(getFilePaneMimeFromExtension('/tmp/table.csv')).toBe('text/csv');
     expect(getFilePaneMimeFromExtension('/tmp/report.pdf')).toBe('application/pdf');
+    expect(getFilePaneMimeFromExtension('/tmp/deck.ppt')).toBe('application/vnd.ms-powerpoint');
+    expect(getFilePaneMimeFromExtension('/tmp/deck.pptx')).toBe(
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
   });
 });
 

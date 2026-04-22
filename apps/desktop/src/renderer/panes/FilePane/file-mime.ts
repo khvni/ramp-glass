@@ -101,6 +101,8 @@ export const getFilePaneMimeFromExtension = (absolutePath: string): string => {
       return 'text/javascript';
     case '.pdf':
       return 'application/pdf';
+    case '.ppt':
+      return 'application/vnd.ms-powerpoint';
     case '.pptx':
       return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
     case '.ts':

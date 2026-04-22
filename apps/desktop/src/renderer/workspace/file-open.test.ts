@@ -102,4 +102,20 @@ describe('openWorkspaceFile', () => {
       mime: MISSING_FILE_MIME,
     });
   });
+
+  it('opens pptx files with the presentation MIME so FilePane can show the fallback renderer', async () => {
+    const store = createWorkspaceStore<TinkerPaneData>();
+
+    await openWorkspaceFile(
+      store,
+      '/vault/deck.pptx',
+      async () => 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    );
+
+    expect(store.getState().tabs[0]?.panes[getPanelIdForPath('file', '/vault/deck.pptx')]?.data).toEqual({
+      kind: 'file',
+      path: '/vault/deck.pptx',
+      mime: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    });
+  });
 });
