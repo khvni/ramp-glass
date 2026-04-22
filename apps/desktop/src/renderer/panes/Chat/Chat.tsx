@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type JSX } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+  type JSX,
+  type KeyboardEvent,
+} from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
 import { Badge, Button, ModelPicker, Textarea } from '@tinker/design';
 import { injectActiveSkills, injectMemoryContext, streamSessionEvents } from '@tinker/bridge';
@@ -15,11 +25,17 @@ import {
   type WorkspaceModelOption,
 } from '../../opencode.js';
 import { useDockviewApi } from '../../workspace/DockviewContext.js';
+import { ChatMessage } from '../ChatMessage/index.js';
+import {
+  calculateComposerHeight,
+  shouldAbortComposerKey,
+  shouldSubmitComposerKey,
+} from '../chat-composer.js';
 import { useSessionHistoryWindow } from '../useSessionHistoryWindow.js';
 import { messageTextFromBlocks, MessageBlock, partToBlock, type Block } from './Block.js';
 import { draftReducer } from './draftReducer.js';
 
-type ChatMessage = {
+type ChatMessageRecord = {
   id: string;
   role: 'user' | 'assistant' | 'system';
   blocks: Block[];
@@ -48,7 +64,7 @@ const deriveSkillDescription = (text: string): string => {
   return cleaned.length > 160 ? `${cleaned.slice(0, 157)}…` : cleaned;
 };
 
-const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): ChatMessage[] => {
+const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): ChatMessageRecord[] => {
   return messages.map(({ info, parts }) => {
     const blocks: Block[] = [];
     for (const part of parts) {
@@ -72,8 +88,8 @@ const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): Chat
   });
 };
 
-const mergeHistoryMessages = (olderMessages: readonly ChatMessage[], newerMessages: readonly ChatMessage[]): ChatMessage[] => {
-  const merged = new Map<string, ChatMessage>();
+const mergeHistoryMessages = (olderMessages: readonly ChatMessageRecord[], newerMessages: readonly ChatMessageRecord[]): ChatMessageRecord[] => {
+  const merged = new Map<string, ChatMessageRecord>();
 
   for (const message of olderMessages) {
     merged.set(message.id, message);
@@ -84,6 +100,37 @@ const mergeHistoryMessages = (olderMessages: readonly ChatMessage[], newerMessag
   }
 
   return [...merged.values()].sort((left, right) => left.id.localeCompare(right.id));
+};
+
+const readPixelValue = (value: string, fallback = 0): number => {
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) ? parsed : fallback;
+};
+
+const syncComposerHeight = (textarea: HTMLTextAreaElement | null): void => {
+  if (!textarea || typeof window === 'undefined') {
+    return;
+  }
+
+  const styles = window.getComputedStyle(textarea);
+  const fontSize = readPixelValue(styles.fontSize, 16);
+  const lineHeight =
+    styles.lineHeight === 'normal' ? fontSize * 1.5 : readPixelValue(styles.lineHeight, fontSize * 1.5);
+
+  textarea.style.height = 'auto';
+
+  const { height, maxHeight, overflowY } = calculateComposerHeight({
+    scrollHeight: textarea.scrollHeight,
+    lineHeight,
+    paddingTop: readPixelValue(styles.paddingTop),
+    paddingBottom: readPixelValue(styles.paddingBottom),
+    borderTopWidth: readPixelValue(styles.borderTopWidth),
+    borderBottomWidth: readPixelValue(styles.borderBottomWidth),
+  });
+
+  textarea.style.maxHeight = `${maxHeight}px`;
+  textarea.style.height = `${height}px`;
+  textarea.style.overflowY = overflowY;
 };
 
 export const Chat = ({
@@ -101,7 +148,7 @@ export const Chat = ({
     [opencode.baseUrl, opencode.password, opencode.username, vaultPath],
   );
   const dockviewApi = useDockviewApi();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessageRecord[]>([]);
   const [historyCursor, setHistoryCursor] = useState<string | null>(null);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [draftBlocks, dispatchDraft] = useReducer(draftReducer, []);
@@ -118,6 +165,9 @@ export const Chat = ({
   const sessionIDRef = useRef<string | null>(null);
   const memoryCommitRef = useRef<Promise<void>>(Promise.resolve());
   const chatLogRef = useRef<HTMLDivElement | null>(null);
+  const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const abortRequestedRef = useRef(false);
+  const draftBlocksRef = useRef<Block[]>([]);
   const selectedModel = useMemo(() => findModelOptionById(modelOptions, selectedModelId), [modelOptions, selectedModelId]);
 
   useEffect(() => {
@@ -185,6 +235,7 @@ export const Chat = ({
   useEffect(() => {
     const existing = sessionIDRef.current;
     sessionIDRef.current = null;
+    abortRequestedRef.current = false;
     if (existing) {
       void client.session.abort({ sessionID: existing });
     }
@@ -196,6 +247,14 @@ export const Chat = ({
     setDefaultDisclosureOpen(false);
   }, [activeSkillsRevision, client]);
 
+  useEffect(() => {
+    draftBlocksRef.current = draftBlocks;
+  }, [draftBlocks]);
+
+  useLayoutEffect(() => {
+    syncComposerHeight(composerRef.current);
+  }, [input]);
+
   // ⌥T toggles the global disclosure default. Listener is scoped to the chat
   // log container so it never fires while typing in inputs / textareas, never
   // intercepts macOS Option+T (`†`) for other panes, and only one Chat pane
@@ -205,7 +264,7 @@ export const Chat = ({
     if (!node) {
       return;
     }
-    const handler = (event: KeyboardEvent): void => {
+    const handler = (event: globalThis.KeyboardEvent): void => {
       if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) {
         return;
       }
@@ -233,7 +292,10 @@ export const Chat = ({
     setDisclosureOverrides((current) => ({ ...current, [partID]: next }));
   }, []);
 
-  const loadHistoryPage = async (sessionID: string, before?: string): Promise<{ messages: ChatMessage[]; cursor: string | null }> => {
+  const loadHistoryPage = async (
+    sessionID: string,
+    before?: string,
+  ): Promise<{ messages: ChatMessageRecord[]; cursor: string | null }> => {
     const history = await client.session.messages({
       sessionID,
       limit: 100,
@@ -246,7 +308,7 @@ export const Chat = ({
     };
   };
 
-  const refreshHistory = async (sessionID: string): Promise<{ messages: ChatMessage[]; cursor: string | null } | null> => {
+  const refreshHistory = async (sessionID: string): Promise<{ messages: ChatMessageRecord[]; cursor: string | null } | null> => {
     const page = await loadHistoryPage(sessionID);
     if (!mountedRef.current || sessionIDRef.current !== sessionID) {
       return null;
@@ -318,6 +380,54 @@ export const Chat = ({
     return session.id;
   };
 
+  const abortActiveStream = async (): Promise<void> => {
+    if (!busy) {
+      return;
+    }
+
+    abortRequestedRef.current = true;
+    setStatus('Stopping…');
+
+    const activeSessionID = sessionIDRef.current;
+    if (!activeSessionID) {
+      return;
+    }
+
+    try {
+      await client.session.abort({ sessionID: activeSessionID });
+    } catch (error) {
+      abortRequestedRef.current = false;
+
+      if (!mountedRef.current) {
+        return;
+      }
+
+      console.warn('Failed to abort the active OpenCode session.', error);
+      setStatus('Unable to stop current response.');
+    }
+  };
+
+  useEffect(() => {
+    if (!busy || typeof window === 'undefined') {
+      return;
+    }
+
+    const handleWindowKeyDown = (event: globalThis.KeyboardEvent): void => {
+      if (!shouldAbortComposerKey({ key: event.key, isStreaming: busy })) {
+        return;
+      }
+
+      event.preventDefault();
+      void abortActiveStream();
+    };
+
+    window.addEventListener('keydown', handleWindowKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleWindowKeyDown);
+    };
+  }, [busy, client]);
+
   const openPlaybookWithDraft = (seedDraft: SkillDraft): void => {
     if (!dockviewApi) {
       return;
@@ -357,7 +467,7 @@ export const Chat = ({
     });
   };
 
-  const handleSaveAsSkill = (message: ChatMessage): void => {
+  const handleSaveAsSkill = (message: ChatMessageRecord): void => {
     const text = messageTextFromBlocks(message.blocks);
     const seed: SkillDraft = {
       slug: deriveSkillSlug(text),
@@ -373,6 +483,7 @@ export const Chat = ({
       return;
     }
 
+    abortRequestedRef.current = false;
     setBusy(true);
     setStatus('Waiting for OpenCode…');
     setMessages((current) => [
@@ -388,8 +499,22 @@ export const Chat = ({
 
     try {
       const activeSessionID = await ensureSession();
+      if (abortRequestedRef.current) {
+        setStatus('OpenCode is ready.');
+        return;
+      }
+
       const relevantEntities = await resolveRelevantEntities(text, 6);
+      if (abortRequestedRef.current) {
+        setStatus('OpenCode is ready.');
+        return;
+      }
+
       await injectMemoryContext(client, activeSessionID, relevantEntities);
+      if (abortRequestedRef.current) {
+        setStatus('OpenCode is ready.');
+        return;
+      }
 
       const stream = streamSessionEvents(client, activeSessionID);
       const consumeStream = (async () => {
@@ -409,7 +534,7 @@ export const Chat = ({
           } else if (event.type === 'file_written') {
             onFileWritten?.(event.path);
           } else if (event.type === 'error') {
-            setStatus(event.message);
+            setStatus(abortRequestedRef.current ? 'OpenCode is ready.' : event.message);
           } else if (event.type === 'done') {
             setStatus('OpenCode is ready.');
           }
@@ -430,10 +555,34 @@ export const Chat = ({
       });
       await consumeStream;
 
+      const aborted = abortRequestedRef.current;
+      const partialBlocks = draftBlocksRef.current;
+      const partialText = messageTextFromBlocks(partialBlocks).trim();
       const historyPage = await refreshHistory(activeSessionID);
-      if (mountedRef.current) {
-        dispatchDraft({ type: 'reset' });
+      if (!mountedRef.current || sessionIDRef.current !== activeSessionID) {
+        return;
       }
+
+      if (aborted && partialText.length > 0) {
+        const historyAlreadyHasPartial = historyPage?.messages.some(
+          (message) =>
+            message.role === 'assistant'
+            && messageTextFromBlocks(message.blocks).trim() === partialText,
+        );
+
+        if (!historyAlreadyHasPartial) {
+          setMessages((current) => [
+            ...current,
+            {
+              id: `assistant-abort-${Date.now()}`,
+              role: 'assistant',
+              blocks: partialBlocks,
+            },
+          ]);
+        }
+      }
+
+      dispatchDraft({ type: 'reset' });
 
       const assistantMessageRecord = historyPage?.messages
         .filter((message) => message.role === 'assistant')
@@ -446,7 +595,7 @@ export const Chat = ({
           ? [{ name: block.name, output: block.output }]
           : [],
       );
-      if (assistantMessage && vaultPath) {
+      if (!aborted && assistantMessage && vaultPath) {
         memoryCommitRef.current = memoryCommitRef.current.then(async () => {
           try {
             const result = await captureConversationMemory(opencode, vaultPath, {
@@ -485,9 +634,32 @@ export const Chat = ({
       ]);
       setStatus('Chat hit an error.');
     } finally {
+      abortRequestedRef.current = false;
       if (mountedRef.current) {
         setBusy(false);
       }
+    }
+  };
+
+  const handleComposerKeyDown = (event: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (shouldAbortComposerKey({ key: event.key, isStreaming: busy })) {
+      event.preventDefault();
+      void abortActiveStream();
+      return;
+    }
+
+    if (
+      shouldSubmitComposerKey({
+        key: event.key,
+        shiftKey: event.shiftKey,
+        altKey: event.altKey,
+        ctrlKey: event.ctrlKey,
+        metaKey: event.metaKey,
+        isComposing: event.nativeEvent.isComposing,
+      })
+    ) {
+      event.preventDefault();
+      void sendMessage();
     }
   };
 
@@ -527,52 +699,74 @@ export const Chat = ({
           </div>
         ) : null}
 
-        {historyWindow.renderedMessages.map((message) => {
-          const text = messageTextFromBlocks(message.blocks);
-          return (
-            <div key={message.id} className={`tinker-message tinker-message--${message.role}`}>
-              {message.blocks.map((block) => (
-                <MessageBlock
-                  key={block.partID}
-                  block={block}
-                  isOpen={isDisclosureOpen(block.partID)}
-                  onToggle={(next) => handleDisclosureToggle(block.partID, next)}
-                />
-              ))}
-              {message.role === 'assistant' && text.trim().length > 0 ? (
-                <div className="tinker-message-actions">
-                  <Button variant="ghost" size="s" onClick={() => handleSaveAsSkill(message)}>
-                    Save as skill
-                  </Button>
-                </div>
-              ) : null}
-            </div>
-          );
-        })}
+        {historyWindow.renderedMessages.flatMap((message) => {
+          const lastTextBlockIdx = (() => {
+            for (let i = message.blocks.length - 1; i >= 0; i -= 1) {
+              if (message.blocks[i]!.kind === 'text') {
+                return i;
+              }
+            }
+            return -1;
+          })();
 
-        {draftBlocks.length > 0 ? (
-          <div className="tinker-message tinker-message--assistant">
-            {draftBlocks.map((block) => (
+          return message.blocks.map((block, idx) => {
+            if (block.kind === 'text') {
+              const isLastText = idx === lastTextBlockIdx;
+              return (
+                <ChatMessage
+                  key={block.partID}
+                  role={message.role}
+                  text={block.text}
+                  {...(message.role === 'assistant' && isLastText
+                    ? { onSaveAsSkill: () => handleSaveAsSkill(message) }
+                    : {})}
+                />
+              );
+            }
+
+            return (
               <MessageBlock
                 key={block.partID}
                 block={block}
                 isOpen={isDisclosureOpen(block.partID)}
                 onToggle={(next) => handleDisclosureToggle(block.partID, next)}
               />
-            ))}
-          </div>
-        ) : null}
+            );
+          });
+        })}
+
+        {draftBlocks.length > 0
+          ? draftBlocks.map((block) => {
+              if (block.kind === 'text') {
+                return (
+                  <ChatMessage key={block.partID} role="assistant" text={block.text} streaming />
+                );
+              }
+
+              return (
+                <MessageBlock
+                  key={block.partID}
+                  block={block}
+                  isOpen={isDisclosureOpen(block.partID)}
+                  onToggle={(next) => handleDisclosureToggle(block.partID, next)}
+                />
+              );
+            })
+          : null}
       </div>
 
-      <div className="tinker-composer">
+      <div className={`tinker-composer${busy ? ' tinker-composer--busy' : ''}`}>
         <Textarea
+          ref={composerRef}
           value={input}
           rows={4}
+          resize="none"
           placeholder="Ask about the vault, your project, or the next change to make."
           onChange={(event) => setInput(event.currentTarget.value)}
+          onKeyDown={handleComposerKeyDown}
           disabled={busy || !modelConnected}
         />
-        <div className="tinker-inline-actions">
+        <div className="tinker-inline-actions tinker-composer-actions">
           <ModelPicker
             items={modelOptions}
             value={selectedModelId}
@@ -581,13 +775,15 @@ export const Chat = ({
             disabled={busy}
             emptyLabel="No models available in OpenCode."
           />
-          <Button
-            variant="primary"
-            onClick={sendMessage}
-            disabled={busy || !modelConnected || input.trim().length === 0}
-          >
-            {busy ? 'Streaming…' : 'Send message'}
-          </Button>
+          {busy ? (
+            <Button variant="danger" onClick={() => void abortActiveStream()}>
+              Stop
+            </Button>
+          ) : (
+            <Button variant="primary" onClick={sendMessage} disabled={!modelConnected || input.trim().length === 0}>
+              Send message
+            </Button>
+          )}
         </div>
       </div>
     </section>

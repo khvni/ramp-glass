@@ -334,6 +334,9 @@ pub fn run() {
     ])
     .setup(|app| {
       tauri::async_runtime::block_on(async {
+        if let Err(error) = commands::opencode::reconcile_opencode_manifests(&app.handle()).await {
+          eprintln!("[opencode] orphan manifest cleanup failed: {error}");
+        }
         bootstrap_opencode(&app.handle()).await?;
         ensure_main_window(&app.handle())?;
         Ok::<(), String>(())
@@ -347,6 +350,9 @@ pub fn run() {
   app.run(move |_app, event| {
     if matches!(event, RunEvent::Exit) {
       crate::commands::auth::stop_better_auth(&handle);
+      if let Err(error) = tauri::async_runtime::block_on(commands::opencode::stop_all_opencodes(&handle)) {
+        eprintln!("[opencode] stop-all cleanup failed: {error}");
+      }
       terminate_legacy_opencode(&handle);
     }
   });
