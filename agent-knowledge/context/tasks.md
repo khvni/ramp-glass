@@ -237,6 +237,7 @@ Scope preserved for historical context + roadmap signaling. **Do not work on the
 | TIN-177 + TIN-178 + TIN-181 | 09 | UI trio: `<Modal>` + `<Toast>` provider + `<EmptyState>` primitives in `@tinker/design`; `EmptyState` adopted by Chat / Today / IntegrationsStrip | review | Branch `khvni/ui-design-trio`. One bundled PR. Session: [[2026-04-21-2146-ui-trio]]. Folder-per-component (D21), tokens-only (D14/D23), dual-theme verified. 31 new tests. |
 | TIN-172 | 15 / M7.8 | `<ConnectionGate>` primitive (minimal MCP variant) | review | PR #50. Ships the atom TIN-155 generalizes. |
 | TIN-155 | 15 | `<ConnectionSplash>` full-window splash (generalizes TIN-172) | review | PR stacks on #50. Composes ConnectionGate + Tinker wordmark + spinner + 4 service categories. |
+| TIN-113 + TIN-114 + TIN-115 + TIN-116 + TIN-117 | 02 | Playbook skill marketplace — per-user skill store + browse pane + install-from-file + Save-as-skill modal in Chat + optional git sync. Shared `runSkillAutoSync` helper; folder-per-component D21; tokens-only D14/D23. Default layout (M1.6) unchanged. | review | PR #106 · branch `feat/playbook/tin-113-117`. Decoupled skill reinject from session reset (pre-existing coupling exposed by this PR). Session: [[2026-04-22-1146-playbook]]. |
 
 ## Rejected (not coming back)
 
