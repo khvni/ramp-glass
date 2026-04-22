@@ -8,7 +8,12 @@ topic: TIN-84 Settings Account panel + sign-out
 
 ## Outcome
 
-Shipped `<Account>` primitive + wired the Settings pane into the workspace pane registry so M8 sign-out flows end-to-end. Sign-out calls `auth_sign_out` for every connected provider, which clears the OS keychain and the session store; renderer state reloads and falls back to the sign-in gate because `hasSignedIn` flips to `false`.
+Shipped `<Account>` primitive + wired the Settings pane into the workspace pane registry so M8 sign-out flows end-to-end. Draft PR #93 (branch `khvni/tin-84-account-panel`) is ready for human review; a competing Codex PR #96 on `byalikhani/tin-84-…` touches the same ticket, so reviewer picks one. Sign-out calls `auth_sign_out` for every connected provider, which clears the OS keychain and the session store; renderer state reloads and falls back to the sign-in gate because `hasSignedIn` flips to `false`.
+
+## Review iteration
+
+- Reviewer (elon-reviewer) flagged: `defaultActiveSectionId` test-plumbing prop, redundant section-header eyebrows (duplicated by SettingsShell nav), identity-wrapper `pickCurrentSession`, sequential sign-out loop, over-exported `useSettingsConnection`.
+- Applied all five: extracted `<Connections>` into its own folder-per-component with dedicated tests (removes the need for the prop), slimmed `Settings.tsx` to a thin shell composer, inlined the session pick, un-exported the hook, and swapped the sign-out loop for `Promise.allSettled` with aggregated failure messaging. Verifier green after the follow-up commit.
 
 ## Code delta
 
