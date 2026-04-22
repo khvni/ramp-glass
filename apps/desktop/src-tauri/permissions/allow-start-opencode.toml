@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-start-opencode"
+description = "Allows the frontend to start the OpenCode sidecar."
+
+[permission.commands]
+allow = ["start_opencode"]
+deny = []

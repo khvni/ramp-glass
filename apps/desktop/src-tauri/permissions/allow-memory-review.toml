@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-memory-review"
+description = "Allows the frontend to approve, dismiss, and diff pending memory entries."
+
+[permission.commands]
+allow = ["memory_approve", "memory_dismiss", "memory_diff"]
+deny = []

@@ -1,0 +1,7 @@
+[[permission]]
+identifier = "allow-stop-opencode"
+description = "Allows the frontend to stop the OpenCode sidecar."
+
+[permission.commands]
+allow = ["stop_opencode"]
+deny = []

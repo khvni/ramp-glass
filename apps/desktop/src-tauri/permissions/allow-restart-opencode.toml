@@ -1,7 +1,0 @@
-[[permission]]
-identifier = "allow-restart-opencode"
-description = "Allows the frontend to restart the OpenCode sidecar."
-
-[permission.commands]
-allow = ["restart_opencode"]
-deny = []
