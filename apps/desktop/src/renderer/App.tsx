@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { homeDir, join } from '@tauri-apps/api/path';
-import { open as openDialog } from '@tauri-apps/plugin-dialog';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import { open as openExternal } from '@tauri-apps/plugin-shell';
 import {
@@ -18,12 +17,14 @@ import {
 } from '@tinker/memory';
 import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
 import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus, SSOSession, User, VaultConfig } from '@tinker/shared-types';
-import { GUEST_USER_ID, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
+import { GUEST_USER_ID, openFolderPicker, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import {
-  checkExaBootHealth,
+  checkTrackedMcpBootHealth,
   EXA_CHECKING_STATUS,
   EXA_MCP_NAME,
+  GITHUB_MCP_NAME,
+  LINEAR_MCP_NAME,
   type MCPStatus,
 } from './integrations.js';
 import { createWorkspaceClient, getOpencodeDirectory, pickFirstOauthProvider } from './opencode.js';
@@ -61,9 +62,9 @@ type CurrentUserState = {
   avatarUrl: string | null;
 };
 
-type OpencodeRestartConfig = {
-  userId: User['id'];
-  memorySubdir: string;
+type RestartOpencodeOptions = {
+  folderPath?: string;
+  memorySubdir?: string;
 };
 
 const MODEL_CONNECT_POLL_INTERVAL_MS = 1_500;
@@ -141,14 +142,6 @@ const resolveCurrentUser = (sessions: SSOStatus): CurrentUserState => {
   };
 };
 
-const resolveOpencodeRestartConfig = async (sessions: SSOStatus): Promise<OpencodeRestartConfig> => {
-  const userId = pickCurrentUserId(sessions);
-  return {
-    userId,
-    memorySubdir: await getActiveMemoryPath(userId),
-  };
-};
-
 const toStoredUser = (session: SSOSession): User => {
   const timestamp = new Date().toISOString();
 
@@ -195,19 +188,13 @@ const syncCurrentUserMemoryPath = async (
   await syncActiveMemoryPath(pickCurrentUserId(sessions), options);
 };
 
-const getDefaultVaultPath = async (): Promise<string> => {
-  const home = await homeDir();
-  return join(home, 'Tinker', 'knowledge');
+const restartOpencode = (options: RestartOpencodeOptions): Promise<OpencodeConnection> => {
+  return invoke<OpencodeConnection>('restart_opencode', { options });
 };
 
-const selectVault = async (): Promise<string | null> => {
-  const selected = await openDialog({
-    directory: true,
-    multiple: false,
-    title: 'Select your Tinker vault',
-  });
-
-  return typeof selected === 'string' ? selected : null;
+const selectSessionFolder = async (): Promise<string | null> => {
+  const picked = await openFolderPicker();
+  return picked.trim().length > 0 ? picked : null;
 };
 
 const forwardGoogleAuth = async (
@@ -330,12 +317,21 @@ const disconnectModelProvider = async (connection: OpencodeConnection, vaultPath
   }
 };
 
+const resolveRestartOpencodeOptions = async (
+  sessions: SSOStatus,
+  folderPath: string | null,
+): Promise<RestartOpencodeOptions> => {
+  return {
+    ...(folderPath ? { folderPath } : {}),
+    memorySubdir: await getActiveMemoryPath(pickCurrentUserId(sessions)),
+  };
+};
+
 const restartWorkspaceOpencode = async (
   vaultPath: string | null,
   sessions: SSOStatus,
 ): Promise<{ opencode: OpencodeConnection; modelConnected: boolean }> => {
-  const restartConfig = await resolveOpencodeRestartConfig(sessions);
-  const opencode = await invoke<OpencodeConnection>('restart_opencode', restartConfig);
+  const opencode = await restartOpencode(await resolveRestartOpencodeOptions(sessions, vaultPath));
   await syncConnectorState(opencode, vaultPath, sessions);
   const modelConnected = await probeModelConnection(opencode, vaultPath);
   return { opencode, modelConnected };
@@ -357,6 +353,7 @@ export const App = (): JSX.Element => {
   const [guestMessage, setGuestMessage] = useState<string | null>(null);
   const [memorySweepState, setMemorySweepState] = useState<MemoryRunState | null>(null);
   const [memorySweepBusy, setMemorySweepBusy] = useState(false);
+  const [sessionFolderBusy, setSessionFolderBusy] = useState(false);
   const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
 
   const requireNativeRuntime = (action: string): void => {
@@ -412,22 +409,35 @@ export const App = (): JSX.Element => {
           return;
         }
 
-        const sessions = await readAuthStatus();
+        const [initialOpencode, sessions] = await Promise.all([
+          invoke<OpencodeConnection>('get_opencode_connection'),
+          readAuthStatus(),
+        ]);
         await syncStoredUsers(sessions);
         await syncCurrentUserMemoryPath(sessions, { emit: false });
-        const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
+        const storedVaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
 
+        let opencode = initialOpencode;
         let vaultRevision = 0;
-        if (vaultPath) {
-          const config = { path: vaultPath, isNew: false };
+        if (storedVaultPath) {
+          const config = { path: storedVaultPath, isNew: false };
           await vaultService.init(config);
           await indexVault(config);
-          await skillStore.init(vaultPath);
+          await skillStore.init(storedVaultPath);
           await skillStore.reindex();
           vaultRevision = 1;
         }
 
-        const { opencode, modelConnected } = await restartWorkspaceOpencode(vaultPath, sessions);
+        try {
+          opencode = await restartOpencode(await resolveRestartOpencodeOptions(sessions, storedVaultPath));
+        } catch (error) {
+          console.warn('Could not restart OpenCode with the restored workspace. Falling back to the warm-started sidecar.', error);
+        }
+
+        await syncConnectorState(opencode, storedVaultPath, sessions).catch((error) => {
+          console.warn('Could not restore connector state on boot.', error);
+        });
+        const modelConnected = await probeModelConnection(opencode, storedVaultPath);
 
         if (!active) {
           return;
@@ -442,7 +452,7 @@ export const App = (): JSX.Element => {
           opencode,
           sessions,
           mcpStatus: {},
-          vaultPath,
+          vaultPath: storedVaultPath,
           modelConnected,
           vaultRevision,
           activeSkillsRevision: 0,
@@ -681,15 +691,17 @@ export const App = (): JSX.Element => {
             mcpStatus: {
               ...current.mcpStatus,
               [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
+              [GITHUB_MCP_NAME]: EXA_CHECKING_STATUS,
+              [LINEAR_MCP_NAME]: EXA_CHECKING_STATUS,
             },
           },
     );
 
     void (async () => {
-      const status = await checkExaBootHealth(() => {
+      const statuses = await checkTrackedMcpBootHealth(() => {
         const client = createWorkspaceClient(connection, directory);
         return client.mcp.status();
-      });
+      }, state.sessions.github);
 
       if (!active) {
         return;
@@ -702,7 +714,7 @@ export const App = (): JSX.Element => {
               ...current,
               mcpStatus: {
                 ...current.mcpStatus,
-                [EXA_MCP_NAME]: status,
+                ...statuses,
               },
             },
       );
@@ -717,6 +729,7 @@ export const App = (): JSX.Element => {
     state.status === 'ready' ? state.opencode.baseUrl : null,
     state.status === 'ready' ? state.opencode.username : null,
     state.status === 'ready' ? state.opencode.password : null,
+    state.status === 'ready' ? state.sessions.github?.scopes.join(',') : null,
   ]);
 
   if (state.status === 'loading') {
@@ -774,36 +787,41 @@ export const App = (): JSX.Element => {
             mcpStatus: {
               ...current.mcpStatus,
               [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
+              [GITHUB_MCP_NAME]: EXA_CHECKING_STATUS,
+              [LINEAR_MCP_NAME]: EXA_CHECKING_STATUS,
             },
             modelConnected: nextState.modelConnected,
           },
     );
   };
 
-  const setVaultPath = async (config: VaultConfig): Promise<void> => {
-    requireNativeRuntime('Selecting a vault');
-    await vaultService.init(config);
-    await indexVault(config);
-    await skillStore.init(config.path);
-    await skillStore.reindex();
-    window.localStorage.setItem(VAULT_PATH_KEY, config.path);
+  const setSessionFolder = async (config: VaultConfig): Promise<void> => {
+    requireNativeRuntime('Selecting a folder');
+    setSessionFolderBusy(true);
 
-    await syncConnectorState(state.opencode, config.path, state.sessions).catch((error) => {
-      console.warn('Could not refresh connector state after vault change.', error);
-    });
-    const modelConnected = await probeModelConnection(state.opencode, config.path);
+    try {
+      const nextState = await restartWorkspaceOpencode(config.path, state.sessions);
+      await vaultService.init(config);
+      await indexVault(config);
+      await skillStore.init(config.path);
+      await skillStore.reindex();
+      window.localStorage.setItem(VAULT_PATH_KEY, config.path);
 
-    setState((current) =>
-      current.status !== 'ready'
-        ? current
-        : {
-            ...current,
-            vaultPath: config.path,
-            modelConnected,
-            vaultRevision: current.vaultRevision + 1,
-            activeSkillsRevision: current.activeSkillsRevision + 1,
-          },
-    );
+      setState((current) =>
+        current.status !== 'ready'
+          ? current
+          : {
+              ...current,
+              opencode: nextState.opencode,
+              vaultPath: config.path,
+              modelConnected: nextState.modelConnected,
+              vaultRevision: current.vaultRevision + 1,
+              activeSkillsRevision: current.activeSkillsRevision + 1,
+            },
+      );
+    } finally {
+      setSessionFolderBusy(false);
+    }
   };
 
   const handleActiveSkillsChanged = (): void => {
@@ -966,22 +984,6 @@ export const App = (): JSX.Element => {
     }
   };
 
-  const handleCreateVault = async (): Promise<void> => {
-    requireNativeRuntime('Creating the default vault');
-    await setVaultPath({
-      path: await getDefaultVaultPath(),
-      isNew: true,
-    });
-  };
-
-  const handlePickVault = async (): Promise<void> => {
-    requireNativeRuntime('Selecting an existing vault');
-    const vaultPath = await selectVault();
-    if (vaultPath) {
-      await setVaultPath({ path: vaultPath, isNew: false });
-    }
-  };
-
   const handleContinueAsGuest = async (): Promise<void> => {
     setGuestBusy(true);
     setGuestMessage('Switching to guest mode…');
@@ -1022,6 +1024,27 @@ export const App = (): JSX.Element => {
     } finally {
       setGuestBusy(false);
     }
+  };
+
+  const handleSelectSessionFolder = async (): Promise<void> => {
+    if (sessionFolderBusy) {
+      return;
+    }
+
+    requireNativeRuntime('Selecting a folder');
+    const folderPath = await selectSessionFolder();
+    if (!folderPath) {
+      return;
+    }
+
+    await setSessionFolder({ path: folderPath, isNew: false });
+  };
+
+  const handleCreateDefaultVault = async (): Promise<void> => {
+    requireNativeRuntime('Creating the default vault');
+    const home = await homeDir();
+    const defaultPath = await join(home, 'Tinker', 'knowledge');
+    await setSessionFolder({ path: defaultPath, isNew: true });
   };
 
   const handleRunScheduledJobNow = async (jobId: string): Promise<void> => {
@@ -1071,6 +1094,10 @@ export const App = (): JSX.Element => {
         memorySweepState={memorySweepState}
         memorySweepBusy={memorySweepBusy}
         onContinueAsGuest={handleContinueAsGuest}
+        sessionFolderBusy={sessionFolderBusy}
+        onSelectSessionFolder={handleSelectSessionFolder}
+        onCreateVault={handleCreateDefaultVault}
+        onSelectVault={handleSelectSessionFolder}
         onConnectGoogle={() => handleProviderConnect('google')}
         onDisconnectGoogle={() => handleProviderDisconnect('google')}
         onConnectGithub={() => handleProviderConnect('github')}
@@ -1079,8 +1106,6 @@ export const App = (): JSX.Element => {
         onDisconnectMicrosoft={() => handleProviderDisconnect('microsoft')}
         onConnectModel={handleConnectModel}
         onDisconnectModel={handleDisconnectModel}
-        onCreateVault={handleCreateVault}
-        onSelectVault={handlePickVault}
         onRunScheduledJobNow={handleRunScheduledJobNow}
         onSchedulerChanged={bumpSchedulerRevision}
         onActiveSkillsChanged={handleActiveSkillsChanged}
