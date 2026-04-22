@@ -8,7 +8,6 @@ import {
   useState,
   type JSX,
   type KeyboardEvent,
-  type ReactNode,
   type UIEventHandler,
 } from 'react';
 import type { Message, Part } from '@opencode-ai/sdk/v2/client';
@@ -16,12 +15,14 @@ import {
   Badge,
   Button,
   ClickableBadge,
+  ComposerChip,
   ContextBadge,
   EmptyState,
-  IconButton,
+  Menu,
   ModelPicker,
+  PromptComposer,
   SelectFolderButton,
-  Textarea,
+  type MenuItem,
 } from '@tinker/design';
 import {
   createChatHistoryWriter,
@@ -40,7 +41,13 @@ import {
   updateLastActive,
   updateSession,
 } from '@tinker/memory';
-import { DEFAULT_SESSION_MODE, type SkillStore } from '@tinker/shared-types';
+import {
+  DEFAULT_REASONING_LEVEL,
+  DEFAULT_SESSION_MODE,
+  type ReasoningLevel,
+  type SessionMode,
+  type SkillStore,
+} from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../../bindings.js';
 import { captureConversationMemory } from '../../memory.js';
 import {
@@ -51,12 +58,10 @@ import {
   pickDefaultModelOptionId,
   type WorkspaceModelOption,
 } from '../../opencode.js';
-import { AttachmentIcon } from './AttachmentIcon.js';
 import { ChatMessage } from '../ChatMessage/index.js';
 import { McpConnectionGate } from './components/McpConnectionGate/index.js';
 import { resolvePreferredStoredModelId, resolveSelectedModelId } from './modelSelection.js';
 import {
-  calculateComposerHeight,
   shouldAbortComposerKey,
   shouldSubmitComposerKey,
 } from '../chat-composer.js';
@@ -91,8 +96,32 @@ type ChatProps = {
   onMemoryCommitted?: () => void;
   paneIsActive?: boolean;
   onAttentionSignal?: (reason: 'notification-arrival') => void;
-  modeToggleSlot?: ReactNode;
-  reasoningPickerSlot?: ReactNode;
+};
+
+const MODE_ITEMS: ReadonlyArray<MenuItem<SessionMode>> = [
+  { value: 'build', label: 'Build', description: 'Default agent — plans and edits.' },
+  { value: 'plan', label: 'Plan', description: 'Read-only planning — no edits.' },
+];
+
+const THINKING_ITEMS: ReadonlyArray<MenuItem<ReasoningLevel>> = [
+  { value: 'default', label: 'Default' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+  { value: 'xhigh', label: 'X-High' },
+];
+
+const MODE_LABELS: Record<SessionMode, string> = {
+  build: 'Build',
+  plan: 'Plan',
+};
+
+const THINKING_LABELS: Record<ReasoningLevel, string> = {
+  default: 'Default',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+  xhigh: 'X-High',
 };
 
 const formatMessages = (messages: Array<{ info: Message; parts: Part[] }>): ChatMessageRecord[] => {
@@ -131,37 +160,6 @@ const mergeHistoryMessages = (olderMessages: readonly ChatMessageRecord[], newer
   }
 
   return [...merged.values()].sort((left, right) => left.id.localeCompare(right.id));
-};
-
-const readPixelValue = (value: string, fallback = 0): number => {
-  const parsed = Number.parseFloat(value);
-  return Number.isFinite(parsed) ? parsed : fallback;
-};
-
-const syncComposerHeight = (textarea: HTMLTextAreaElement | null): void => {
-  if (!textarea || typeof window === 'undefined') {
-    return;
-  }
-
-  const styles = window.getComputedStyle(textarea);
-  const fontSize = readPixelValue(styles.fontSize, 16);
-  const lineHeight =
-    styles.lineHeight === 'normal' ? fontSize * 1.5 : readPixelValue(styles.lineHeight, fontSize * 1.5);
-
-  textarea.style.height = 'auto';
-
-  const { height, maxHeight, overflowY } = calculateComposerHeight({
-    scrollHeight: textarea.scrollHeight,
-    lineHeight,
-    paddingTop: readPixelValue(styles.paddingTop),
-    paddingBottom: readPixelValue(styles.paddingBottom),
-    borderTopWidth: readPixelValue(styles.borderTopWidth),
-    borderBottomWidth: readPixelValue(styles.borderBottomWidth),
-  });
-
-  textarea.style.maxHeight = `${maxHeight}px`;
-  textarea.style.height = `${height}px`;
-  textarea.style.overflowY = overflowY;
 };
 
 const readContextUsageTokens = (value: unknown): ContextUsageSnapshot['tokens'] | null => {
@@ -238,8 +236,6 @@ export const Chat = ({
   onMemoryCommitted,
   paneIsActive = true,
   onAttentionSignal,
-  modeToggleSlot,
-  reasoningPickerSlot,
 }: ChatProps): JSX.Element => {
   const folderPickerAvailable = typeof onSelectSessionFolder === 'function';
   const awaitingFolder = !sessionFolderPath && folderPickerAvailable;
@@ -270,12 +266,13 @@ export const Chat = ({
   const [defaultDisclosureOpen, setDefaultDisclosureOpen] = useState(false);
   const [disclosureOverrides, setDisclosureOverrides] = useState<Record<string, boolean>>({});
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [composerMode, setComposerMode] = useState<SessionMode>(DEFAULT_SESSION_MODE);
+  const [thinkingLevel, setThinkingLevel] = useState<ReasoningLevel>(DEFAULT_REASONING_LEVEL);
   const mountedRef = useRef(true);
   const sessionIDRef = useRef<string | null>(null);
   const historyWriterRef = useRef<ChatHistoryWriter | null>(null);
   const memoryCommitRef = useRef<Promise<void>>(Promise.resolve());
   const chatLogRef = useRef<HTMLDivElement | null>(null);
-  const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const abortRequestedRef = useRef(false);
   const contextUsageSnapshotRef = useRef<ContextUsageSnapshot | null>(null);
   const draftBlocksRef = useRef<Block[]>([]);
@@ -545,10 +542,6 @@ export const Chat = ({
       attentionRaisedForDraftRef.current = false;
     }
   }, [busy, draftBlocks.length]);
-
-  useLayoutEffect(() => {
-    syncComposerHeight(composerRef.current);
-  }, [input]);
 
   // ⌥T toggles the global disclosure default. Listener is scoped to the chat
   // log container so it never fires while typing in inputs / textareas, never
@@ -932,6 +925,8 @@ export const Chat = ({
       await client.session.prompt({
         sessionID: activeSessionID,
         parts: [{ type: 'text', text }],
+        agent: composerMode,
+        ...(thinkingLevel === 'default' ? {} : { variant: thinkingLevel }),
         ...(selectedModel
           ? {
               model: {
@@ -1058,14 +1053,6 @@ export const Chat = ({
     <section className="tinker-pane tinker-pane--chat">
       <header className="tinker-chat-header">
         <div className="tinker-chat-header__left">
-          <ModelPicker
-            items={modelOptions}
-            value={selectedModelId}
-            onSelect={setSelectedModelId}
-            loading={modelOptionsLoading}
-            disabled={busy || hydratingHistory}
-            emptyLabel="No models available in OpenCode."
-          />
           {folderPickerAvailable ? (
             <SelectFolderButton
               folderPath={sessionFolderPath}
@@ -1080,10 +1067,6 @@ export const Chat = ({
         </div>
         <div className="tinker-chat-header__right">
           {contextUsage ? <ContextBadge {...contextUsage} /> : null}
-          <div className="tinker-chat-header__slot">
-            {modeToggleSlot}
-            {reasoningPickerSlot}
-          </div>
           <Badge variant="default" size="small">
             {status}
           </Badge>
@@ -1224,54 +1207,66 @@ export const Chat = ({
       </div>
 
       <div className="tinker-composer-card__wrap">
-        {mcpConnectionGate.notice ? (
-          <Badge variant="info" size="small">
-            {mcpConnectionGate.notice}
-          </Badge>
-        ) : null}
-        <div
-          className={`tinker-composer-card${busy ? ' tinker-composer-card--busy' : ''}`}
-        >
-          <div className="tinker-composer-card__body">
-            <Textarea
-              ref={composerRef}
-              value={input}
-              rows={4}
-              resize="none"
-              placeholder="Ask about the vault, your project, or the next change to make."
-              onChange={(event) => setInput(event.currentTarget.value)}
-              onKeyDown={handleComposerKeyDown}
-              disabled={composerBlocked}
-            />
-          </div>
-          <div className="tinker-composer-card__footer">
-            <div className="tinker-composer-card__footer-left">
-              <IconButton
-                variant="ghost"
-                size="s"
-                icon={<AttachmentIcon />}
-                label="Attachments coming soon"
-                aria-disabled
-                disabled
+        <PromptComposer
+          value={input}
+          onChange={setInput}
+          onSubmit={() => void sendMessage()}
+          onAbort={() => void abortActiveStream()}
+          onKeyDown={handleComposerKeyDown}
+          placeholder='Ask anything… "What dependencies are outdated?"'
+          disabled={composerBlocked}
+          busy={busy}
+          canSubmit={!composerBlocked}
+          attachLabel="Attachments coming soon"
+          attachDisabled
+          notice={
+            mcpConnectionGate.notice ? (
+              <Badge variant="info" size="small">
+                {mcpConnectionGate.notice}
+              </Badge>
+            ) : null
+          }
+          controls={
+            <>
+              <Menu
+                items={MODE_ITEMS}
+                value={composerMode}
+                onSelect={setComposerMode}
+                disabled={busy || hydratingHistory}
+                trigger={({ open, toggle }) => (
+                  <ComposerChip
+                    label={MODE_LABELS[composerMode]}
+                    open={open}
+                    disabled={busy || hydratingHistory}
+                    onClick={toggle}
+                  />
+                )}
               />
-            </div>
-            <div className="tinker-composer-card__footer-right">
-              {busy ? (
-                <Button variant="danger" onClick={() => void abortActiveStream()}>
-                  Stop
-                </Button>
-              ) : (
-                <Button
-                  variant="primary"
-                  onClick={sendMessage}
-                  disabled={composerBlocked || input.trim().length === 0}
-                >
-                  Send message
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
+              <ModelPicker
+                items={modelOptions}
+                value={selectedModelId}
+                onSelect={setSelectedModelId}
+                loading={modelOptionsLoading}
+                disabled={busy || hydratingHistory}
+                emptyLabel="No models available in OpenCode."
+              />
+              <Menu
+                items={THINKING_ITEMS}
+                value={thinkingLevel}
+                onSelect={setThinkingLevel}
+                disabled={busy || hydratingHistory}
+                trigger={({ open, toggle }) => (
+                  <ComposerChip
+                    label={THINKING_LABELS[thinkingLevel]}
+                    open={open}
+                    disabled={busy || hydratingHistory}
+                    onClick={toggle}
+                  />
+                )}
+              />
+            </>
+          }
+        />
       </div>
     </section>
   );
