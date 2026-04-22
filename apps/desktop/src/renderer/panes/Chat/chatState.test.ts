@@ -16,8 +16,11 @@ const modelOptions = [
     providerId: 'anthropic',
     providerName: 'Anthropic',
     modelId: 'claude-sonnet-4',
+    storedId: 'anthropic/claude-sonnet-4',
     name: 'Claude Sonnet 4',
     contextWindow: 200_000,
+    supportsReasoning: false,
+    reasoningVariants: {},
   },
 ] as const;
 

@@ -91,6 +91,26 @@ const buildStoredUserId = (provider: User['provider'], providerUserId: string): 
   return `${provider}:${providerUserId}`;
 };
 
+const createLocalUser = (): User => {
+  const timestamp = new Date().toISOString();
+
+  return {
+    id: DEFAULT_USER_ID,
+    provider: 'local',
+    providerUserId: DEFAULT_USER_ID,
+    displayName: 'Offline mode',
+    createdAt: timestamp,
+    lastSeenAt: timestamp,
+  };
+};
+
+const pickCurrentUserId = (sessions: SSOStatus): User['id'] => {
+  const activeSession = sessions.google ?? sessions.github ?? sessions.microsoft;
+  return activeSession
+    ? buildStoredUserId(activeSession.provider, activeSession.userId)
+    : DEFAULT_USER_ID;
+};
+
 const toStoredUser = (session: SSOSession): User => {
   const timestamp = new Date().toISOString();
 
@@ -333,6 +353,7 @@ export const App = (): JSX.Element => {
         }
 
         const [opencode, sessions] = await Promise.all([invoke<OpencodeConnection>('get_opencode_connection'), readAuthStatus()]);
+        await upsertUser(createLocalUser());
         await ensureConnectedMemoryPaths(sessions);
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
 
@@ -927,6 +948,7 @@ export const App = (): JSX.Element => {
     state.sessions.microsoft !== null;
   const signInGateVisible = nativeRuntime && !hasSignedIn;
   const workspaceAvailable = nativeRuntime && state.onboarded && hasSignedIn;
+  const currentUserId = pickCurrentUserId(state.sessions);
 
   if (signInGateVisible) {
     return (
@@ -968,7 +990,8 @@ export const App = (): JSX.Element => {
         />
       ) : (
         <Workspace
-          key={DEFAULT_USER_ID}
+          key={currentUserId}
+          currentUserId={currentUserId}
           layoutStore={state.layoutStore}
           memoryStore={state.memoryStore}
           schedulerStore={state.schedulerStore}

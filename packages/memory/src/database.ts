@@ -1,4 +1,5 @@
 import Database from '@tauri-apps/plugin-sql';
+import { DEFAULT_SESSION_MODE } from '@tinker/shared-types';
 
 const DEFAULT_SQL_URL = 'sqlite:tinker.db';
 const LAYOUT_STATE_COLUMN = 'workspace_state_json';
@@ -68,7 +69,9 @@ export const DATABASE_SCHEMA = [
     folder_path TEXT NOT NULL,
     created_at TEXT NOT NULL,
     last_active_at TEXT NOT NULL,
+    mode TEXT NOT NULL DEFAULT '${DEFAULT_SESSION_MODE}',
     model_id TEXT,
+    reasoning_level TEXT,
     FOREIGN KEY (user_id) REFERENCES users(id)
   )`,
   `CREATE INDEX IF NOT EXISTS sessions_user_id_last_active_at_idx
@@ -138,6 +141,23 @@ export const DATABASE_SCHEMA = [
   )`,
 ];
 
+export const ensureSessionTableColumns = async (
+  database: Pick<Database, 'execute' | 'select'>,
+): Promise<void> => {
+  const rows = await database.select<TableInfoRow[]>('PRAGMA table_info(sessions)');
+  const columns = new Set(rows.map((row) => row.name));
+
+  if (!columns.has('mode')) {
+    await database.execute(
+      `ALTER TABLE sessions ADD COLUMN mode TEXT NOT NULL DEFAULT '${DEFAULT_SESSION_MODE}'`,
+    );
+  }
+
+  if (!columns.has('reasoning_level')) {
+    await database.execute('ALTER TABLE sessions ADD COLUMN reasoning_level TEXT');
+  }
+};
+
 const ensureLayoutTableShape = async (database: Database): Promise<void> => {
   const columns = await database.select<TableInfoRow[]>(`PRAGMA table_info(layouts)`);
   const hasWorkspaceColumn = columns.some((column) => column.name === LAYOUT_STATE_COLUMN);
@@ -177,6 +197,7 @@ export const getDatabase = async (sqlUrl = DEFAULT_SQL_URL): Promise<Database> =
       for (const statement of DATABASE_SCHEMA) {
         await database.execute(statement);
       }
+      await ensureSessionTableColumns(database);
       await ensureLayoutTableShape(database);
       return database;
     });

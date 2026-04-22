@@ -32,7 +32,7 @@ import {
   type ChatHistoryWriter,
 } from '@tinker/bridge';
 import { createSession, findLatestSessionForFolder, resolveRelevantEntities, updateLastActive } from '@tinker/memory';
-import type { SkillStore } from '@tinker/shared-types';
+import { DEFAULT_SESSION_MODE, type SkillStore } from '@tinker/shared-types';
 import type { OpencodeConnection } from '../../../bindings.js';
 import { captureConversationMemory } from '../../memory.js';
 import {
@@ -409,6 +409,7 @@ export const Chat = ({
               folderPath: sessionFolderPath,
               createdAt: timestamp,
               lastActiveAt: timestamp,
+              mode: DEFAULT_SESSION_MODE,
             });
           } catch (error) {
             console.warn('Failed to restore the session row from chat history.', error);
@@ -687,6 +688,7 @@ export const Chat = ({
           folderPath: sessionFolderPath,
           createdAt: timestamp,
           lastActiveAt: timestamp,
+          mode: DEFAULT_SESSION_MODE,
         });
       } catch (error) {
         console.warn('Failed to persist the active chat session.', error);

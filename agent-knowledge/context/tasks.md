@@ -106,13 +106,15 @@ Spec: [[23-mvp-chat-markdown]] + [[24-mvp-model-picker]] · Depends on: M1.3
 | 4.6 | Thinking/reasoning blocks: same disclosure pattern. Hidden by default. Keyboard shortcut `⌥T` toggles all. | S | 4.5 | review | TIN-43 · PR #67 (bundled — see 4.5). |
 | 4.7 | `<ModelPicker>` primitive in `@tinker/design` per 4.1 findings. Dropdown + search input + keyboard nav + provider/model/context-window rows. | L | 4.1 | done | TIN-44 · PR #32 merged 2026-04-22. Folder `ModelPicker/` (Trigger + Panel + CSS + tests). Substring filter; fuzzysort deferred. Follow-up tickets: Ctrl+N/P + click-outside scrollbar gap + ARIA combobox upgrade. |
 | 4.8 | Wire ModelPicker to `opencode.config.providers()` SDK call. Group by provider. | M | 4.7 | review | TIN-45 · PR #43. Chat composer picker now loads from SDK, applies selected `{ providerID, modelID }` on prompt, and handles zero-provider empty state. |
-| 4.9 | Persist selected model per-session in SQLite `sessions.model_id`. New session inherits last-used model. | S | 4.8, 2.2 | not started | Cross-pillar touch. |
+| 4.9 | Persist selected model per-session in SQLite `sessions.model_id`. New session inherits last-used model. | S | 4.8, 2.2 | review | TIN-46 · PR #80. |
 | 4.10 | Parity verification: side-by-side with OpenCode Desktop from 4.1. Checklist in PR description. | S | 4.9 | not started | Review-as-task. |
 | 4.11 | Input box: multi-line `<Textarea>` (already shipped). `Enter` submits, `Shift+Enter` newline, disabled while streaming, `Escape` calls `session.abort()`. Auto-resize up to 10 lines. | M | 4.2 | review | TIN-48 · PR #58. |
 | 4.12 | Stop button: visible only while streaming, calls `session.abort()`. Replaces send button during stream. | S | 4.11 | review | TIN-49 · PR #58. |
 | 4.13 | Auto-scroll: stick to bottom during streaming unless user scrolled up. `[New messages]` pill appears when user is scrolled up + new content arrives. | M | 4.4 | review | TIN-50 + PR #73. Sticky-bottom threshold = 100px; pill uses `ClickableBadge`; helper tests cover tail-signature + threshold logic. |
 | 4.14 | Copy-message button on each assistant message. Hover-reveal. | S | 4.2 | review | TIN-51 · PR #57. Copies raw markdown; hidden while streaming. |
 | 4.15 | Clear existing tool-call / thinking UI from `Chat.tsx` that doesn't match 4.5/4.6 semantics. | S | 4.5, 4.6 | review | TIN-52 · PR #67 (bundled — see 4.5). |
+| 4.16 | Build vs Plan mode picker in Chat pane header. Persist per session and pass to OpenCode prompt agent. | M | 2.2, 4.7, 4.8, 5.2 | review | TIN-173 · PR #80. Header ships ModelPicker + ModeToggle + plan badge + ContextBadge wiring. |
+| 4.17 | Reasoning level picker for reasoning-capable models. Persist per session; new session inherits last-used value for that model family. | M | 2.2, 4.7, 4.8, 5.1 | review | TIN-174 · PR #80. Hidden for non-reasoning models; maps UI low/medium/high to OpenCode variants. |
 
 ### M5 — Context usage badge
 Spec: [[25-mvp-context-badge]] · Depends on: M4.2
