@@ -17,8 +17,8 @@ import {
   type MemoryRunState,
 } from '@tinker/memory';
 import { createSchedulerEngine, type SchedulerEngine } from '@tinker/scheduler';
-import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus, SSOSession, User, VaultConfig } from '@tinker/shared-types';
-import { DEFAULT_USER_ID, ONBOARDING_KEY, type AuthProvider, type AuthStatus, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
+import type { LayoutStore, MemoryStore, ScheduledJobStore, SkillStore, SSOStatus, SSOSession, VaultConfig } from '@tinker/shared-types';
+import { ONBOARDING_KEY, type AuthProvider, type OpencodeConnection, VAULT_PATH_KEY } from '../bindings.js';
 import { readDailySweepState, runDailyMemorySweepIfDue } from './memory.js';
 import {
   checkExaBootHealth,
@@ -30,6 +30,12 @@ import { FirstRun } from './panes/FirstRun.js';
 import { createWorkspaceClient, getOpencodeDirectory, pickFirstOauthProvider } from './opencode.js';
 import { SignIn } from './routes/SignIn/index.js';
 import { isTauriRuntime, WEB_PREVIEW_NOTICE } from './runtime.js';
+import {
+  buildStoredUserId,
+  EMPTY_AUTH_STATUS,
+  toStoredUser,
+  useCurrentUser,
+} from './useCurrentUser.js';
 import { Workspace } from './workspace/Workspace.js';
 
 type ReadyAppState = {
@@ -39,7 +45,6 @@ type ReadyAppState = {
   skillStore: SkillStore;
   schedulerStore: ScheduledJobStore;
   opencode: OpencodeConnection;
-  sessions: SSOStatus;
   mcpStatus: Record<string, MCPStatus>;
   vaultPath: string | null;
   onboarded: boolean;
@@ -85,57 +90,6 @@ const providerNeedsRefreshToken = (provider: AuthProvider): boolean => {
 
 const providerNeedsWorkspaceRefresh = (provider: AuthProvider): boolean => {
   return provider === 'github';
-};
-
-const buildStoredUserId = (provider: User['provider'], providerUserId: string): string => {
-  return `${provider}:${providerUserId}`;
-};
-
-const createLocalUser = (): User => {
-  const timestamp = new Date().toISOString();
-
-  return {
-    id: DEFAULT_USER_ID,
-    provider: 'local',
-    providerUserId: DEFAULT_USER_ID,
-    displayName: 'Offline mode',
-    createdAt: timestamp,
-    lastSeenAt: timestamp,
-  };
-};
-
-const pickCurrentUserId = (sessions: SSOStatus): User['id'] => {
-  const activeSession = sessions.google ?? sessions.github ?? sessions.microsoft;
-  return activeSession
-    ? buildStoredUserId(activeSession.provider, activeSession.userId)
-    : DEFAULT_USER_ID;
-};
-
-const toStoredUser = (session: SSOSession): User => {
-  const timestamp = new Date().toISOString();
-
-  return {
-    id: buildStoredUserId(session.provider, session.userId),
-    provider: session.provider,
-    providerUserId: session.userId,
-    displayName: session.displayName,
-    email: session.email,
-    createdAt: timestamp,
-    lastSeenAt: timestamp,
-    ...(session.avatarUrl ? { avatarUrl: session.avatarUrl } : {}),
-  };
-};
-
-const withDefaultSessions = (status: Partial<SSOStatus> | null | undefined): SSOStatus => {
-  return {
-    google: status?.google ?? null,
-    github: status?.github ?? null,
-    microsoft: status?.microsoft ?? null,
-  };
-};
-
-const readAuthStatus = async (): Promise<SSOStatus> => {
-  return withDefaultSessions(await invoke<AuthStatus>('auth_status'));
 };
 
 const ensureConnectedMemoryPaths = async (sessions: SSOStatus): Promise<void> => {
@@ -297,6 +251,7 @@ export const App = (): JSX.Element => {
   const [memorySweepState, setMemorySweepState] = useState<MemoryRunState | null>(null);
   const [memorySweepBusy, setMemorySweepBusy] = useState(false);
   const schedulerEngineRef = useRef<SchedulerEngine | null>(null);
+  const { state: currentUserState, refresh: refreshCurrentUser } = useCurrentUser(nativeRuntime);
 
   const requireNativeRuntime = (action: string): void => {
     if (!nativeRuntime) {
@@ -340,7 +295,6 @@ export const App = (): JSX.Element => {
             skillStore,
             schedulerStore,
             opencode: WEB_PREVIEW_CONNECTION,
-            sessions: withDefaultSessions(null),
             mcpStatus: {},
             vaultPath: null,
             onboarded: false,
@@ -352,9 +306,7 @@ export const App = (): JSX.Element => {
           return;
         }
 
-        const [opencode, sessions] = await Promise.all([invoke<OpencodeConnection>('get_opencode_connection'), readAuthStatus()]);
-        await upsertUser(createLocalUser());
-        await ensureConnectedMemoryPaths(sessions);
+        const opencode = await invoke<OpencodeConnection>('get_opencode_connection');
         const vaultPath = window.localStorage.getItem(VAULT_PATH_KEY);
 
         let vaultRevision = 0;
@@ -367,9 +319,6 @@ export const App = (): JSX.Element => {
           vaultRevision = 1;
         }
 
-        await syncConnectorState(opencode, vaultPath, sessions).catch((error) => {
-          console.warn('Could not restore connector state on boot.', error);
-        });
         const modelConnected = await probeModelConnection(opencode, vaultPath);
 
         if (!active) {
@@ -383,7 +332,6 @@ export const App = (): JSX.Element => {
           skillStore,
           schedulerStore,
           opencode,
-          sessions,
           mcpStatus: {},
           vaultPath,
           onboarded: window.localStorage.getItem(ONBOARDING_KEY) === '1',
@@ -408,6 +356,49 @@ export const App = (): JSX.Element => {
       active = false;
     };
   }, [layoutStore, memoryStore, nativeRuntime, schedulerStore, skillStore, vaultService]);
+
+  useEffect(() => {
+    if (!nativeRuntime || state.status !== 'ready' || currentUserState.status !== 'ready') {
+      return;
+    }
+
+    let active = true;
+    const activeSessions = currentUserState.sessions;
+    const activeVaultPath = state.vaultPath;
+    const activeBaseUrl = state.opencode.baseUrl;
+
+    void (async () => {
+      await ensureConnectedMemoryPaths(activeSessions);
+      await syncConnectorState(state.opencode, activeVaultPath, activeSessions).catch((error) => {
+        console.warn('Could not restore connector state on auth change.', error);
+      });
+      const modelConnected = await probeModelConnection(state.opencode, activeVaultPath);
+
+      if (!active) {
+        return;
+      }
+
+      setState((current) =>
+        current.status !== 'ready' || current.opencode.baseUrl !== activeBaseUrl
+          ? current
+          : {
+              ...current,
+              modelConnected,
+            },
+      );
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    currentUserState.status,
+    currentUserState.status === 'ready' ? currentUserState.sessions : EMPTY_AUTH_STATUS,
+    nativeRuntime,
+    state.status,
+    state.status === 'ready' ? state.opencode.baseUrl : null,
+    state.status === 'ready' ? state.vaultPath : null,
+  ]);
 
   useEffect(() => {
     if (!nativeRuntime || state.status !== 'ready' || !state.vaultPath) {
@@ -663,7 +654,7 @@ export const App = (): JSX.Element => {
     state.status === 'ready' ? state.opencode.password : null,
   ]);
 
-  if (state.status === 'loading') {
+  if (state.status === 'loading' || currentUserState.status === 'loading') {
     return (
       <div className="tinker-app">
         <main className="tinker-stage">
@@ -691,18 +682,23 @@ export const App = (): JSX.Element => {
     );
   }
 
-  const reloadConnectionState = async (connection: OpencodeConnection, vaultPath: string | null) => {
-    const sessions = await readAuthStatus();
-    await syncConnectorState(connection, vaultPath, sessions);
-    const modelConnected = await probeModelConnection(connection, vaultPath);
-
-    return { sessions, modelConnected };
-  };
+  if (currentUserState.status === 'error') {
+    return (
+      <div className="tinker-app">
+        <main className="tinker-stage">
+          <section className="tinker-card">
+            <p className="tinker-eyebrow">Start-up failed</p>
+            <h1>Tinker could not finish booting</h1>
+            <p className="tinker-muted">{currentUserState.message}</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   const refreshWorkspaceConnection = async (): Promise<void> => {
     requireNativeRuntime('Restarting OpenCode');
     const opencode = await invoke<OpencodeConnection>('restart_opencode');
-    const nextState = await reloadConnectionState(opencode, state.vaultPath);
 
     setState((current) =>
       current.status !== 'ready'
@@ -710,12 +706,10 @@ export const App = (): JSX.Element => {
         : {
             ...current,
             opencode,
-            sessions: nextState.sessions,
             mcpStatus: {
               ...current.mcpStatus,
               [EXA_MCP_NAME]: EXA_CHECKING_STATUS,
             },
-            modelConnected: nextState.modelConnected,
           },
     );
   };
@@ -728,7 +722,8 @@ export const App = (): JSX.Element => {
     await skillStore.reindex();
     window.localStorage.setItem(VAULT_PATH_KEY, config.path);
 
-    await syncConnectorState(state.opencode, config.path, state.sessions).catch((error) => {
+    const activeSessions = currentUserState.status === 'ready' ? currentUserState.sessions : EMPTY_AUTH_STATUS;
+    await syncConnectorState(state.opencode, config.path, activeSessions).catch((error) => {
       console.warn('Could not refresh connector state after vault change.', error);
     });
     const modelConnected = await probeModelConnection(state.opencode, config.path);
@@ -847,19 +842,9 @@ export const App = (): JSX.Element => {
         throw new Error(`${providerDisplayName(provider)} sign-in did not return refresh token. Try again.`);
       }
 
+      await refreshCurrentUser();
       if (providerNeedsWorkspaceRefresh(provider)) {
         await refreshWorkspaceConnection();
-      } else {
-        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
-        setState((current) =>
-          current.status !== 'ready'
-            ? current
-            : {
-                ...current,
-                sessions: nextState.sessions,
-                modelConnected: nextState.modelConnected,
-              },
-        );
       }
 
       setProviderMessage(provider, `${providerDisplayName(provider)} connected as ${session.email}.`);
@@ -877,20 +862,10 @@ export const App = (): JSX.Element => {
     try {
       requireNativeRuntime(`Disconnecting ${providerDisplayName(provider)}`);
       await invoke('auth_sign_out', { provider });
+      await refreshCurrentUser();
 
       if (providerNeedsWorkspaceRefresh(provider)) {
         await refreshWorkspaceConnection();
-      } else {
-        const nextState = await reloadConnectionState(state.opencode, state.vaultPath);
-        setState((current) =>
-          current.status !== 'ready'
-            ? current
-            : {
-                ...current,
-                sessions: nextState.sessions,
-                modelConnected: nextState.modelConnected,
-              },
-        );
       }
 
       setProviderMessage(provider, `${providerDisplayName(provider)} disconnected.`);
@@ -942,13 +917,10 @@ export const App = (): JSX.Element => {
     await engine.runNow(jobId);
   };
 
-  const hasSignedIn =
-    state.sessions.google !== null ||
-    state.sessions.github !== null ||
-    state.sessions.microsoft !== null;
-  const signInGateVisible = nativeRuntime && !hasSignedIn;
-  const workspaceAvailable = nativeRuntime && state.onboarded && hasSignedIn;
-  const currentUserId = pickCurrentUserId(state.sessions);
+  const currentSessions = currentUserState.sessions;
+  const currentUserId = currentUserState.authState === 'authenticated' ? currentUserState.user.id : null;
+  const signInGateVisible = nativeRuntime && currentUserState.authState === 'unauthenticated';
+  const workspaceAvailable = nativeRuntime && state.onboarded && currentUserState.authState === 'authenticated';
 
   if (signInGateVisible) {
     return (
@@ -977,7 +949,7 @@ export const App = (): JSX.Element => {
           githubAuthMessage={providerMessages.github}
           microsoftAuthBusy={providerBusy.microsoft}
           microsoftAuthMessage={providerMessages.microsoft}
-          sessions={state.sessions}
+          sessions={currentSessions}
           mcpStatus={state.mcpStatus}
           vaultPath={state.vaultPath}
           onConnectModel={handleConnectModel}
@@ -990,8 +962,8 @@ export const App = (): JSX.Element => {
         />
       ) : (
         <Workspace
-          key={currentUserId}
-          currentUserId={currentUserId}
+          key={currentUserId ?? 'local-user'}
+          currentUserId={currentUserId ?? 'local-user'}
           layoutStore={state.layoutStore}
           memoryStore={state.memoryStore}
           schedulerStore={state.schedulerStore}
@@ -1007,7 +979,7 @@ export const App = (): JSX.Element => {
           microsoftAuthBusy={providerBusy.microsoft}
           microsoftAuthMessage={providerMessages.microsoft}
           opencode={state.opencode}
-          sessions={state.sessions}
+          sessions={currentSessions}
           mcpStatus={state.mcpStatus}
           vaultPath={state.vaultPath}
           vaultRevision={state.vaultRevision}
