@@ -819,6 +819,8 @@ export const Workspace = ({
       titlebar={
         <Titlebar
           sessionFolderPath={vaultPath}
+          currentUserName={currentUserName}
+          currentUserAvatarUrl={currentUserAvatarUrl}
           isLeftRailVisible={workspacePreferences.isLeftRailVisible}
           isRightInspectorVisible={workspacePreferences.isRightInspectorVisible}
           onToggleLeftRail={toggleLeftRail}

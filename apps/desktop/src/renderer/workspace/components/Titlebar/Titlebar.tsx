@@ -1,10 +1,12 @@
 import type { JSX } from 'react';
-import { IconButton } from '@tinker/design';
+import { Avatar, IconButton } from '@tinker/design';
 import { getPanelTitleForPath } from '../../../renderers/file-utils.js';
 import './Titlebar.css';
 
 export type TitlebarProps = {
   sessionFolderPath: string | null;
+  currentUserName?: string;
+  currentUserAvatarUrl?: string | null;
   isLeftRailVisible: boolean;
   isRightInspectorVisible: boolean;
   onToggleLeftRail: () => void;
@@ -13,6 +15,9 @@ export type TitlebarProps = {
 };
 
 const basename = (path: string): string => getPanelTitleForPath(path.replace(/[\\/]+$/u, ''));
+
+const shortPath = (path: string): string =>
+  path.replace(/^\/Users\/([^/]+)\//u, '~$1/').replace(/^\/home\/([^/]+)\//u, '~$1/');
 
 // Paper 9Q-0: 15×15 glyph with 12×10 rounded-rect panel outline + a divider line.
 // LEFT-rail-toggle places the divider toward the left edge of the panel. Stroke uses
@@ -58,6 +63,8 @@ const PlaybookIcon = (): JSX.Element => (
 
 export const Titlebar = ({
   sessionFolderPath,
+  currentUserName = 'Guest',
+  currentUserAvatarUrl = null,
   isLeftRailVisible,
   isRightInspectorVisible,
   onToggleLeftRail,
@@ -65,6 +72,7 @@ export const Titlebar = ({
   onOpenPlaybook,
 }: TitlebarProps): JSX.Element => {
   const crumb = sessionFolderPath !== null ? basename(sessionFolderPath) : null;
+  const pathLabel = sessionFolderPath !== null ? shortPath(sessionFolderPath) : null;
 
   return (
     <header className="tinker-titlebar" data-tauri-drag-region>
@@ -80,8 +88,20 @@ export const Titlebar = ({
             <span className="tinker-titlebar__crumb" title={sessionFolderPath ?? undefined}>
               {crumb}
             </span>
+            {pathLabel !== null ? (
+              <span className="tinker-titlebar__path" title={sessionFolderPath ?? undefined}>
+                {pathLabel}
+              </span>
+            ) : null}
           </>
         ) : null}
+        <Avatar
+          className="tinker-titlebar__avatar"
+          name={currentUserName}
+          {...(currentUserAvatarUrl !== null ? { src: currentUserAvatarUrl } : {})}
+          size="xs"
+          title={currentUserName}
+        />
       </div>
 
       <div className="tinker-titlebar__actions" data-tauri-drag-region="false">
