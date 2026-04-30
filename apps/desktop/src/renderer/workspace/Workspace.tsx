@@ -349,6 +349,7 @@ export const Workspace = ({
           try {
             const restoredModel = Model.fromJson(savedLayout.layoutJson as IJsonModel);
             modelRef.current = restoredModel;
+            setActiveRailItem(getActivePaneKind(restoredModel));
           } catch (error) {
             console.warn('Stored workspace layout could not be hydrated. Falling back to default.', error);
             modelRef.current = Model.fromJson(createDefaultLayoutJson());

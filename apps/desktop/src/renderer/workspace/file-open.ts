@@ -94,13 +94,20 @@ export const openWorkspaceFile = async (
 
   const existingFilePane = findFirstFilePaneInActiveTabset(model);
   if (existingFilePane) {
+    const tabsetId = existingFilePane.getParent()?.getId();
+    model.doAction(Actions.deleteTab(existingFilePane.getId()));
+    const targetId = tabsetId && model.getNodeById(tabsetId)
+      ? tabsetId
+      : model.getActiveTabset()?.getId() ?? model.getFirstTabSet().getId();
     model.doAction(
-      Actions.updateNodeAttributes(existingFilePane.getId(), {
-        name: getPanelTitleForPath(absolutePath),
-        config: { kind: 'file' as const, path: absolutePath, mime },
-      }),
+      Actions.addTab(
+        fileTabJson,
+        targetId,
+        DockLocation.CENTER,
+        -1,
+        true,
+      ),
     );
-    model.doAction(Actions.selectTab(existingFilePane.getId()));
     return;
   }
 

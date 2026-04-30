@@ -50,12 +50,14 @@ describe('openWorkspaceFile', () => {
 
     await openWorkspaceFile(model, '/vault/first.md', async () => 'text/markdown');
     const firstPaneId = getPanelIdForPath('file', '/vault/first.md');
+    const secondPaneId = getPanelIdForPath('file', '/vault/second.md');
 
     await openWorkspaceFile(model, '/vault/second.md', async () => 'text/markdown');
 
-    const replacedNode = findTabById(model, firstPaneId);
-    expect(replacedNode).toBeDefined();
-    const config = replacedNode?.getConfig() as TinkerPaneData;
+    expect(findTabById(model, firstPaneId)).toBeNull();
+    const newNode = findTabById(model, secondPaneId);
+    expect(newNode).toBeDefined();
+    const config = newNode?.getConfig() as TinkerPaneData;
     expect(config).toEqual({
       kind: 'file',
       path: '/vault/second.md',
