@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { Layout, Model, Actions, DockLocation, type TabNode, type IJsonModel } from 'flexlayout-react';
 import '@tinker/design/styles/tokens.css';
 import { Badge, Button } from '@tinker/design';
@@ -31,7 +31,7 @@ const NotesRenderer = ({ data }: { data: DemoData }): JSX.Element => {
 const TimerRenderer = ({ data }: { data: DemoData }): JSX.Element => {
   if (data.kind !== 'timer') return <div />;
   const [now, setNow] = useState(() => Date.now());
-  useMemo(() => {
+  useEffect(() => {
     const id = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(id);
   }, []);
