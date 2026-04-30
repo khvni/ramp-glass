@@ -355,7 +355,7 @@ export const Workspace = ({
           id: `chat-${crypto.randomUUID()}`,
           kind: 'chat',
           title,
-          data: { kind: 'chat', folderPath, memorySubdir },
+          data: { kind: 'chat', createFreshSession: true, folderPath, memorySubdir },
         },
       });
 

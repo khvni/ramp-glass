@@ -46,6 +46,7 @@ export const RegisteredChatPane = ({
       {...(onDuplicatePane ? { onDuplicatePane } : {})}
       {...(onClosePane ? { onClosePane } : {})}
       {...(paneData?.sessionId ? { paneSessionId: paneData.sessionId } : {})}
+      {...(paneData?.createFreshSession ? { createFreshSession: paneData.createFreshSession } : {})}
       onSelectSessionFolder={propOnSelectSessionFolder ?? runtimeOnSelectSessionFolder}
       onReleaseOpencode={() => {
         if (releaseConnectionForPane) {

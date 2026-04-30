@@ -36,6 +36,7 @@ export type TinkerPaneData =
   | {
       readonly kind: 'chat';
       readonly sessionId?: string;
+      readonly createFreshSession?: boolean;
       readonly folderPath?: string;
       readonly memorySubdir?: string;
     }

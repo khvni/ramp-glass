@@ -115,6 +115,7 @@ type ChatProps = {
   onClosePane?: () => void;
   paneIsActive?: boolean;
   paneSessionId?: string;
+  createFreshSession?: boolean;
   onPersistSessionId?: (sessionId: string) => void;
   onAttentionSignal?: (reason: 'notification-arrival') => void;
   onReleaseOpencode?: () => void;
@@ -270,6 +271,7 @@ export const Chat = ({
   onClosePane,
   paneIsActive = true,
   paneSessionId,
+  createFreshSession = false,
   onPersistSessionId,
   onAttentionSignal,
   onReleaseOpencode,
@@ -502,15 +504,17 @@ export const Chat = ({
 
     void (async () => {
       try {
-        const existingSession = await findLatestSessionForFolder(currentUserId, sessionFolderPath);
+        const existingSession = createFreshSession ? null : await findLatestSessionForFolder(currentUserId, sessionFolderPath);
         const pinnedSession = paneSessionId ? await getSession(paneSessionId) : null;
         const restoredSessionID =
           pinnedSession?.id
           ?? existingSession?.id
-          ?? (await findLatestChatHistorySessionId({
-            folderPath: sessionFolderPath,
-            userId: currentUserId,
-          }));
+          ?? (createFreshSession
+            ? null
+            : await findLatestChatHistorySessionId({
+              folderPath: sessionFolderPath,
+              userId: currentUserId,
+            }));
 
         if (!restoredSessionID || cancelled || !mountedRef.current) {
           if (!cancelled && mountedRef.current) {
@@ -573,7 +577,7 @@ export const Chat = ({
     // installing a skill used to force this effect — which aborts the live
     // OpenCode session, wipes messages, and rehydrates from disk. Re-injection
     // now happens lazily in `injectActiveSkillsIfStale` before each prompt.
-  }, [activateSession, client, currentUserId, onPersistSessionId, paneSessionId, readyStatus, sessionFolderPath]);
+  }, [activateSession, client, createFreshSession, currentUserId, onPersistSessionId, paneSessionId, readyStatus, sessionFolderPath]);
 
   useEffect(() => {
     if (!activeSessionId || !selectedModel) {
