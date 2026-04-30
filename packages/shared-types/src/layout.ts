@@ -27,23 +27,9 @@ export const createDefaultWorkspacePreferences = (): WorkspacePreferences => {
   };
 };
 
-/**
- * FlexLayout-compatible persisted model JSON. This replaces the former
- * `WorkspaceState<TinkerPaneData>` from `@tinker/panes`.
- *
- * Each FlexLayout tab node carries:
- *   - `component`: the `TinkerPaneKind` string
- *   - `config`: the `TinkerPaneData` payload
- */
-export type PersistedLayoutJson = {
-  global?: Record<string, unknown>;
-  borders?: unknown[];
-  layout: unknown;
-};
-
 export type LayoutState = {
   version: 3;
-  layoutJson: PersistedLayoutJson;
+  layoutJson: unknown;
   updatedAt: string;
   preferences: WorkspacePreferences;
 };

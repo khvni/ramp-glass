@@ -2,10 +2,8 @@ import { useCallback, useMemo, useRef, useState, type JSX } from 'react';
 import { Layout, Model, Actions, DockLocation, type TabNode, type IJsonModel } from 'flexlayout-react';
 import 'flexlayout-react/style/dark.css';
 import '@tinker/design/styles/tokens.css';
-import { Badge, Button, TextInput } from '@tinker/design';
+import { Badge, Button } from '@tinker/design';
 import './panes-demo.css';
-
-const PANES_DEMO_WORKSPACE_ID = 'panes-demo';
 
 type DemoData =
   | { readonly kind: 'chat'; readonly messages: ReadonlyArray<{ readonly id: string; readonly body: string }> }
@@ -60,7 +58,6 @@ const createSeedModel = (): IJsonModel => ({
     tabSetEnableDrop: true,
     tabSetEnableDrag: true,
     tabSetEnableMaximize: true,
-    splitterSize: 4,
   },
   borders: [],
   layout: {

@@ -6,29 +6,10 @@ import { getPanelIdForPath, XLSX_MIME } from '../renderers/file-utils.js';
 import { openWorkspaceFile } from './file-open.js';
 import { createDefaultLayoutJson } from './layout.default.js';
 
-const findTabByComponent = (model: Model, component: string): TabNode | null => {
-  let found: TabNode | null = null;
-  model.visitNodes((node) => {
-    if (found) return;
-    if (node.getType() === 'tab' && (node as TabNode).getComponent() === component) {
-      found = node as TabNode;
-    }
-  });
-  return found;
-};
-
 const findTabById = (model: Model, id: string): TabNode | null => {
   const node = model.getNodeById(id);
   if (node && node.getType() === 'tab') return node as TabNode;
   return null;
-};
-
-const countTabsets = (model: Model): number => {
-  let count = 0;
-  model.visitNodes((node) => {
-    if (node.getType() === 'tabset') count += 1;
-  });
-  return count;
 };
 
 describe('openWorkspaceFile', () => {

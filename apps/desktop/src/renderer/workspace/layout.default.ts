@@ -15,7 +15,6 @@ export const createDefaultLayoutJson = (): IJsonModel => {
       tabSetEnableDrag: true,
       tabSetEnableMaximize: true,
       tabSetEnableTabStrip: true,
-      splitterSize: 4,
       tabSetMinWidth: 100,
       tabSetMinHeight: 100,
     },

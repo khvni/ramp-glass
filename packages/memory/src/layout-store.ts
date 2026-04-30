@@ -2,7 +2,6 @@ import {
   createDefaultWorkspacePreferences,
   type LayoutState,
   type LayoutStore,
-  type PersistedWorkspaceState,
   type WorkspacePreferences,
 } from '@tinker/shared-types';
 import { getDatabase } from './database.js';
@@ -13,10 +12,10 @@ export type LayoutRow = {
   updated_at: string;
 };
 
-export const CURRENT_LAYOUT_VERSION = 2 as const;
+export const CURRENT_LAYOUT_VERSION = 3 as const;
 
 type StoredLayoutPayload = {
-  workspaceState: unknown;
+  layoutJson: unknown;
   preferences?: unknown;
 };
 
@@ -51,22 +50,18 @@ const normalizePreferences = (value: unknown): WorkspacePreferences => {
   };
 };
 
-const isWorkspaceState = (value: unknown): value is PersistedWorkspaceState => {
+const isLayoutJson = (value: unknown): boolean => {
   if (!value || typeof value !== 'object') {
     return false;
   }
 
   const candidate = value as Record<string, unknown>;
-  return (
-    candidate.version === CURRENT_LAYOUT_VERSION &&
-    Array.isArray(candidate.tabs) &&
-    ('activeTabId' in candidate)
-  );
+  return 'layout' in candidate;
 };
 
 export const serializeLayoutState = (state: LayoutState): string => {
   const payload: StoredLayoutPayload = {
-    workspaceState: state.workspaceState,
+    layoutJson: state.layoutJson,
     preferences: state.preferences,
   };
 
@@ -92,18 +87,18 @@ export const hydrateLayoutRow = (row: LayoutRow | undefined, userId: string): La
   }
 
   const candidate = payload as Record<string, unknown>;
-  const hasWrapper = 'workspaceState' in candidate;
-  const workspaceState = hasWrapper ? candidate.workspaceState : payload;
+  const hasWrapper = 'layoutJson' in candidate;
+  const layoutJson = hasWrapper ? candidate.layoutJson : payload;
   const preferences = hasWrapper ? normalizePreferences(candidate.preferences) : createDefaultWorkspacePreferences();
 
-  if (!isWorkspaceState(workspaceState)) {
-    console.warn(`Ignoring stored layout for user ${userId}: payload was not a WorkspaceState snapshot.`);
+  if (!isLayoutJson(layoutJson)) {
+    console.warn(`Ignoring stored layout for user ${userId}: payload was not a valid FlexLayout model.`);
     return null;
   }
 
   return {
     version: CURRENT_LAYOUT_VERSION,
-    workspaceState,
+    layoutJson,
     updatedAt: row.updated_at,
     preferences,
   };

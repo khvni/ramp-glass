@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { Layout, Model, Actions, type TabNode, type Action, type IJsonModel } from 'flexlayout-react';
+import { Layout, Model, Actions, DockLocation, type TabNode, type Action, type IJsonModel } from 'flexlayout-react';
 import 'flexlayout-react/style/dark.css';
 import { getActiveMemoryPath, type MemoryRunState } from '@tinker/memory';
 import {
@@ -18,7 +18,7 @@ import {
 import type { OpencodeConnection } from '../../bindings.js';
 import { resolveWorkspaceFilePath } from '../file-links.js';
 import { BUILTIN_MCP_NAMES, type BuiltinMcpName, type MCPStatus } from '../integrations.js';
-import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
+import { isAbsolutePath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
 import { Titlebar } from './components/Titlebar/index.js';
