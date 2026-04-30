@@ -1,4 +1,4 @@
-import { useMemo, type JSX, type KeyboardEvent } from 'react';
+import { useMemo, type JSX } from 'react';
 import { Button, EmptyState } from '@tinker/design';
 import type { Session } from '@tinker/shared-types';
 import { getPanelTitleForPath } from '../../../renderers/file-utils.js';
@@ -57,13 +57,6 @@ export const SessionSwitcher = ({
     [sessions],
   );
 
-  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>, session: Session): void => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      onSelectSession(session);
-    }
-  };
-
   if (errorMessage !== null) {
     return (
       <section className="tinker-session-switcher tinker-session-switcher--empty">
@@ -108,18 +101,15 @@ export const SessionSwitcher = ({
           </Button>
         </header>
 
-        <div className="tinker-session-switcher__list" role="listbox" aria-label="Recent sessions">
+        <div className="tinker-session-switcher__list" aria-label="Recent sessions">
           {sortedSessions.map((session) => (
             <button
               key={session.id}
               type="button"
               className="tinker-session-switcher__row"
-              role="option"
-              aria-selected="false"
               title={session.folderPath}
               disabled={busy}
               onClick={() => onSelectSession(session)}
-              onKeyDown={(event) => handleKeyDown(event, session)}
             >
               <span className="tinker-session-switcher__folder">{basename(session.folderPath)}</span>
               <span className="tinker-session-switcher__path">{formatPath(session.folderPath)}</span>
