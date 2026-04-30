@@ -135,20 +135,14 @@ Log of what's explicitly OUT of scope or deferred, with reasoning. Coding agents
 - **Why**: Matches "workspace, not a chat window" tone — desktop-first, quiet, long-session-friendly. Amber is distinct from the cyan-on-dark AI-slop default. Host Grotesk carries geometric warmth without looking like every other Inter/DM Sans clone.
 - **How to apply**: Never reintroduce `Space Grotesk`, `Inter`, `Avenir Next`, or radial cyan gradients. Never add light-mode branches without a design decision first. If a light mode lands, it's a token-layer change in `@tinker/design`, not a per-app override.
 
-### `[2026-04-19]` D16 — Replace Dockview with `@tinker/panes`
-- **Decision**: Retire `dockview-react` as the workspace layout engine. `@tinker/panes` (recursive split tree + tabs + zustand store) is the only sanctioned layout primitive going forward. Existing panes migrate feature-by-feature; no big-bang rip-out.
-- **Why**: Dockview solves VS Code-style dockable panels with floating windows and cross-group tab merging — capabilities Tinker does not need per PRD. The cost we paid was:
-  - Workspace state serialization is opaque (whatever Dockview emits).
-  - Tab ordering + pane focus semantics live in a third-party runtime we don't fully own.
-  - Plugging cmux-style attention rings and Superset-style workspace metadata into Dockview means fighting its APIs.
-  - Layout persistence schema leaks Dockview's internal model into `packages/shared-types`, making migrations brittle.
+### `[2026-04-19]` D16 — Replace Dockview with FlexLayout (updated 2026-04-30)
+- **Decision**: Retire `dockview-react` **and** the custom `@tinker/panes` package. **`flexlayout-react`** (FlexLayout) is the sanctioned layout engine going forward.
+- **History**: D16 originally replaced Dockview with the custom `@tinker/panes` recursive split-tree engine. `@tinker/panes` served its purpose but was superseded by FlexLayout, which provides the same split/tab/drag-drop/resize capabilities out of the box without maintaining a custom implementation.
 - **How to apply**:
-  - New panes register with `PaneRegistry` keyed by `pane.kind`.
-  - Layout state serializes via `selectWorkspaceSnapshot()`; persistence uses the `WorkspaceState<TData>` type, not Dockview's JSON.
-  - Migration order (parallel agents): Chat → Today → Scheduler → Settings → Playbook → VaultBrowser → file renderers. Each migration is its own PR with the matching pane moving to a `kind` in the registry.
-  - Don't add new `dockview-react` imports. Don't extend `packages/shared-types/LayoutState.dockviewModel`.
-  - Remove the `dockview-react` dependency in the PR that ships the last migrated pane.
-- **Reference**: See `agent-knowledge/reference/panes-heritage.md` for the architectural synthesis (cmux + OpenCode + Superset) behind this choice.
+  - New panes register via the FlexLayout factory function. Each pane kind is a `component` string on a tab node; pane payload lives in `config`.
+  - Layout state serializes via `model.toJson()`; persistence uses the `IJsonModel` type from `flexlayout-react`.
+  - Don't add `dockview-react` or `@tinker/panes` imports.
+- **Reference**: See `agent-knowledge/reference/panes-heritage.md` for the architectural synthesis (cmux + OpenCode + Superset) behind the original choice.
 
 ### `[2026-04-19]` D17 — Device / Host service split
 - **Decision**: Separate the process that runs workspace state from the process that displays it. `@tinker/host-service` (standalone server: workspace CRUD, vault + memory I/O, OpenCode sidecar lifecycle, git ops) is spawned and adopted by the Tauri shell but is deployable without Electron/Tauri awareness.
