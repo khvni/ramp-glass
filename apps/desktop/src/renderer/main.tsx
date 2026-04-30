@@ -2,7 +2,7 @@ import { StrictMode, Suspense, lazy, useEffect, type JSX, type ReactNode } from 
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/host-grotesk';
 import { ToastProvider } from '@tinker/design';
-import '@tinker/panes/styles.css';
+import 'flexlayout-react/style/dark.css';
 import { App } from './App.js';
 import { registerWorkspacePaneRenderers } from './workspace/register-pane-renderers.js';
 import { registerWorkspacePanes } from './workspace/register-panes.js';
