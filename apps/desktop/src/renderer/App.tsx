@@ -43,6 +43,15 @@ type BindingKey = string;
 const bindingKey = (folderPath: string, memorySubdir: string, userId: string): BindingKey =>
   `${folderPath}\0${memorySubdir}\0${userId}`;
 
+const parseBindingKey = (key: BindingKey): { folderPath: string; memorySubdir: string; userId: string } | null => {
+  const [folderPath, memorySubdir, userId, ...rest] = key.split('\0');
+  if (folderPath === undefined || memorySubdir === undefined || userId === undefined || rest.length > 0) {
+    return null;
+  }
+
+  return { folderPath, memorySubdir, userId };
+};
+
 const defaultConnection = (state: ReadyAppState): OpencodeConnection => {
   return state.opencodes[state.defaultBindingKey] ?? Object.values(state.opencodes)[0] ?? WEB_PREVIEW_CONNECTION;
 };
@@ -928,6 +937,8 @@ export const App = (): JSX.Element => {
 
     try {
       const memorySubdir = await getActiveMemoryPath(currentUserId);
+      const previousDefaultBindingKey = state.status === 'ready' ? state.defaultBindingKey : null;
+      const nextBindingKey = bindingKey(folderPath, memorySubdir, currentUserId);
       const connection = await acquireOpencode(folderPath, memorySubdir, currentUserId);
       await syncConnectorState(connection, folderPath, currentSessions);
       await vaultService.init({ path: folderPath, isNew });
@@ -939,11 +950,18 @@ export const App = (): JSX.Element => {
           ? current
           : {
               ...current,
+              defaultBindingKey: nextBindingKey,
               vaultPath: folderPath,
               vaultRevision: current.vaultRevision + 1,
               activeSkillsRevision: current.activeSkillsRevision + 1,
             },
       );
+      if (previousDefaultBindingKey && previousDefaultBindingKey !== nextBindingKey) {
+        const previous = parseBindingKey(previousDefaultBindingKey);
+        if (previous) {
+          void releaseOpencode(previous.folderPath, previous.memorySubdir, previous.userId);
+        }
+      }
     } finally {
       setSessionFolderBusy(false);
     }
