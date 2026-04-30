@@ -138,6 +138,11 @@ export const PanesDemo = (): JSX.Element => {
   const model = modelRef.current;
 
   const [paneCounter, setPaneCounter] = useState(100);
+  const [modelRevision, setModelRevision] = useState(0);
+
+  const handleModelChange = useCallback(() => {
+    setModelRevision((v) => v + 1);
+  }, []);
 
   const factory = useCallback((node: TabNode): JSX.Element => {
     const component = node.getComponent();
@@ -234,7 +239,7 @@ export const PanesDemo = (): JSX.Element => {
       if (node.getType() === 'tab') tabs += 1;
     });
     return { tabsets, tabs };
-  }, [model]);
+  }, [model, modelRevision]);
 
   return (
     <main className="panes-demo-shell">
@@ -263,6 +268,7 @@ export const PanesDemo = (): JSX.Element => {
         <Layout
           model={model}
           factory={factory}
+          onModelChange={handleModelChange}
         />
       </section>
 
