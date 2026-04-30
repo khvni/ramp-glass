@@ -33,22 +33,20 @@ const findFilePaneByPath = (
   return found;
 };
 
-const findFirstFilePaneInActiveTabset = (
+const findFirstFilePane = (
   model: Model,
 ): TabNode | null => {
-  const activeTabset = model.getActiveTabset();
-  if (!activeTabset) return null;
-
-  const children = activeTabset.getChildren();
-  for (const child of children) {
-    if (child.getType() !== 'tab') continue;
-    const tabNode = child as TabNode;
+  let found: TabNode | null = null;
+  model.visitNodes((node) => {
+    if (found) return;
+    if (node.getType() !== 'tab') return;
+    const tabNode = node as TabNode;
     const config = tabNode.getConfig() as TinkerPaneData | undefined;
     if (config?.kind === 'file') {
-      return tabNode;
+      found = tabNode;
     }
-  }
-  return null;
+  });
+  return found;
 };
 
 export const openWorkspaceFile = async (
@@ -92,7 +90,7 @@ export const openWorkspaceFile = async (
     },
   };
 
-  const existingFilePane = findFirstFilePaneInActiveTabset(model);
+  const existingFilePane = findFirstFilePane(model);
   if (existingFilePane) {
     const tabsetId = existingFilePane.getParent()?.getId();
     model.doAction(Actions.deleteTab(existingFilePane.getId()));
