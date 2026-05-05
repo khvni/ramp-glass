@@ -510,7 +510,11 @@ export const Chat = ({
     void (async () => {
       try {
         const existingSession = createFreshSession ? null : await findLatestSessionForFolder(currentUserId, sessionFolderPath);
-        const pinnedSession = paneSessionId ? await getSession(paneSessionId) : null;
+        const loadedPinnedSession = paneSessionId ? await getSession(paneSessionId) : null;
+        const pinnedSession =
+          loadedPinnedSession?.userId === currentUserId && loadedPinnedSession.folderPath === sessionFolderPath
+            ? loadedPinnedSession
+            : null;
         const restoredSessionID =
           pinnedSession?.id
           ?? existingSession?.id
