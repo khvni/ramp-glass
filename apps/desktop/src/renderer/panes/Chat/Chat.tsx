@@ -301,6 +301,7 @@ export const Chat = ({
   const [contextUsage, setContextUsage] = useState<ResolvedContextUsage | null>(null);
   const [showNewMessagesPill, setShowNewMessagesPill] = useState(false);
   const [requiresMcpConnectionGate, setRequiresMcpConnectionGate] = useState(false);
+  const [memoryRefreshPaused, setMemoryRefreshPaused] = useState(false);
   // Global default applied where no per-disclosure override exists. ⌥T flips this and clears overrides.
   const [defaultDisclosureOpen, setDefaultDisclosureOpen] = useState(false);
   const [disclosureOverrides, setDisclosureOverrides] = useState<Record<string, boolean>>({});
@@ -331,7 +332,7 @@ export const Chat = ({
     enabled: !hydratingHistory && !awaitingFolder && requiresMcpConnectionGate,
     loadStatus: loadMcpStatus,
   });
-  const composerBlocked = busy || hydratingHistory || awaitingFolder || !modelConnected || mcpConnectionGate.blocked;
+  const composerBlocked = busy || hydratingHistory || awaitingFolder || !modelConnected || mcpConnectionGate.blocked || memoryRefreshPaused;
 
   const saveAsSkillDefaultBody = useMemo(() => {
     return saveAsSkillOpen ? buildSkillTranscript(messages) : '';
@@ -445,10 +446,14 @@ export const Chat = ({
   }, [currentUserId]);
 
   useEffect(() => {
-    return subscribeMemoryPathChanged(() => {
+    return subscribeMemoryPathChanged((detail) => {
       memoryPathRef.current = null;
+      if (busy) {
+        setMemoryRefreshPaused(true);
+        setStatus(`Paused for memory refresh (${detail.reason === 'root-changed' ? 'path changed' : 'user switched'}).`);
+      }
     });
-  }, []);
+  }, [busy]);
 
   const resolveMemoryPath = useCallback(async (): Promise<string> => {
     if (!memoryPathRef.current) {
@@ -985,6 +990,7 @@ export const Chat = ({
     dispatchDraft({ type: 'reset' });
 
     try {
+      setMemoryRefreshPaused(false);
       const activeSessionID = await ensureSession();
       if (abortRequestedRef.current) {
         setStatus(readyStatus);
@@ -1062,6 +1068,9 @@ export const Chat = ({
           : {}),
       });
       await consumeStream;
+      if (mountedRef.current) {
+        setMemoryRefreshPaused(false);
+      }
 
       const aborted = abortRequestedRef.current;
       const partialBlocks = draftBlocksRef.current;
@@ -1137,6 +1146,7 @@ export const Chat = ({
     } finally {
       abortRequestedRef.current = false;
       if (mountedRef.current) {
+        setMemoryRefreshPaused(false);
         setBusy(false);
       }
     }

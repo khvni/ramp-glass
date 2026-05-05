@@ -43,6 +43,17 @@ type BindingKey = string;
 const bindingKey = (folderPath: string, memorySubdir: string, userId: string): BindingKey =>
   `${folderPath}\0${memorySubdir}\0${userId}`;
 
+const parseBindingKey = (
+  key: BindingKey,
+): { folderPath: string; memorySubdir: string; userId: string } | null => {
+  const [folderPath, memorySubdir, userId, ...rest] = key.split('\0');
+  if (rest.length > 0 || folderPath === undefined || memorySubdir === undefined || userId === undefined) {
+    return null;
+  }
+
+  return { folderPath, memorySubdir, userId };
+};
+
 const defaultConnection = (state: ReadyAppState): OpencodeConnection => {
   return state.opencodes[state.defaultBindingKey] ?? Object.values(state.opencodes)[0] ?? WEB_PREVIEW_CONNECTION;
 };
@@ -108,10 +119,6 @@ const providerNeedsRefreshToken = (provider: AuthProvider): boolean => {
   return provider === 'google' || provider === 'microsoft';
 };
 
-const providerNeedsWorkspaceRefresh = (provider: AuthProvider): boolean => {
-  return provider === 'github';
-};
-
 const createGuestUser = (): User => {
   const timestamp = new Date().toISOString();
 
@@ -173,15 +180,19 @@ const syncStoredUsers = async (sessions: SSOStatus): Promise<void> => {
   ]);
 };
 
-const syncCurrentUserMemoryPath = async (
-  sessions: SSOStatus,
-  options?: { emit?: boolean },
-): Promise<void> => {
+const resolveUserMemoryPath = async (sessions: SSOStatus, options?: { emit?: boolean }): Promise<string> => {
   const connectedSessions = Object.values(sessions).filter((session): session is SSOSession => session !== null);
   await Promise.all(
     connectedSessions.map((session) => getActiveMemoryPath(buildStoredUserId(session.provider, session.userId))),
   );
-  await syncActiveMemoryPath(pickCurrentUserId(sessions), options);
+  return syncActiveMemoryPath(pickCurrentUserId(sessions), options);
+};
+
+const syncCurrentUserMemoryPath = async (
+  sessions: SSOStatus,
+  options?: { emit?: boolean },
+): Promise<void> => {
+  await resolveUserMemoryPath(sessions, options);
 };
 
 const selectSessionFolder = async (): Promise<string | null> => {
@@ -420,21 +431,103 @@ export const App = (): JSX.Element => {
     [nativeRuntime, state],
   );
 
-  const refreshAllConnectorState = useCallback(
+  const respawnAllOpencodes = useCallback(
     async (sessions: SSOStatus): Promise<void> => {
       if (!nativeRuntime || state.status !== 'ready') {
         return;
       }
-      await syncCurrentUserMemoryPath(sessions, { emit: false });
-      for (const conn of Object.values(state.opencodes)) {
-        await syncConnectorState(conn, state.vaultPath, sessions);
-      }
-      const modelConnected = await probeModelConnection(defaultConnection(state), state.vaultPath);
+
       setState((current) =>
         current.status !== 'ready'
           ? current
           : {
               ...current,
+              mcpStatus: {
+                ...current.mcpStatus,
+                ...Object.fromEntries(BUILTIN_MCP_NAMES.map((name) => [name, { status: 'reconnecting' }])),
+                [EXA_MCP_NAME]: { status: 'reconnecting' },
+              },
+            },
+      );
+
+      const nextUserId = pickCurrentUserId(sessions);
+      const nextMemorySubdir = await resolveUserMemoryPath(sessions, { emit: false });
+      const previousState = state;
+      const nextOpencodes: Record<BindingKey, OpencodeConnection> = {};
+      let nextDefaultBindingKey: BindingKey | null = null;
+
+      try {
+        for (const [key, conn] of Object.entries(previousState.opencodes)) {
+          const binding = parseBindingKey(key);
+          await invoke('stop_opencode', { pid: conn.pid });
+
+          if (!binding) {
+            continue;
+          }
+
+          const nextKey =
+            key === previousState.defaultBindingKey || binding.userId === nextUserId
+              ? bindingKey(binding.folderPath, nextMemorySubdir, nextUserId)
+              : key;
+          const nextBinding = parseBindingKey(nextKey);
+          if (!nextBinding) {
+            continue;
+          }
+
+          const nextConn = await invoke<OpencodeConnection>('start_opencode', {
+            folderPath: nextBinding.folderPath,
+            userId: nextBinding.userId,
+            memorySubdir: nextBinding.memorySubdir,
+          });
+          await syncConnectorState(nextConn, previousState.vaultPath, sessions);
+          nextOpencodes[nextKey] = nextConn;
+
+          if (key === previousState.defaultBindingKey) {
+            nextDefaultBindingKey = nextKey;
+          }
+        }
+      } catch (error) {
+        for (const conn of Object.values(nextOpencodes)) {
+          try {
+            await invoke('stop_opencode', { pid: conn.pid });
+          } catch (stopError) {
+            console.warn('Failed to stop a partially refreshed OpenCode sidecar.', stopError);
+          }
+        }
+        throw error;
+      }
+
+      const nextDefaultConnection =
+        nextDefaultBindingKey && nextOpencodes[nextDefaultBindingKey]
+          ? nextOpencodes[nextDefaultBindingKey]
+          : Object.values(nextOpencodes)[0];
+      const modelConnected = nextDefaultConnection
+        ? await probeModelConnection(nextDefaultConnection, previousState.vaultPath)
+        : false;
+      refcountsRef.current = Object.fromEntries(
+        Object.entries(previousState.opencodes)
+          .map(([key]) => {
+            const binding = parseBindingKey(key);
+            if (!binding) {
+              return null;
+            }
+
+            const nextKey =
+              key === previousState.defaultBindingKey || binding.userId === nextUserId
+                ? bindingKey(binding.folderPath, nextMemorySubdir, nextUserId)
+                : key;
+            return [nextKey, refcountsRef.current[key] ?? (key === previousState.defaultBindingKey ? 1 : 0)] as const;
+          })
+          .filter((entry): entry is readonly [BindingKey, number] => entry !== null && entry[0] in nextOpencodes),
+      );
+      setState((current) =>
+        current.status !== 'ready'
+          ? current
+          : {
+              ...current,
+              opencodes: nextOpencodes,
+              defaultBindingKey: nextDefaultBindingKey ?? Object.keys(nextOpencodes)[0] ?? previousState.defaultBindingKey,
+              skillsRootPath: nextMemorySubdir,
               modelConnected,
               mcpStatus: {
                 ...current.mcpStatus,
@@ -459,13 +552,13 @@ export const App = (): JSX.Element => {
         return;
       }
 
-      void refreshAllConnectorState(sessions).catch((error) => {
+      void respawnAllOpencodes(sessions).catch((error) => {
         console.warn('Failed to refresh OpenCode after a memory path change.', error);
       });
     });
   }, [
     nativeRuntime,
-    refreshAllConnectorState,
+    respawnAllOpencodes,
     state.status,
     currentUserState.status,
     currentUserState.status === 'ready' ? currentUserState.sessions : null,
@@ -928,17 +1021,6 @@ export const App = (): JSX.Element => {
 
   const currentSessions = currentUserState.sessions;
 
-  const reloadConnectionState = async (
-    connection: OpencodeConnection,
-    vaultPath: string | null,
-  ): Promise<{ sessions: SSOStatus; modelConnected: boolean }> => {
-    const sessions = await readAuthStatus();
-    await syncConnectorState(connection, vaultPath, sessions);
-    const modelConnected = await probeModelConnection(connection, vaultPath);
-
-    return { sessions, modelConnected };
-  };
-
   const bindSessionFolder = async (folderPath: string, isNew: boolean): Promise<void> => {
     requireNativeRuntime('Selecting a folder');
     setSessionFolderBusy(true);
@@ -947,7 +1029,14 @@ export const App = (): JSX.Element => {
       const memorySubdir = await getActiveMemoryPath(currentUserId);
       const previousDefaultBindingKey = state.status === 'ready' ? state.defaultBindingKey : null;
       const nextBindingKey = bindingKey(folderPath, memorySubdir, currentUserId);
-      const connection = await acquireOpencode(folderPath, memorySubdir, currentUserId);
+      const existingConnection =
+        state.status === 'ready' && state.opencodes[nextBindingKey]
+          ? state.opencodes[nextBindingKey]
+          : null;
+      const connection = existingConnection ?? await acquireOpencode(folderPath, memorySubdir, currentUserId);
+      if (existingConnection) {
+        refcountsRef.current[nextBindingKey] = (refcountsRef.current[nextBindingKey] ?? 0) + 1;
+      }
       await syncConnectorState(connection, folderPath, currentSessions);
       await vaultService.init({ path: folderPath, isNew });
       await indexVault({ path: folderPath, isNew });
@@ -1079,20 +1168,7 @@ export const App = (): JSX.Element => {
       await getActiveMemoryPath(buildStoredUserId(session.provider, session.userId));
 
       const nextState = await refreshCurrentUser();
-      if (providerNeedsWorkspaceRefresh(provider)) {
-        await refreshAllConnectorState(nextState.sessions);
-      } else {
-        const reloaded = await reloadConnectionState(defaultConnection(state), state.vaultPath);
-        await syncCurrentUserMemoryPath(reloaded.sessions);
-        setState((current) =>
-          current.status !== 'ready'
-            ? current
-            : {
-                ...current,
-                modelConnected: reloaded.modelConnected,
-              },
-        );
-      }
+      await respawnAllOpencodes(nextState.sessions);
 
       setProviderMessage(provider, `${providerDisplayName(provider)} connected as ${session.email}.`);
       setGuestMessage(null);
@@ -1112,20 +1188,7 @@ export const App = (): JSX.Element => {
       await invoke('auth_sign_out', { provider });
 
       const nextState = await refreshCurrentUser();
-      if (providerNeedsWorkspaceRefresh(provider)) {
-        await refreshAllConnectorState(nextState.sessions);
-      } else {
-        const reloaded = await reloadConnectionState(defaultConnection(state), state.vaultPath);
-        await syncCurrentUserMemoryPath(reloaded.sessions);
-        setState((current) =>
-          current.status !== 'ready'
-            ? current
-            : {
-                ...current,
-                modelConnected: reloaded.modelConnected,
-              },
-        );
-      }
+      await respawnAllOpencodes(nextState.sessions);
 
       setProviderMessage(provider, `${providerDisplayName(provider)} disconnected.`);
       setGuestMessage(null);
@@ -1153,21 +1216,7 @@ export const App = (): JSX.Element => {
 
       await upsertUser(createGuestUser());
       const nextUserState = await refreshCurrentUser();
-
-      if (providersToClear.includes('github')) {
-        await refreshAllConnectorState(nextUserState.sessions);
-      } else {
-        const reloaded = await reloadConnectionState(defaultConnection(state), state.vaultPath);
-        await syncCurrentUserMemoryPath(reloaded.sessions);
-        setState((current) =>
-          current.status !== 'ready'
-            ? current
-            : {
-                ...current,
-                modelConnected: reloaded.modelConnected,
-              },
-        );
-      }
+      await respawnAllOpencodes(nextUserState.sessions);
 
       setProviderMessages(EMPTY_PROVIDER_MESSAGES);
       setGuestMessage('Guest mode active.');
@@ -1268,7 +1317,7 @@ export const App = (): JSX.Element => {
         onActiveSkillsChanged={handleActiveSkillsChanged}
         onRunMemorySweep={handleRunMemorySweep}
         onMemoryCommitted={handleMemoryCommitted}
-        onRequestMcpRespawn={() => refreshAllConnectorState(currentSessions)}
+        onRequestMcpRespawn={() => respawnAllOpencodes(currentSessions)}
         getConnectionForPane={(paneData) => {
           if (state.status !== 'ready') return WEB_PREVIEW_CONNECTION;
           if (paneData.folderPath && paneData.memorySubdir) {
