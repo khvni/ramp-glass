@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import {
   countUnreadPanes,
   createAttentionStore,
@@ -9,6 +9,7 @@ import {
   type PaneRegistry,
   type WorkspaceStore,
   Workspace,
+  useWorkspaceSelector,
   isSplit,
   isStack,
   collectStacks,
@@ -222,8 +223,7 @@ export const PanesDemo = (): JSX.Element => {
     [attentionStore],
   );
 
-  const stats = useMemo(() => {
-    const state = store.getState();
+  const stats = useWorkspaceSelector(store, (state) => {
     const tab = state.tabs.find((t) => t.id === state.activeTabId);
     if (!tab) return { stacks: 0, panes: 0, splits: 0 };
     let splits = 0;
@@ -237,7 +237,7 @@ export const PanesDemo = (): JSX.Element => {
     };
     count(tab.layout);
     return { stacks: collectStacks(tab.layout).length, panes: Object.keys(tab.panes).length, splits };
-  }, [store]);
+  });
   const unreadCount = countUnreadPanes(attentionSnapshot);
   const activeFlash = attentionSnapshot.activeFlash?.accent ?? 'none';
 

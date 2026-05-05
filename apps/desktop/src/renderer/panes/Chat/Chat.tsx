@@ -310,6 +310,7 @@ export const Chat = ({
   const [composerMode, setComposerMode] = useState<SessionMode>(DEFAULT_SESSION_MODE);
   const [thinkingLevel, setThinkingLevel] = useState<ReasoningLevel>(DEFAULT_REASONING_LEVEL);
   const mountedRef = useRef(true);
+  const busyRef = useRef(busy);
   const sessionIDRef = useRef<string | null>(null);
   const sessionCreatedAtRef = useRef<string | null>(null);
   const historyWriterRef = useRef<ChatHistoryWriter | null>(null);
@@ -448,14 +449,18 @@ export const Chat = ({
   }, [currentUserId]);
 
   useEffect(() => {
+    busyRef.current = busy;
+  }, [busy]);
+
+  useEffect(() => {
     return subscribeMemoryPathChanged((detail) => {
       memoryPathRef.current = null;
-      if (busy) {
+      if (busyRef.current) {
         setMemoryRefreshPaused(true);
         setStatus(`Paused for memory refresh (${detail.reason === 'root-changed' ? 'path changed' : 'user switched'}).`);
       }
     });
-  }, [busy]);
+  }, []);
 
   const resolveMemoryPath = useCallback(async (): Promise<string> => {
     if (!memoryPathRef.current) {
