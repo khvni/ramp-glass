@@ -342,6 +342,8 @@ export const Chat = ({
   releaseRef.current = onReleaseOpencode;
   const persistSessionIdRef = useRef(onPersistSessionId);
   persistSessionIdRef.current = onPersistSessionId;
+  const paneSessionIdRef = useRef(paneSessionId);
+  paneSessionIdRef.current = paneSessionId;
 
   useEffect(() => {
     mountedRef.current = true;
@@ -517,7 +519,8 @@ export const Chat = ({
     void (async () => {
       try {
         const existingSession = createFreshSession ? null : await findLatestSessionForFolder(currentUserId, sessionFolderPath);
-        const loadedPinnedSession = paneSessionId ? await getSession(paneSessionId) : null;
+        const pinnedSessionId = paneSessionIdRef.current;
+        const loadedPinnedSession = pinnedSessionId ? await getSession(pinnedSessionId) : null;
         const pinnedSession =
           loadedPinnedSession?.userId === currentUserId && loadedPinnedSession.folderPath === sessionFolderPath
             ? loadedPinnedSession
@@ -593,7 +596,7 @@ export const Chat = ({
     // installing a skill used to force this effect — which aborts the live
     // OpenCode session, wipes messages, and rehydrates from disk. Re-injection
     // now happens lazily in `injectActiveSkillsIfStale` before each prompt.
-  }, [activateSession, client, createFreshSession, currentUserId, paneSessionId, readyStatus, sessionFolderPath]);
+  }, [activateSession, client, createFreshSession, currentUserId, readyStatus, sessionFolderPath]);
 
   useEffect(() => {
     if (!activeSessionId || !selectedModel) {
