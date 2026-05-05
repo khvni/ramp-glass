@@ -1,24 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CURRENT_LAYOUT_VERSION, hydrateLayoutRow, serializeLayoutState } from './layout-store.js';
 
-const SAMPLE_LAYOUT_JSON = {
-  global: {},
-  borders: [],
-  layout: {
-    type: 'row',
-    weight: 100,
-    children: [
-      {
-        type: 'tabset',
-        weight: 100,
-        children: [
-          { type: 'tab', id: 'chat-1', name: 'Chat', component: 'chat', config: { kind: 'chat' } },
-        ],
-      },
-    ],
-  },
-};
-
 describe('hydrateLayoutRow', () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
 
@@ -37,7 +19,7 @@ describe('hydrateLayoutRow', () => {
   it('returns null and warns when the stored version is incompatible', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION + 1,
-      workspace_state_json: JSON.stringify({ layoutJson: SAMPLE_LAYOUT_JSON }),
+      workspace_state_json: '{"tabs":[],"activeTabId":null,"version":2}',
       updated_at: '2026-04-15T00:00:00.000Z',
     };
 
@@ -71,7 +53,11 @@ describe('hydrateLayoutRow', () => {
       version: CURRENT_LAYOUT_VERSION,
       workspace_state_json: serializeLayoutState({
         version: CURRENT_LAYOUT_VERSION,
-        layoutJson: SAMPLE_LAYOUT_JSON,
+        workspaceState: {
+          version: CURRENT_LAYOUT_VERSION,
+          tabs: [],
+          activeTabId: null,
+        },
         updatedAt: '2026-04-15T00:00:00.000Z',
         preferences: {
           autoOpenAgentWrittenFiles: false,
@@ -85,7 +71,11 @@ describe('hydrateLayoutRow', () => {
 
     expect(hydrateLayoutRow(row, 'user')).toEqual({
       version: CURRENT_LAYOUT_VERSION,
-      layoutJson: SAMPLE_LAYOUT_JSON,
+      workspaceState: {
+        version: CURRENT_LAYOUT_VERSION,
+        tabs: [],
+        activeTabId: null,
+      },
       updatedAt: '2026-04-15T00:00:00.000Z',
       preferences: {
         autoOpenAgentWrittenFiles: false,
@@ -96,16 +86,20 @@ describe('hydrateLayoutRow', () => {
     });
   });
 
-  it('defaults preferences when loading a raw layout payload', () => {
+  it('defaults auto-open on when loading a raw workspace payload', () => {
     const row = {
       version: CURRENT_LAYOUT_VERSION,
-      workspace_state_json: JSON.stringify({ layoutJson: SAMPLE_LAYOUT_JSON }),
+      workspace_state_json: '{"version":2,"tabs":[],"activeTabId":null}',
       updated_at: '2026-04-15T00:00:00.000Z',
     };
 
     expect(hydrateLayoutRow(row, 'user')).toEqual({
       version: CURRENT_LAYOUT_VERSION,
-      layoutJson: SAMPLE_LAYOUT_JSON,
+      workspaceState: {
+        version: CURRENT_LAYOUT_VERSION,
+        tabs: [],
+        activeTabId: null,
+      },
       updatedAt: '2026-04-15T00:00:00.000Z',
       preferences: {
         autoOpenAgentWrittenFiles: true,
