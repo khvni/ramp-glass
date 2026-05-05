@@ -73,7 +73,7 @@ describe('hydrateLayoutRow', () => {
         version: CURRENT_LAYOUT_VERSION,
         layoutJson: SAMPLE_LAYOUT_JSON,
         updatedAt: '2026-04-15T00:00:00.000Z',
-        preferences: { autoOpenAgentWrittenFiles: false, isLeftRailVisible: true, isRightInspectorVisible: false },
+        preferences: { autoOpenAgentWrittenFiles: false, isLeftRailVisible: true, isRightInspectorVisible: false, customMcps: [] },
       }),
       updated_at: '2026-04-15T00:00:00.000Z',
     };
@@ -82,7 +82,7 @@ describe('hydrateLayoutRow', () => {
       version: CURRENT_LAYOUT_VERSION,
       layoutJson: SAMPLE_LAYOUT_JSON,
       updatedAt: '2026-04-15T00:00:00.000Z',
-      preferences: { autoOpenAgentWrittenFiles: false, isLeftRailVisible: true, isRightInspectorVisible: false },
+      preferences: { autoOpenAgentWrittenFiles: false, isLeftRailVisible: true, isRightInspectorVisible: false, customMcps: [] },
     });
   });
 
@@ -97,7 +97,7 @@ describe('hydrateLayoutRow', () => {
       version: CURRENT_LAYOUT_VERSION,
       layoutJson: SAMPLE_LAYOUT_JSON,
       updatedAt: '2026-04-15T00:00:00.000Z',
-      preferences: { autoOpenAgentWrittenFiles: true, isLeftRailVisible: true, isRightInspectorVisible: false },
+      preferences: { autoOpenAgentWrittenFiles: true, isLeftRailVisible: true, isRightInspectorVisible: false, customMcps: [] },
     });
   });
 });
