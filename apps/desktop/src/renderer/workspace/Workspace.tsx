@@ -30,8 +30,11 @@ import { resolveWorkspaceFilePath } from '../file-links.js';
 import { BUILTIN_MCP_NAMES, type BuiltinMcpName, type MCPStatus } from '../integrations.js';
 import { isAbsolutePath, getPanelTitleForPath } from '../renderers/file-utils.js';
 import { ChatPaneRuntimeContext } from './chat-pane-runtime.js';
+import { ConnectionsRoute } from './components/ConnectionsRoute/index.js';
+import { MemoryRoute } from './components/MemoryRoute/index.js';
 import { RegisteredChatPane } from './components/RegisteredChatPane/index.js';
 import { SessionSwitcher } from './components/SessionSwitcher/index.js';
+import { SettingsRoute } from './components/SettingsRoute/index.js';
 import { Titlebar } from './components/Titlebar/index.js';
 import { WorkspaceShell } from './components/WorkspaceShell/index.js';
 import { WorkspaceSidebar } from './components/WorkspaceSidebar/index.js';
@@ -114,6 +117,7 @@ const createWorkspaceTabId = (): string => {
 };
 
 type UtilityPaneKind = 'settings' | 'memory' | 'playbook';
+type WorkspaceRoute = 'workspace' | 'memory' | 'settings' | 'connections';
 
 const utilityPaneTitle = (kind: UtilityPaneKind): string => {
   switch (kind) {
@@ -206,6 +210,7 @@ export const Workspace = ({
     createDefaultWorkspacePreferences(),
   );
   const [pendingSettingsSectionId, setPendingSettingsSectionId] = useState<string | null>(null);
+  const [activeRoute, setActiveRoute] = useState<WorkspaceRoute>('workspace');
   const [storedSessions, setStoredSessions] = useState<Session[]>([]);
   const [sessionLoadError, setSessionLoadError] = useState<string | null>(null);
   const [sessionSwitcherResolved, setSessionSwitcherResolved] = useState(false);
@@ -219,6 +224,11 @@ export const Workspace = ({
       return tab.panes[tab.activePaneId]?.data.kind ?? null;
     },
   );
+  const resolvedActiveRailItem = activeRoute === 'workspace' ? activeRailItem : activeRoute;
+
+  const handleActiveRouteChange = useCallback((nextRoute: WorkspaceRoute): void => {
+    setActiveRoute(nextRoute);
+  }, []);
 
   useEffect(() => {
     vaultPathRef.current = vaultPath;
@@ -245,6 +255,7 @@ export const Workspace = ({
 
   const openFileInWorkspace = useCallback(
     (reportedPath: string, options?: { mime?: string }): void => {
+      handleActiveRouteChange('workspace');
       const absolutePath = resolveAgentPath(reportedPath);
       if (!absolutePath) {
         return;
@@ -257,12 +268,13 @@ export const Workspace = ({
 
       void openWorkspaceFile(workspaceStore, absolutePath);
     },
-    [resolveAgentPath, workspaceStore],
+    [handleActiveRouteChange, resolveAgentPath, workspaceStore],
   );
 
   const openNewChatPane = useCallback((): void => {
+    handleActiveRouteChange('workspace');
     openNewChatPanel(workspaceStore);
-  }, [workspaceStore]);
+  }, [handleActiveRouteChange, workspaceStore]);
 
   const refreshStoredSessions = useCallback(async (): Promise<void> => {
     try {
@@ -360,9 +372,10 @@ export const Workspace = ({
       });
 
       setSessionSwitcherResolved(true);
+      handleActiveRouteChange('workspace');
       await refreshStoredSessions();
     })();
-  }, [currentUserId, onSelectSessionFolder, refreshStoredSessions, workspaceStore]);
+  }, [currentUserId, handleActiveRouteChange, onSelectSessionFolder, refreshStoredSessions, workspaceStore]);
 
   const handleSelectStoredSession = useCallback(
     (session: Session): void => {
@@ -370,10 +383,11 @@ export const Workspace = ({
         await onActivateSession(session);
         await openSessionChatPane(session);
         setSessionSwitcherResolved(true);
+        handleActiveRouteChange('workspace');
         await refreshStoredSessions();
       })();
     },
-    [onActivateSession, openSessionChatPane, refreshStoredSessions],
+    [handleActiveRouteChange, onActivateSession, openSessionChatPane, refreshStoredSessions],
   );
 
   const signalPaneAttention = useCallback(
@@ -566,20 +580,21 @@ export const Workspace = ({
   );
 
   const openSettingsPane = useCallback((): void => {
-    openOrFocusPane('settings');
-  }, [openOrFocusPane]);
+    setPendingSettingsSectionId(null);
+    handleActiveRouteChange('settings');
+  }, [handleActiveRouteChange]);
 
   const openMemoryPane = useCallback((): void => {
-    openOrFocusPane('memory');
-  }, [openOrFocusPane]);
+    handleActiveRouteChange('memory');
+  }, [handleActiveRouteChange]);
 
   const openPlaybookPane = useCallback((): void => {
     openOrFocusPane('playbook');
   }, [openOrFocusPane]);
   const openConnectionsSection = useCallback((): void => {
     setPendingSettingsSectionId('connections');
-    openOrFocusPane('settings');
-  }, [openOrFocusPane]);
+    handleActiveRouteChange('connections');
+  }, [handleActiveRouteChange]);
 
   const handlePendingSettingsSectionConsumed = useCallback((): void => {
     setPendingSettingsSectionId(null);
@@ -624,12 +639,12 @@ export const Workspace = ({
       settings: {
         kind: 'settings',
         defaultTitle: 'Settings',
-        render: ({ pane }) => <>{getRenderer('settings')(requirePaneData('settings', pane.data))}</>,
+        render: () => <SettingsRoute />,
       },
       memory: {
         kind: 'memory',
         defaultTitle: 'Memory',
-        render: ({ pane }) => <>{getRenderer('memory')(requirePaneData('memory', pane.data))}</>,
+        render: () => <MemoryRoute />,
       },
       playbook: {
         kind: 'playbook',
@@ -811,6 +826,37 @@ export const Workspace = ({
     : `Account · ${currentUserEmail ?? currentUserName}`;
   const shouldShowSessionSwitcher =
     !sessionSwitcherResolved && (storedSessions.length > 0 || sessionLoadError !== null);
+  const routeContent = (() => {
+    switch (activeRoute) {
+      case 'memory':
+        return <MemoryRoute />;
+      case 'settings':
+        return <SettingsRoute />;
+      case 'connections':
+        return <ConnectionsRoute />;
+      case 'workspace':
+        return shouldShowSessionSwitcher ? (
+          <SessionSwitcher
+            sessions={storedSessions}
+            busy={sessionFolderBusy}
+            errorMessage={sessionLoadError}
+            onSelectSession={handleSelectStoredSession}
+            onCreateSession={handleCreateSessionFromSwitcher}
+            onRetry={() => void refreshStoredSessions()}
+          />
+        ) : (
+          <PanesWorkspace
+            store={workspaceStore}
+            registry={registry}
+            attention={{
+              store: attentionStore,
+              workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
+            }}
+            ariaLabel="Tinker workspace"
+          />
+        );
+    }
+  })();
 
   return (
     <WorkspaceShell
@@ -833,7 +879,7 @@ export const Workspace = ({
           userInitial={userInitial}
           avatarUrl={currentUserAvatarUrl}
           accountLabel={accountLabel}
-          activeRailItem={activeRailItem}
+          activeRailItem={resolvedActiveRailItem}
           onOpenChat={openNewChatPane}
           onOpenMemory={openMemoryPane}
           onOpenSettings={openSettingsPane}
@@ -846,26 +892,7 @@ export const Workspace = ({
         <SettingsPaneRuntimeContext.Provider value={settingsPaneRuntime}>
           <MemoryPaneRuntimeContext.Provider value={{ currentUserId }}>
             <PlaybookPaneRuntimeContext.Provider value={playbookPaneRuntime}>
-              {shouldShowSessionSwitcher ? (
-                <SessionSwitcher
-                  sessions={storedSessions}
-                  busy={sessionFolderBusy}
-                  errorMessage={sessionLoadError}
-                  onSelectSession={handleSelectStoredSession}
-                  onCreateSession={handleCreateSessionFromSwitcher}
-                  onRetry={() => void refreshStoredSessions()}
-                />
-              ) : (
-                <PanesWorkspace
-                  store={workspaceStore}
-                  registry={registry}
-                  attention={{
-                    store: attentionStore,
-                    workspaceId: DESKTOP_WORKSPACE_ATTENTION_ID,
-                  }}
-                  ariaLabel="Tinker workspace"
-                />
-              )}
+              {routeContent}
             </PlaybookPaneRuntimeContext.Provider>
           </MemoryPaneRuntimeContext.Provider>
         </SettingsPaneRuntimeContext.Provider>
