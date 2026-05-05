@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import type { CustomMcpEntry } from '@tinker/shared-types';
 import { MemorySettingsPanel } from '../MemorySettingsPanel/index.js';
 import { SettingsShell, type SettingsShellSection } from '../SettingsShell/index.js';
 import { useSettingsPaneRuntime } from '../../settings-pane-runtime.js';
@@ -11,9 +12,6 @@ export const SettingsPane = (): JSX.Element => {
   const [activeSectionId, setActiveSectionId] = useState<string>('account');
   const consumedRef = useRef<string | null>(null);
 
-  // When the rail nav (e.g. Connections item) opens this pane with a target section,
-  // the runtime carries a one-shot `pendingSectionId`. Consume it exactly once then
-  // let local state drive subsequent nav so the user can still click around freely.
   useEffect(() => {
     const pending = runtime.pendingSectionId;
     if (pending && pending !== consumedRef.current) {
@@ -22,6 +20,28 @@ export const SettingsPane = (): JSX.Element => {
       runtime.onPendingSectionConsumed();
     }
   }, [runtime]);
+
+  const handleAddCustomMcp = useCallback(
+    (entry: CustomMcpEntry) => {
+      const prefs = runtime.workspacePreferences;
+      runtime.onWorkspacePreferencesChange({
+        ...prefs,
+        customMcps: [...prefs.customMcps, entry],
+      });
+    },
+    [runtime],
+  );
+
+  const handleRemoveCustomMcp = useCallback(
+    (id: string) => {
+      const prefs = runtime.workspacePreferences;
+      runtime.onWorkspacePreferencesChange({
+        ...prefs,
+        customMcps: prefs.customMcps.filter((m) => m.id !== id),
+      });
+    },
+    [runtime],
+  );
 
   const sections = useMemo<ReadonlyArray<SettingsShellSection>>(
     () => [
@@ -80,12 +100,15 @@ export const SettingsPane = (): JSX.Element => {
             vaultPath={runtime.vaultPath}
             memoryPath={runtime.vaultPath}
             seedStatuses={runtime.mcpSeedStatuses}
+            customMcps={runtime.workspacePreferences.customMcps}
+            onAddCustomMcp={handleAddCustomMcp}
+            onRemoveCustomMcp={handleRemoveCustomMcp}
             onRequestRespawn={runtime.onRequestRespawn}
           />
         ),
       },
     ],
-    [runtime],
+    [runtime, handleAddCustomMcp, handleRemoveCustomMcp],
   );
 
   return (

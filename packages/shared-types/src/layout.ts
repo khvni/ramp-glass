@@ -13,10 +13,20 @@ export type TabKind =
   | 'image'
   | 'code';
 
+export type CustomMcpEntry = {
+  readonly id: string;
+  readonly label: string;
+  readonly url: string;
+  readonly headerName: string;
+  readonly headerValue: string;
+  readonly enabled: boolean;
+};
+
 export type WorkspacePreferences = {
   autoOpenAgentWrittenFiles: boolean;
   isLeftRailVisible: boolean;
   isRightInspectorVisible: boolean;
+  customMcps: ReadonlyArray<CustomMcpEntry>;
 };
 
 export const createDefaultWorkspacePreferences = (): WorkspacePreferences => {
@@ -24,6 +34,7 @@ export const createDefaultWorkspacePreferences = (): WorkspacePreferences => {
     autoOpenAgentWrittenFiles: true,
     isLeftRailVisible: true,
     isRightInspectorVisible: false,
+    customMcps: [],
   };
 };
 

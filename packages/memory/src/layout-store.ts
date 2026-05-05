@@ -47,6 +47,7 @@ const normalizePreferences = (value: unknown): WorkspacePreferences => {
       typeof candidate.isRightInspectorVisible === 'boolean'
         ? candidate.isRightInspectorVisible
         : defaults.isRightInspectorVisible,
+    customMcps: Array.isArray(candidate.customMcps) ? candidate.customMcps : defaults.customMcps,
   };
 };
 
