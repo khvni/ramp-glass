@@ -993,53 +993,10 @@ export const App = (): JSX.Element => {
     currentUserState.status === 'ready' ? currentUserState.sessions.github?.scopes.join(',') : null,
   ]);
 
-  if (state.status === 'loading' || currentUserState.status === 'loading') {
-    return (
-      <div className="tinker-app">
-        <main className="tinker-stage">
-          <section className="tinker-card">
-            <p className="tinker-eyebrow">Booting</p>
-            <h1>Tinker is starting workspace</h1>
-            <p className="tinker-muted">Launching OpenCode, loading vault state, restoring local context.</p>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  if (state.status === 'error') {
-    return (
-      <div className="tinker-app">
-        <main className="tinker-stage">
-          <section className="tinker-card">
-            <p className="tinker-eyebrow">Start-up failed</p>
-            <h1>Tinker could not finish booting</h1>
-            <p className="tinker-muted">{state.message}</p>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  if (currentUserState.status === 'error') {
-    return (
-      <div className="tinker-app">
-        <main className="tinker-stage">
-          <section className="tinker-card">
-            <p className="tinker-eyebrow">Start-up failed</p>
-            <h1>Tinker could not finish booting</h1>
-            <p className="tinker-muted">{currentUserState.message}</p>
-          </section>
-        </main>
-      </div>
-    );
-  }
-
-  const currentSessions = currentUserState.sessions;
-
+  const currentSessions = currentUserState.status === 'ready' ? currentUserState.sessions : withDefaultSessions(null);
   const currentUser = resolveCurrentUser(currentSessions);
   const currentUserId =
-    currentUserState.authState === 'authenticated'
+    currentUserState.status === 'ready' && currentUserState.authState === 'authenticated'
       ? currentUserState.user.id
       : pickCurrentUserId(currentSessions);
 
@@ -1082,6 +1039,70 @@ export const App = (): JSX.Element => {
       setSessionFolderBusy(false);
     }
   }, [acquireOpencode, currentSessions, currentUserId, nativeRuntime, state, stopBinding, vaultService]);
+
+  const handleSelectSessionFolder = useCallback(async (): Promise<string | null> => {
+    if (sessionFolderBusy) {
+      return null;
+    }
+
+    requireNativeRuntime('Selecting a folder');
+    const folderPath = await selectSessionFolder();
+    if (!folderPath) {
+      return null;
+    }
+
+    await bindSessionFolder(folderPath, false);
+    return folderPath;
+  }, [bindSessionFolder, nativeRuntime, sessionFolderBusy]);
+
+  const handleCreateDefaultVault = useCallback(async (): Promise<void> => {
+    requireNativeRuntime('Creating the default vault');
+    const home = await homeDir();
+    const defaultPath = await join(home, 'Tinker', 'knowledge');
+    await bindSessionFolder(defaultPath, true);
+  }, [bindSessionFolder, nativeRuntime]);
+
+  if (state.status === 'loading' || currentUserState.status === 'loading') {
+    return (
+      <div className="tinker-app">
+        <main className="tinker-stage">
+          <section className="tinker-card">
+            <p className="tinker-eyebrow">Booting</p>
+            <h1>Tinker is starting workspace</h1>
+            <p className="tinker-muted">Launching OpenCode, loading vault state, restoring local context.</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (state.status === 'error') {
+    return (
+      <div className="tinker-app">
+        <main className="tinker-stage">
+          <section className="tinker-card">
+            <p className="tinker-eyebrow">Start-up failed</p>
+            <h1>Tinker could not finish booting</h1>
+            <p className="tinker-muted">{state.message}</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
+
+  if (currentUserState.status === 'error') {
+    return (
+      <div className="tinker-app">
+        <main className="tinker-stage">
+          <section className="tinker-card">
+            <p className="tinker-eyebrow">Start-up failed</p>
+            <h1>Tinker could not finish booting</h1>
+            <p className="tinker-muted">{currentUserState.message}</p>
+          </section>
+        </main>
+      </div>
+    );
+  }
 
   const handleActivateSession = async (session: Session): Promise<void> => {
     await updateLastActive(session.id, new Date().toISOString());
@@ -1248,28 +1269,6 @@ export const App = (): JSX.Element => {
       setGuestBusy(false);
     }
   };
-
-  const handleSelectSessionFolder = useCallback(async (): Promise<string | null> => {
-    if (sessionFolderBusy) {
-      return null;
-    }
-
-    requireNativeRuntime('Selecting a folder');
-    const folderPath = await selectSessionFolder();
-    if (!folderPath) {
-      return null;
-    }
-
-    await bindSessionFolder(folderPath, false);
-    return folderPath;
-  }, [bindSessionFolder, nativeRuntime, sessionFolderBusy]);
-
-  const handleCreateDefaultVault = useCallback(async (): Promise<void> => {
-    requireNativeRuntime('Creating the default vault');
-    const home = await homeDir();
-    const defaultPath = await join(home, 'Tinker', 'knowledge');
-    await bindSessionFolder(defaultPath, true);
-  }, [bindSessionFolder, nativeRuntime]);
 
   const handleRunScheduledJobNow = async (jobId: string): Promise<void> => {
     const engine = schedulerEngineRef.current;

@@ -977,7 +977,7 @@ export const Chat = ({
   }, [busy, client]);
   const sendMessage = async (): Promise<void> => {
     const text = input.trim();
-    if (!text || busy || hydratingHistory || !modelConnected || mcpConnectionGate.blocked) {
+    if (!text || busy || hydratingHistory || memoryRefreshPaused || !modelConnected || mcpConnectionGate.blocked) {
       return;
     }
 
