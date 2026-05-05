@@ -453,16 +453,11 @@ export const App = (): JSX.Element => {
       const nextUserId = pickCurrentUserId(sessions);
       const nextMemorySubdir = await resolveUserMemoryPath(sessions, { emit: false });
       const previousState = state;
-      const nextOpencodes: Record<BindingKey, OpencodeConnection> = {};
-      let nextDefaultBindingKey: BindingKey | null = null;
-
-      try {
-        for (const [key, conn] of Object.entries(previousState.opencodes)) {
+      const nextBindings = Object.entries(previousState.opencodes)
+        .map(([key]) => {
           const binding = parseBindingKey(key);
-          await invoke('stop_opencode', { pid: conn.pid });
-
           if (!binding) {
-            continue;
+            return null;
           }
 
           const nextKey =
@@ -471,9 +466,21 @@ export const App = (): JSX.Element => {
               : key;
           const nextBinding = parseBindingKey(nextKey);
           if (!nextBinding) {
-            continue;
+            return null;
           }
 
+          return { key, nextKey, nextBinding };
+        })
+        .filter((binding): binding is {
+          key: BindingKey;
+          nextKey: BindingKey;
+          nextBinding: { folderPath: string; memorySubdir: string; userId: string };
+        } => binding !== null);
+      const nextOpencodes: Record<BindingKey, OpencodeConnection> = {};
+      let nextDefaultBindingKey: BindingKey | null = null;
+
+      try {
+        for (const { key, nextKey, nextBinding } of nextBindings) {
           const nextConn = await invoke<OpencodeConnection>('start_opencode', {
             folderPath: nextBinding.folderPath,
             userId: nextBinding.userId,
@@ -497,6 +504,16 @@ export const App = (): JSX.Element => {
         throw error;
       }
 
+      await Promise.all(
+        Object.values(previousState.opencodes).map(async (conn) => {
+          try {
+            await invoke('stop_opencode', { pid: conn.pid });
+          } catch (error) {
+            console.warn('Failed to stop a replaced OpenCode sidecar.', error);
+          }
+        }),
+      );
+
       const nextDefaultConnection =
         nextDefaultBindingKey && nextOpencodes[nextDefaultBindingKey]
           ? nextOpencodes[nextDefaultBindingKey]
@@ -505,20 +522,9 @@ export const App = (): JSX.Element => {
         ? await probeModelConnection(nextDefaultConnection, previousState.vaultPath)
         : false;
       refcountsRef.current = Object.fromEntries(
-        Object.entries(previousState.opencodes)
-          .map(([key]) => {
-            const binding = parseBindingKey(key);
-            if (!binding) {
-              return null;
-            }
-
-            const nextKey =
-              key === previousState.defaultBindingKey || binding.userId === nextUserId
-                ? bindingKey(binding.folderPath, nextMemorySubdir, nextUserId)
-                : key;
-            return [nextKey, refcountsRef.current[key] ?? (key === previousState.defaultBindingKey ? 1 : 0)] as const;
-          })
-          .filter((entry): entry is readonly [BindingKey, number] => entry !== null && entry[0] in nextOpencodes),
+        nextBindings
+          .map(({ key, nextKey }) => [nextKey, refcountsRef.current[key] ?? (key === previousState.defaultBindingKey ? 1 : 0)] as const)
+          .filter((entry) => entry[0] in nextOpencodes),
       );
       setState((current) =>
         current.status !== 'ready'
