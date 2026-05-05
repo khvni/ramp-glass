@@ -702,6 +702,7 @@ export const Workspace = ({
       workspacePreferences,
       opencode,
       vaultPath,
+      memoryPath: skillsRootPath,
       mcpSeedStatuses,
       onSignOut: async (session: SSOSession) => {
         await disconnectByProvider[session.provider]();
@@ -750,6 +751,7 @@ export const Workspace = ({
     handlePendingSettingsSectionConsumed,
     opencode,
     vaultPath,
+    skillsRootPath,
     mcpStatus,
     onRequestMcpRespawn,
   ]);

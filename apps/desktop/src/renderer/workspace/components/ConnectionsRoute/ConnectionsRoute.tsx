@@ -57,7 +57,7 @@ export const ConnectionsRoute = (): JSX.Element => {
           <ConnectionsSection
             opencode={runtime.opencode}
             vaultPath={runtime.vaultPath}
-            memoryPath={runtime.vaultPath}
+            memoryPath={runtime.memoryPath}
             seedStatuses={runtime.mcpSeedStatuses}
             onRequestRespawn={runtime.onRequestRespawn}
           />
