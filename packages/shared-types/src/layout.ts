@@ -1,6 +1,3 @@
-import type { WorkspaceState } from '@tinker/panes';
-import type { TinkerPaneData } from './pane.js';
-
 export type TabKind =
   | 'vault-browser'
   | 'chat'
@@ -32,11 +29,9 @@ export const createDefaultWorkspacePreferences = (): WorkspacePreferences => {
   };
 };
 
-export type PersistedWorkspaceState = WorkspaceState<TinkerPaneData>;
-
 export type LayoutState = {
-  version: 2;
-  workspaceState: PersistedWorkspaceState;
+  version: 3;
+  layoutJson: unknown;
   updatedAt: string;
   preferences: WorkspacePreferences;
 };

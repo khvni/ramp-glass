@@ -1,9 +1,8 @@
 // Pane types for the Tinker MVP workspace.
 //
-// `TinkerPaneKind` is the discriminator shipped in `@tinker/panes` registrations
-// (`PaneRegistry<TinkerPaneKind>`, see spec [[20-mvp-panes-workspace]]).
-// `TinkerPaneData` is the discriminated payload stored on each `Pane<TData>`
-// instance and persisted inside `WorkspaceState<TinkerPaneData>`.
+// `TinkerPaneKind` is the discriminator used in FlexLayout tab registrations.
+// `TinkerPaneData` is the discriminated payload stored in each FlexLayout tab
+// node's `config` and persisted inside the layout JSON.
 //
 // Adding a third kind is an intentional scope change: extend the union, register
 // the renderer, and update any exhaustive switches in the same PR.
