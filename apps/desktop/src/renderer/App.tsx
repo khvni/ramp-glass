@@ -453,29 +453,32 @@ export const App = (): JSX.Element => {
       const nextUserId = pickCurrentUserId(sessions);
       const nextMemorySubdir = await resolveUserMemoryPath(sessions, { emit: false });
       const previousState = state;
-      const nextBindings = Object.entries(previousState.opencodes)
-        .map(([key]) => {
-          const binding = parseBindingKey(key);
-          if (!binding) {
-            return null;
-          }
+      const requestedBindings = new Map<BindingKey, { key: BindingKey; nextKey: BindingKey; nextBinding: { folderPath: string; memorySubdir: string; userId: string } }>();
+      for (const [key] of Object.entries(previousState.opencodes)) {
+        const binding = parseBindingKey(key);
+        if (!binding) {
+          continue;
+        }
 
-          const nextKey =
-            key === previousState.defaultBindingKey || binding.userId === nextUserId
-              ? bindingKey(binding.folderPath, nextMemorySubdir, nextUserId)
-              : key;
-          const nextBinding = parseBindingKey(nextKey);
-          if (!nextBinding) {
-            return null;
-          }
+        const nextKey =
+          key === previousState.defaultBindingKey || binding.userId === nextUserId
+            ? bindingKey(binding.folderPath, nextMemorySubdir, nextUserId)
+            : key;
+        const nextBinding = parseBindingKey(nextKey);
+        if (!nextBinding) {
+          continue;
+        }
 
-          return { key, nextKey, nextBinding };
-        })
-        .filter((binding): binding is {
-          key: BindingKey;
-          nextKey: BindingKey;
-          nextBinding: { folderPath: string; memorySubdir: string; userId: string };
-        } => binding !== null);
+        requestedBindings.set(nextKey, { key, nextKey, nextBinding });
+      }
+      if (previousState.vaultPath) {
+        const nextKey = bindingKey(previousState.vaultPath, nextMemorySubdir, nextUserId);
+        const nextBinding = parseBindingKey(nextKey);
+        if (nextBinding && !requestedBindings.has(nextKey)) {
+          requestedBindings.set(nextKey, { key: previousState.defaultBindingKey, nextKey, nextBinding });
+        }
+      }
+      const nextBindings = [...requestedBindings.values()];
       const nextOpencodes: Record<BindingKey, OpencodeConnection> = {};
       let nextDefaultBindingKey: BindingKey | null = null;
 
@@ -514,10 +517,15 @@ export const App = (): JSX.Element => {
         }),
       );
 
+      const desiredDefaultBindingKey = previousState.vaultPath
+        ? bindingKey(previousState.vaultPath, nextMemorySubdir, nextUserId)
+        : nextDefaultBindingKey;
       const nextDefaultConnection =
-        nextDefaultBindingKey && nextOpencodes[nextDefaultBindingKey]
-          ? nextOpencodes[nextDefaultBindingKey]
-          : Object.values(nextOpencodes)[0];
+        desiredDefaultBindingKey && nextOpencodes[desiredDefaultBindingKey]
+          ? nextOpencodes[desiredDefaultBindingKey]
+          : nextDefaultBindingKey && nextOpencodes[nextDefaultBindingKey]
+            ? nextOpencodes[nextDefaultBindingKey]
+            : Object.values(nextOpencodes)[0];
       const modelConnected = nextDefaultConnection
         ? await probeModelConnection(nextDefaultConnection, previousState.vaultPath)
         : false;
@@ -532,7 +540,8 @@ export const App = (): JSX.Element => {
           : {
               ...current,
               opencodes: nextOpencodes,
-              defaultBindingKey: nextDefaultBindingKey ?? Object.keys(nextOpencodes)[0] ?? previousState.defaultBindingKey,
+              defaultBindingKey:
+                desiredDefaultBindingKey ?? nextDefaultBindingKey ?? Object.keys(nextOpencodes)[0] ?? previousState.defaultBindingKey,
               skillsRootPath: nextMemorySubdir,
               modelConnected,
               mcpStatus: {
@@ -624,13 +633,14 @@ export const App = (): JSX.Element => {
           vaultRevision = 1;
         }
 
-        const home = await homeDir();
-        const guestMemoryPath = await getActiveMemoryPath(GUEST_USER_ID);
-        const defaultKey = bindingKey(home, guestMemoryPath, GUEST_USER_ID);
+        const defaultFolderPath = storedVaultPath ?? await homeDir();
+        const defaultUserId = pickCurrentUserId(sessions);
+        const defaultMemoryPath = await getActiveMemoryPath(defaultUserId);
+        const defaultKey = bindingKey(defaultFolderPath, defaultMemoryPath, defaultUserId);
         const opencode = await invoke<OpencodeConnection>('start_opencode', {
-          folderPath: home,
-          userId: GUEST_USER_ID,
-          memorySubdir: guestMemoryPath,
+          folderPath: defaultFolderPath,
+          userId: defaultUserId,
+          memorySubdir: defaultMemoryPath,
         });
         await syncConnectorState(opencode, storedVaultPath, sessions);
         const modelConnected = await probeModelConnection(opencode, storedVaultPath);
