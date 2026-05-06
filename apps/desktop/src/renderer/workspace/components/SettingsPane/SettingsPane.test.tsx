@@ -44,6 +44,7 @@ const baseRuntime: SettingsPaneRuntime = {
   workspacePreferences: createDefaultWorkspacePreferences(),
   opencode: null,
   vaultPath: null,
+  memoryPath: null,
   mcpSeedStatuses: {},
   memorySweepState: null,
   memorySweepBusy: false,

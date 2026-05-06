@@ -36,6 +36,7 @@ export type SettingsPaneRuntime = {
   readonly workspacePreferences: WorkspacePreferences;
   readonly opencode: OpencodeConnection | null;
   readonly vaultPath: string | null;
+  readonly memoryPath: string | null;
   readonly mcpSeedStatuses: Partial<Record<BuiltinMcpName, MCPStatus>>;
   readonly memorySweepState: MemoryRunState | null;
   readonly memorySweepBusy: boolean;
