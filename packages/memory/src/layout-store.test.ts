@@ -131,6 +131,7 @@ describe('serializeLayoutState', () => {
         autoOpenAgentWrittenFiles: true,
         isLeftRailVisible: true,
         isRightInspectorVisible: false,
+        activeRoute: 'workspace' as const,
         customMcps: [],
       },
     };
@@ -141,7 +142,7 @@ describe('serializeLayoutState', () => {
     expect(parsed).toHaveProperty('preferences');
   });
 
-  it('embeds CURRENT_LAYOUT_VERSION in the serialized layout state', () => {
+  it('serializes layout payload without storage row metadata', () => {
     const state = {
       version: CURRENT_LAYOUT_VERSION,
       layoutJson: SAMPLE_LAYOUT_JSON,
@@ -150,6 +151,7 @@ describe('serializeLayoutState', () => {
         autoOpenAgentWrittenFiles: true,
         isLeftRailVisible: true,
         isRightInspectorVisible: false,
+        activeRoute: 'workspace' as const,
         customMcps: [],
       },
     };
@@ -157,6 +159,8 @@ describe('serializeLayoutState', () => {
     const result = serializeLayoutState(state);
     const parsed = JSON.parse(result);
     expect(parsed.layoutJson).toEqual(SAMPLE_LAYOUT_JSON);
+    expect(parsed).not.toHaveProperty('version');
+    expect(parsed).not.toHaveProperty('updatedAt');
   });
 
   it('serializes a layout with an empty/minimal layoutJson', () => {
@@ -168,6 +172,7 @@ describe('serializeLayoutState', () => {
         autoOpenAgentWrittenFiles: false,
         isLeftRailVisible: false,
         isRightInspectorVisible: false,
+        activeRoute: 'workspace' as const,
         customMcps: [],
       },
     };
@@ -178,11 +183,12 @@ describe('serializeLayoutState', () => {
     expect(parsed.preferences.autoOpenAgentWrittenFiles).toBe(false);
   });
 
-  it('preferences round-trip correctly through serialize → JSON.parse', () => {
+  it('preferences round-trip correctly through serialize and JSON.parse', () => {
     const customPrefs = {
       autoOpenAgentWrittenFiles: false,
       isLeftRailVisible: false,
       isRightInspectorVisible: true,
+      activeRoute: 'workspace' as const,
       customMcps: [
         {
           id: 'mcp-1',
