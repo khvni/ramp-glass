@@ -1,5 +1,6 @@
 import {
   createDefaultWorkspacePreferences,
+  type CustomMcpEntry,
   type LayoutState,
   type LayoutStore,
   type WorkspacePreferences,
@@ -12,7 +13,7 @@ export type LayoutRow = {
   updated_at: string;
 };
 
-export const CURRENT_LAYOUT_VERSION = 3 as const;
+export const CURRENT_LAYOUT_VERSION = 4 as const;
 
 type StoredLayoutPayload = {
   layoutJson: unknown;
@@ -25,6 +26,18 @@ const parseStoredLayout = (raw: string): unknown | null => {
   } catch {
     return null;
   }
+};
+
+const isValidMcpEntry = (entry: unknown): entry is CustomMcpEntry => {
+  if (!entry || typeof entry !== 'object') return false;
+  const record = entry as Record<string, unknown>;
+  return (
+    typeof record.id === 'string' &&
+    typeof record.label === 'string' &&
+    typeof record.url === 'string' &&
+    typeof record.headerName === 'string' &&
+    typeof record.enabled === 'boolean'
+  );
 };
 
 const normalizePreferences = (value: unknown): WorkspacePreferences => {
@@ -47,6 +60,16 @@ const normalizePreferences = (value: unknown): WorkspacePreferences => {
       typeof candidate.isRightInspectorVisible === 'boolean'
         ? candidate.isRightInspectorVisible
         : defaults.isRightInspectorVisible,
+    activeRoute:
+      candidate.activeRoute === 'workspace' ||
+      candidate.activeRoute === 'memory' ||
+      candidate.activeRoute === 'settings' ||
+      candidate.activeRoute === 'connections'
+        ? candidate.activeRoute
+        : defaults.activeRoute,
+    customMcps: Array.isArray(candidate.customMcps)
+      ? (candidate.customMcps as unknown[]).filter(isValidMcpEntry)
+      : defaults.customMcps,
   };
 };
 
