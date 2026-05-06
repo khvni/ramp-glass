@@ -2,8 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { detectOS, isMac } from './detect-os';
 
 describe('detectOS', () => {
-  // Helper to stub navigator with a given userAgent
-  const withUA = (userAgent: string, userAgentData?: { brands?: string[]; platform?: string }) => {
+  const withUA = (userAgent: string, userAgentData?: { platform?: string }) => {
     vi.stubGlobal('navigator', {
       userAgent,
       ...(userAgentData ? { userAgentData } : { platform: '' }),
@@ -50,7 +49,7 @@ describe('detectOS', () => {
   it('prefers userAgentData platform over userAgent when both present', () => {
     withUA(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      { brands: [], platform: 'macOS' }
+      { platform: 'macOS' },
     );
     expect(detectOS()).toBe('mac');
   });
