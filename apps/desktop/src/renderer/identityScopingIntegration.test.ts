@@ -174,6 +174,14 @@ const hoisted = vi.hoisted(() => {
       ] as TRow;
     }
 
+    if (query.startsWith('PRAGMA table_info(entities)')) {
+      return [{ name: 'id' }, { name: 'stale_since' }] as TRow;
+    }
+
+    if (query.startsWith('PRAGMA table_info(jobs)')) {
+      return [{ name: 'id' }, { name: 'task_kind' }] as TRow;
+    }
+
     if (query.startsWith('PRAGMA table_info(layouts)')) {
       return [{ name: 'user_id' }, { name: 'version' }, { name: 'workspace_state_json' }, { name: 'updated_at' }] as TRow;
     }
