@@ -1,4 +1,5 @@
-import { useEffect, useState, type JSX } from 'react';
+import { useEffect, useMemo, useState, type JSX } from 'react';
+import DOMPurify from 'dompurify';
 import { Badge } from '@tinker/design';
 import { readTextFile } from '../electron-shims-fs.js';
 import { getCodeLanguage, getPanelTitleForPath, type FilePaneParams } from './file-utils.js';
@@ -8,14 +9,18 @@ export const CodeRenderer = ({ params }: { params?: FilePaneParams }): JSX.Eleme
   const path = params?.path;
   const [content, setContent] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null);
+  const [rawHighlighted, setRawHighlighted] = useState<string | null>(null);
+  const sanitizedHighlighted = useMemo(
+    () => (rawHighlighted ? DOMPurify.sanitize(rawHighlighted) : null),
+    [rawHighlighted],
+  );
   const language = path ? getCodeLanguage(path, params?.mime) : 'plaintext';
 
   useEffect(() => {
     if (!path) {
       setError('Missing file path.');
       setContent('');
-      setHighlightedHtml(null);
+      setRawHighlighted(null);
       return;
     }
 
@@ -25,14 +30,14 @@ export const CodeRenderer = ({ params }: { params?: FilePaneParams }): JSX.Eleme
       try {
         setError(null);
         setContent('');
-        setHighlightedHtml(null);
+        setRawHighlighted(null);
         const text = await readTextFile(path);
         if (active) {
           setContent(text);
           if (text.length <= MAX_HIGHLIGHTABLE_CODE_LENGTH) {
             const html = await highlightCode(text, language);
             if (active) {
-              setHighlightedHtml(html);
+              setRawHighlighted(html);
             }
           }
         }
@@ -40,7 +45,7 @@ export const CodeRenderer = ({ params }: { params?: FilePaneParams }): JSX.Eleme
         if (active) {
           setError(nextError instanceof Error ? nextError.message : String(nextError));
           setContent('');
-          setHighlightedHtml(null);
+          setRawHighlighted(null);
         }
       }
     })();
@@ -62,11 +67,11 @@ export const CodeRenderer = ({ params }: { params?: FilePaneParams }): JSX.Eleme
 
       {error ? <p className="tinker-muted">{error}</p> : null}
       {!error ? (
-        <pre className={`tinker-code-block${highlightedHtml ? ' tinker-code-block--highlighted' : ''}`}>
-          {highlightedHtml ? (
+        <pre className={`tinker-code-block${sanitizedHighlighted ? ' tinker-code-block--highlighted' : ''}`}>
+          {sanitizedHighlighted ? (
             <code
               className={`tinker-code-content hljs language-${language}`}
-              dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+              dangerouslySetInnerHTML={{ __html: sanitizedHighlighted }}
             />
           ) : (
             <code className={`tinker-code-content language-${language}`}>{content}</code>
