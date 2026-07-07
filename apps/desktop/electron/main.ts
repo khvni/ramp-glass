@@ -346,6 +346,11 @@ const createWindow = (): void => {
   }
 
   win.webContents.setWindowOpenHandler(({ url }) => {
+    try {
+      guardUrl(url);
+    } catch {
+      return { action: 'deny' };
+    }
     void shell.openExternal(url);
     return { action: 'deny' };
   });

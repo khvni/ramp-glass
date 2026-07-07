@@ -16,20 +16,7 @@
 import { app, BrowserWindow, shell } from 'electron';
 import { join } from 'node:path';
 import { spawnHost, type HostHandle } from './hostLifecycle.js';
-
-const ALLOWED_URL_SCHEMES = new Set(['https:', 'http:']);
-
-const guardUrl = (url: string): void => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error('Invalid URL');
-  }
-  if (!ALLOWED_URL_SCHEMES.has(parsed.protocol)) {
-    throw new Error(`URL scheme "${parsed.protocol}" not allowed`);
-  }
-};
+import { guardUrl } from './security-utils.js';
 
 const isDev = !app.isPackaged;
 const devUrl = process.env['TINKER_DEV_URL'] ?? 'http://localhost:5173/';
