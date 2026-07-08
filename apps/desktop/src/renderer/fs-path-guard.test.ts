@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { resolve, normalize, sep } from 'node:path';
 
 // Re-implement the guard logic for unit testing, matching apps/desktop/src/main/main.ts
-const containsPath = (filePath: string, root: string): boolean => {
+const _containsPath = (filePath: string, root: string): boolean => {
   const resolved = resolve(filePath);
   const rootResolved = resolve(root);
   return resolved.startsWith(rootResolved + sep) || resolved === rootResolved;
@@ -57,9 +57,9 @@ describe('guardFsPath', () => {
   });
 
   it('rejects null/undefined', () => {
-    // @ts-expect-error testing invalid input
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     expect(() => guardFsPath(null)).toThrow();
-    // @ts-expect-error testing invalid input
+    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
     expect(() => guardFsPath(undefined)).toThrow();
   });
 
