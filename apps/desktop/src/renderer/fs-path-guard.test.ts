@@ -57,9 +57,9 @@ describe('guardFsPath', () => {
   });
 
   it('rejects null/undefined', () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    // @ts-expect-error testing invalid input
     expect(() => guardFsPath(null)).toThrow();
-    // eslint-disable-next-line @typescript-eslint/no-unused-expressions
+    // @ts-expect-error testing invalid input
     expect(() => guardFsPath(undefined)).toThrow();
   });
 

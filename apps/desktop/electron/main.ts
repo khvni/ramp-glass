@@ -10,6 +10,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import type { FileDialogOptions, ProjectMode, ProjectState, RecentProject } from '../src/desktop-api-types.js';
+import { guardUrl, guardFsPath } from './security-utils.js';
 
 const isDev = !app.isPackaged;
 const devUrl = process.env.TINKER_DEV_URL ?? 'http://localhost:1420/';
@@ -71,77 +72,39 @@ const registerIpcHandlers = (): void => {
     return result.filePaths[0] ?? null;
   });
 
-  // --- Path traversal / containment guard ---
-// All FS IPC handlers operate on user-selected directories or app-managed paths.
-// Reject any path that resolves outside its intended root (e.g. via "../" escape).
-
-const containsPath = (filePath: string, root: string): boolean => {
-  const resolved = path.resolve(filePath);
-  const rootResolved = path.resolve(root);
-  return resolved.startsWith(rootResolved + path.sep) || resolved === rootResolved;
-};
-
-// Allowed roots for FS operations:
-// - userData: app's own private directory (safe for keychain, settings, etc.)
-// - projectRoots: directories the user has explicitly opened via dialog:openFolder
-const allowedFsRoots = (): string[] => {
-  const roots = [app.getPath('userData')];
-  try {
-    const state = readProjectState();
-    for (const p of state.recentProjects) {
-      if (p.path) roots.push(path.resolve(p.path));
+  const getAllowedRoots = (): string[] => {
+    const roots = [app.getPath('userData')];
+    try {
+      const state = readProjectState();
+      for (const p of state.recentProjects) {
+        if (p.path) roots.push(path.resolve(p.path));
+      }
+      if (state.activeRoot) roots.push(path.resolve(state.activeRoot));
+    } catch {
+      // ignore
     }
-    if (state.activeRoot) roots.push(path.resolve(state.activeRoot));
-  } catch {
-    // ignore
-  }
-  return roots;
-};
+    return roots;
+  };
 
-const guardFsPath = (filePath: string): void => {
-  if (!filePath || typeof filePath !== 'string') throw new Error('Invalid path');
-  const normalized = path.normalize(filePath);
-  if (normalized.includes('..')) throw new Error('Path traversal not allowed');
-  const allowed = allowedFsRoots();
-  if (!allowed.some((root) => containsPath(normalized, root))) {
-    throw new Error('Path outside allowed directory');
-  }
-};
-
-// Allowed URL schemes for shell:openExternal
-const ALLOWED_URL_SCHEMES = new Set(['https:', 'http:']);
-
-const guardUrl = (url: string): void => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error('Invalid URL');
-  }
-  if (!ALLOWED_URL_SCHEMES.has(parsed.protocol)) {
-    throw new Error(`URL scheme "${parsed.protocol}" not allowed`);
-  }
-};
-
-// --- File system ---
+  // --- File system ---
 ipcMain.handle('fs:readTextFile', async (_event, filePath: string) => {
-  guardFsPath(filePath);
+  guardFsPath(filePath, getAllowedRoots());
   return fs.promises.readFile(filePath, 'utf-8');
 });
 
 ipcMain.handle('fs:readFile', async (_event, filePath: string) => {
-  guardFsPath(filePath);
+  guardFsPath(filePath, getAllowedRoots());
   const buf = await fs.promises.readFile(filePath);
   return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
 });
 
 ipcMain.handle('fs:writeTextFile', async (_event, filePath: string, contents: string) => {
-  guardFsPath(filePath);
+  guardFsPath(filePath, getAllowedRoots());
   await fs.promises.writeFile(filePath, contents, 'utf-8');
 });
 
 ipcMain.handle('fs:exists', async (_event, filePath: string) => {
-  guardFsPath(filePath);
+  guardFsPath(filePath, getAllowedRoots());
   try {
     await fs.promises.access(filePath);
     return true;
@@ -151,7 +114,7 @@ ipcMain.handle('fs:exists', async (_event, filePath: string) => {
 });
 
 ipcMain.handle('fs:stat', async (_event, filePath: string) => {
-  guardFsPath(filePath);
+  guardFsPath(filePath, getAllowedRoots());
   const s = await fs.promises.stat(filePath);
   return { isFile: s.isFile(), isDirectory: s.isDirectory(), size: s.size };
 });

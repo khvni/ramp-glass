@@ -10,7 +10,6 @@
  * ensures guardUrl and guardFsPath are identical everywhere.
  */
 
-import { homedir } from 'node:os';
 import { resolve, normalize, sep } from 'node:path';
 
 // ---------------------------------------------------------------------------
@@ -43,15 +42,8 @@ export const guardUrl = (url: string): void => {
 const containsPath = (filePath: string, root: string): boolean => {
   const resolved = resolve(filePath);
   const rootResolved = resolve(root);
-  return (
-    resolved.startsWith(rootResolved + sep) || resolved === rootResolved
-  );
+  return resolved.startsWith(rootResolved + sep) || resolved === rootResolved;
 };
-
-const allowedFsRoots = (userDataPath: string): string[] => [
-  userDataPath,
-  homedir(),
-];
 
 /**
  * Validates that a file path stays within allowed directories and
@@ -60,14 +52,13 @@ const allowedFsRoots = (userDataPath: string): string[] => [
  */
 export const guardFsPath = (
   filePath: string,
-  userDataPath: string,
+  allowedRoots: string[],
 ): void => {
   if (!filePath || typeof filePath !== 'string')
     throw new Error('Invalid path');
   const normalized = normalize(filePath);
   if (normalized.includes('..')) throw new Error('Path traversal not allowed');
-  const allowed = allowedFsRoots(userDataPath);
-  if (!allowed.some((root) => containsPath(normalized, root))) {
+  if (!allowedRoots.some((root) => containsPath(normalized, root))) {
     throw new Error('Path outside allowed directory');
   }
 };

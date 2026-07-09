@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell, dialog, Notification } from 'electron';
-import { join, dirname, resolve, normalize, sep } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import { readFile, writeFile, access, stat } from 'node:fs/promises';
@@ -15,41 +15,7 @@ const WINDOW_HEIGHT = 900;
 const MIN_WIDTH = 960;
 const MIN_HEIGHT = 600;
 
-// Allowed URL schemes for shell.openExternal
-const ALLOWED_URL_SCHEMES = new Set(['https:', 'http:']);
-
-const guardUrl = (url: string): void => {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    throw new Error('Invalid URL');
-  }
-  if (!ALLOWED_URL_SCHEMES.has(parsed.protocol)) {
-    throw new Error(`URL scheme "${parsed.protocol}" not allowed`);
-  }
-};
-
-const containsPath = (filePath: string, root: string): boolean => {
-  const resolved = resolve(filePath);
-  const rootResolved = resolve(root);
-  return resolved.startsWith(rootResolved + sep) || resolved === rootResolved;
-};
-
-const allowedFsRoots = (): string[] => {
-  const roots = [app.getPath('userData'), homedir()];
-  return roots;
-};
-
-const guardFsPath = (filePath: string): void => {
-  if (!filePath || typeof filePath !== 'string') throw new Error('Invalid path');
-  const normalized = normalize(filePath);
-  if (normalized.includes('..')) throw new Error('Path traversal not allowed');
-  const allowed = allowedFsRoots();
-  if (!allowed.some((root) => containsPath(normalized, root))) {
-    throw new Error('Path outside allowed directory');
-  }
-};
+import { guardUrl, guardFsPath } from './security-utils.js';
 
 const createWindow = (): BrowserWindow => {
   const preloadPath = join(__dirname, 'preload.mjs');
@@ -84,6 +50,8 @@ const createWindow = (): BrowserWindow => {
   return window;
 };
 
+const getAllowedRoots = (): string[] => [app.getPath('userData'), homedir()];
+
 const registerIpcHandlers = (): void => {
   ipcMain.handle('tinker:homeDir', () => homedir());
 
@@ -106,23 +74,23 @@ const registerIpcHandlers = (): void => {
   });
 
   ipcMain.handle('tinker:readFile', async (_event, filePath: string) => {
-    guardFsPath(filePath);
+    guardFsPath(filePath, getAllowedRoots());
     const buffer = await readFile(filePath);
     return buffer;
   });
 
   ipcMain.handle('tinker:readTextFile', async (_event, filePath: string) => {
-    guardFsPath(filePath);
+    guardFsPath(filePath, getAllowedRoots());
     return readFile(filePath, 'utf-8');
   });
 
   ipcMain.handle('tinker:writeTextFile', async (_event, filePath: string, content: string) => {
-    guardFsPath(filePath);
+    guardFsPath(filePath, getAllowedRoots());
     await writeFile(filePath, content, 'utf-8');
   });
 
   ipcMain.handle('tinker:exists', async (_event, filePath: string) => {
-    guardFsPath(filePath);
+    guardFsPath(filePath, getAllowedRoots());
     try {
       await access(filePath);
       return true;
@@ -132,7 +100,7 @@ const registerIpcHandlers = (): void => {
   });
 
   ipcMain.handle('tinker:stat', async (_event, filePath: string) => {
-    guardFsPath(filePath);
+    guardFsPath(filePath, getAllowedRoots());
     const info = await stat(filePath);
     return {
       isFile: info.isFile(),

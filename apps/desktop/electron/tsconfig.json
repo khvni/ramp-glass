@@ -5,7 +5,11 @@
     "moduleResolution": "Node",
     "outDir": "../dist-electron",
     "rootDir": ".",
-    "types": ["node"]
+    "baseUrl": ".",
+    "types": ["node"],
+    "paths": {
+      "@tinker/security-utils": ["../../shared/security-utils/index.ts"]
+    }
   },
   "include": ["./**/*.ts", "../src/desktop-api-types.ts"]
 }
